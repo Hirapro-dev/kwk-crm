@@ -26,6 +26,7 @@ import { IMPORT_OBJECTS, IMPORT_OBJECT_KEYS } from '@/lib/import/schema';
 export function ImportPanel() {
   const router = useRouter();
   const [objectKey, setObjectKey] = useState(IMPORT_OBJECT_KEYS[0] ?? 'members');
+  const [updateOnly, setUpdateOnly] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [csvText, setCsvText] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
@@ -75,7 +76,7 @@ export function ImportPanel() {
     setCommitted(null);
     setStage('previewing');
     startBusy(async () => {
-      const res = await previewImport(objectKey, csvText);
+      const res = await previewImport(objectKey, csvText, updateOnly);
       setPreview(res);
       setStage('idle');
     });
@@ -85,7 +86,7 @@ export function ImportPanel() {
     if (!csvText) return;
     setStage('committing');
     startBusy(async () => {
-      const res = await commitImport(objectKey, csvText);
+      const res = await commitImport(objectKey, csvText, updateOnly);
       setCommitted(res);
       setStage('idle');
       if (res.ok) router.refresh();
@@ -158,6 +159,18 @@ export function ImportPanel() {
             )}
           </div>
 
+          <label className="flex items-center gap-1.5 text-xs">
+            <input
+              type="checkbox"
+              checked={updateOnly}
+              onChange={(e) => {
+                setUpdateOnly(e.target.checked);
+                resetResults();
+              }}
+            />
+            更新のみ（既存IDの更新だけ・新規レコードは作成しない）
+          </label>
+
           {preview && !preview.ok && (
             <p role="alert" className="text-sm text-destructive">
               {preview.error}
@@ -170,6 +183,9 @@ export function ImportPanel() {
                 <Stat label="総行数" value={preview.totalRows ?? 0} />
                 <Stat label="新規" value={preview.newCount ?? 0} tone="new" />
                 <Stat label="更新" value={preview.updateCount ?? 0} tone="update" />
+                {updateOnly && (
+                  <Stat label="スキップ(新規)" value={preview.skippedCount ?? 0} />
+                )}
                 <Stat
                   label="エラー"
                   value={preview.errorCount ?? 0}
@@ -248,9 +264,19 @@ export function ImportPanel() {
           </CardHeader>
           <CardContent className="space-y-3 p-4">
             <p className="text-xs text-muted-foreground">
-              有効な {preview.validCount?.toLocaleString()} 行(新規{' '}
-              {preview.newCount} / 更新 {preview.updateCount})を {def.label}{' '}
-              に取り込みます。この操作はレコードを上書きします。
+              {updateOnly ? (
+                <>
+                  更新のみ: 既存 {preview.updateCount} 件を更新します(新規ID{' '}
+                  {preview.skippedCount} 件はスキップ)。
+                </>
+              ) : (
+                <>
+                  有効な {preview.validCount?.toLocaleString()} 行(新規{' '}
+                  {preview.newCount} / 更新 {preview.updateCount})を {def.label}{' '}
+                  に取り込みます。
+                </>
+              )}
+              この操作はレコードを上書きします。
             </p>
             <Button onClick={runCommit} disabled={busy}>
               {stage === 'committing' && (
@@ -268,6 +294,8 @@ export function ImportPanel() {
             {committed?.ok && (
               <p role="status" className="text-sm text-green-700">
                 {committed.upserted?.toLocaleString()} 件を取り込みました。
+                {(committed.skippedCount ?? 0) > 0 &&
+                  ` (新規ID ${committed.skippedCount} 件はスキップ)`}
                 {(committed.errorCount ?? 0) > 0 &&
                   ` (エラー ${committed.errorCount} 件は除外)`}
               </p>

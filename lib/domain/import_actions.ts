@@ -30,6 +30,8 @@ export interface PreviewResult {
   validCount?: number;
   newCount?: number;
   updateCount?: number;
+  /** 更新のみモードで、新規IDのため取込されない件数 */
+  skippedCount?: number;
   errorCount?: number;
   /** 先頭のエラー(最大50件) */
   errors?: RowError[];
@@ -38,13 +40,15 @@ export interface PreviewResult {
   /** 取込されない無視列 */
   ignoredHeaders?: string[];
   /** プレビュー用サンプル(先頭20行、id + 状態) */
-  sample?: Array<{ row: number; id: string; mode: '新規' | '更新' }>;
+  sample?: Array<{ row: number; id: string; mode: '新規' | '更新' | 'スキップ' }>;
 }
 
 export interface CommitResult {
   ok: boolean;
   error?: string;
   upserted?: number;
+  /** 更新のみモードで、新規IDのためスキップした件数 */
+  skippedCount?: number;
   errorCount?: number;
   errors?: RowError[];
 }
@@ -81,12 +85,13 @@ async function findExistingIds(
 export async function previewImport(
   object: string,
   csvText: string,
+  updateOnly = false,
 ): Promise<PreviewResult> {
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
 
   // 問合せは2フォーム統合 + extra(JSONB) + フォーム名解決のため専用ハンドラに委譲
-  if (object === 'inquiries') return previewInquiriesCsv([csvText]);
+  if (object === 'inquiries') return previewInquiriesCsv([csvText], updateOnly);
 
   const def = IMPORT_OBJECTS[object];
   if (!def) return { ok: false, error: '不明なオブジェクトです' };
@@ -123,20 +128,32 @@ export async function previewImport(
 
   let newCount = 0;
   let updateCount = 0;
+  let skippedCount = 0;
   const sample: PreviewResult['sample'] = [];
   for (const r of mapped.records) {
     const isUpdate = existing.has(r.id);
-    if (isUpdate) updateCount++;
-    else newCount++;
-    if (sample.length < 20) sample.push({ row: r.row, id: r.id, mode: isUpdate ? '更新' : '新規' });
+    let mode: '新規' | '更新' | 'スキップ';
+    if (isUpdate) {
+      updateCount++;
+      mode = '更新';
+    } else if (updateOnly) {
+      skippedCount++;
+      mode = 'スキップ';
+    } else {
+      newCount++;
+      mode = '新規';
+    }
+    if (sample.length < 20) sample.push({ row: r.row, id: r.id, mode });
   }
 
   return {
     ok: true,
     totalRows: mapped.totalRows,
-    validCount: mapped.records.length,
+    // 取込対象になる行数(更新のみ時はスキップ分を除く)
+    validCount: updateOnly ? updateCount : mapped.records.length,
     newCount,
     updateCount,
+    skippedCount,
     errorCount: mapped.errors.length,
     errors: mapped.errors.slice(0, 50),
     targetLabels: mapped.presentFields.map((f) => f.label),
@@ -148,12 +165,13 @@ export async function previewImport(
 export async function commitImport(
   object: string,
   csvText: string,
+  updateOnly = false,
 ): Promise<CommitResult> {
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
 
   // 問合せは専用ハンドラに委譲(2フォーム統合 + extra + フォーム名解決)
-  if (object === 'inquiries') return commitInquiriesCsv([csvText]);
+  if (object === 'inquiries') return commitInquiriesCsv([csvText], updateOnly);
 
   const def = IMPORT_OBJECTS[object];
   if (!def) return { ok: false, error: '不明なオブジェクトです' };
@@ -181,7 +199,27 @@ export async function commitImport(
 
   const supabase = await createClient();
   let upserted = 0;
-  const rows = mapped.records.map((r) => r.data);
+  let skippedCount = 0;
+
+  // 更新のみモード: 既存IDの行だけに絞る(新規IDはスキップ)
+  let targetRecords = mapped.records;
+  if (updateOnly) {
+    let existing: Set<string>;
+    try {
+      existing = await findExistingIds(
+        def.table,
+        def.idField,
+        mapped.records.map((r) => r.id),
+      );
+    } catch (e) {
+      return { ok: false, error: `既存データ照会に失敗: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    const before = targetRecords.length;
+    targetRecords = targetRecords.filter((r) => existing.has(r.id));
+    skippedCount = before - targetRecords.length;
+  }
+
+  const rows = targetRecords.map((r) => r.data);
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
     const { error } = await supabase
@@ -192,6 +230,7 @@ export async function commitImport(
         ok: false,
         error: `${i + 1}〜${i + batch.length}行目の保存に失敗: ${error.message}`,
         upserted,
+        skippedCount,
       };
     }
     upserted += batch.length;
@@ -202,6 +241,7 @@ export async function commitImport(
   return {
     ok: true,
     upserted,
+    skippedCount,
     errorCount: mapped.errors.length,
     errors: mapped.errors.slice(0, 50),
   };

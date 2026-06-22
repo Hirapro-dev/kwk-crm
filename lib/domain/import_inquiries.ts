@@ -107,6 +107,7 @@ function convertAll(
 
 export async function previewInquiriesCsv(
   csvTexts: string[],
+  updateOnly = false,
 ): Promise<PreviewResult> {
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
@@ -138,12 +139,22 @@ export async function previewInquiriesCsv(
   }
   let newCount = 0;
   let updateCount = 0;
+  let skippedCount = 0;
   const sample: PreviewResult['sample'] = [];
   for (const r of records) {
     const isUpdate = existing.has(r.id);
-    if (isUpdate) updateCount++;
-    else newCount++;
-    if (sample!.length < 20) sample!.push({ row: 0, id: r.id, mode: isUpdate ? '更新' : '新規' });
+    let mode: '新規' | '更新' | 'スキップ';
+    if (isUpdate) {
+      updateCount++;
+      mode = '更新';
+    } else if (updateOnly) {
+      skippedCount++;
+      mode = 'スキップ';
+    } else {
+      newCount++;
+      mode = '新規';
+    }
+    if (sample!.length < 20) sample!.push({ row: 0, id: r.id, mode });
   }
 
   // 取込されるフォーム名のうち、未登録(新規作成予定)を数える
@@ -154,9 +165,10 @@ export async function previewInquiriesCsv(
   return {
     ok: true,
     totalRows: rawRows.length,
-    validCount: records.length,
+    validCount: updateOnly ? updateCount : records.length,
     newCount,
     updateCount,
+    skippedCount,
     errorCount: errors.length,
     errors: errors.slice(0, 50),
     targetLabels: [
@@ -169,7 +181,10 @@ export async function previewInquiriesCsv(
   };
 }
 
-export async function commitInquiriesCsv(csvTexts: string[]): Promise<CommitResult> {
+export async function commitInquiriesCsv(
+  csvTexts: string[],
+  updateOnly = false,
+): Promise<CommitResult> {
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
 
@@ -212,10 +227,27 @@ export async function commitInquiriesCsv(csvTexts: string[]): Promise<CommitResu
     };
   }
 
+  // 更新のみモード: 既存の問合せIDだけに絞る(新規IDはスキップ)
+  let targetRecords = records;
+  let skippedCount = 0;
+  if (updateOnly) {
+    const ids = records.map((r) => r.id);
+    const existing = new Set<string>();
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const chunk = ids.slice(i, i + BATCH);
+      if (chunk.length === 0) continue;
+      const { data } = await supabase.from('inquiries').select('id').in('id', chunk);
+      for (const r of (data ?? []) as Array<{ id: string }>) existing.add(String(r.id));
+    }
+    const before = targetRecords.length;
+    targetRecords = targetRecords.filter((r) => existing.has(r.id));
+    skippedCount = before - targetRecords.length;
+  }
+
   // 3) inquiries upsert(問合せIDで突合)
   let upserted = 0;
-  for (let i = 0; i < records.length; i += BATCH) {
-    const batch = records.slice(i, i + BATCH);
+  for (let i = 0; i < targetRecords.length; i += BATCH) {
+    const batch = targetRecords.slice(i, i + BATCH);
     const { error } = await supabase
       .from('inquiries')
       .upsert(batch, { onConflict: 'id' });
@@ -224,11 +256,18 @@ export async function commitInquiriesCsv(csvTexts: string[]): Promise<CommitResu
         ok: false,
         error: `${i + 1}〜${i + batch.length}件目の保存に失敗: ${error.message}`,
         upserted,
+        skippedCount,
       };
     }
     upserted += batch.length;
   }
 
   revalidatePath('/inquiries');
-  return { ok: true, upserted, errorCount: errors.length, errors: errors.slice(0, 50) };
+  return {
+    ok: true,
+    upserted,
+    skippedCount,
+    errorCount: errors.length,
+    errors: errors.slice(0, 50),
+  };
 }

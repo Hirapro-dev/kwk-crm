@@ -45,6 +45,7 @@ export async function saveImportSource(input: {
   drive_file_id: string;
   drive_file_id_2?: string;
   enabled: boolean;
+  update_only?: boolean;
 }): Promise<SimpleResult> {
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
@@ -59,12 +60,24 @@ export async function saveImportSource(input: {
       drive_file_id: fileId,
       drive_file_id_2: fileId2,
       enabled: input.enabled,
+      update_only: input.update_only ?? false,
     },
     { onConflict: 'object' },
   );
   if (error) return { ok: false, error: `保存に失敗しました: ${error.message}` };
   revalidatePath('/settings/import-routine');
   return { ok: true, message: '保存しました' };
+}
+
+/** 更新のみ設定を取得 */
+async function loadUpdateOnly(object: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('import_sources')
+    .select('update_only')
+    .eq('object', object)
+    .maybeSingle();
+  return Boolean((data as { update_only?: boolean } | null)?.update_only);
 }
 
 /** 保存済みの Drive ファイルID(1つ目/2つ目)を取得 */
@@ -107,9 +120,10 @@ export async function previewDriveImport(object: string): Promise<PreviewResult>
     return { ok: false, error: 'Drive ファイルが未設定です。先にファイルを保存してください。' };
   }
 
+  const updateOnly = await loadUpdateOnly(object);
   // 問合せは2ファイルを統合して専用ハンドラへ。他は1ファイルを汎用ハンドラへ。
-  if (object === 'inquiries') return previewInquiriesCsv(texts);
-  return previewImport(object, texts[0] as string);
+  if (object === 'inquiries') return previewInquiriesCsv(texts, updateOnly);
+  return previewImport(object, texts[0] as string, updateOnly);
 }
 
 export async function runDriveImport(object: string): Promise<CommitResult> {
@@ -129,10 +143,11 @@ export async function runDriveImport(object: string): Promise<CommitResult> {
   }
   if (texts.length === 0) return { ok: false, error: 'Drive ファイルが未設定です。' };
 
+  const updateOnly = await loadUpdateOnly(object);
   const result =
     object === 'inquiries'
-      ? await commitInquiriesCsv(texts)
-      : await commitImport(object, texts[0] as string);
+      ? await commitInquiriesCsv(texts, updateOnly)
+      : await commitImport(object, texts[0] as string, updateOnly);
   await recordRun(
     object,
     result.ok ? 'success' : 'error',

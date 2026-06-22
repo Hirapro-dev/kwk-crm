@@ -65,6 +65,7 @@ function DriveSourceCard({
   const [fileId, setFileId] = useState(source.drive_file_id ?? '');
   const [fileId2, setFileId2] = useState(source.drive_file_id_2 ?? '');
   const [enabled, setEnabled] = useState(source.enabled);
+  const [updateOnly, setUpdateOnly] = useState(source.update_only);
   const isInquiries = source.object === 'inquiries';
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
@@ -83,6 +84,7 @@ function DriveSourceCard({
         drive_file_id: fileId,
         drive_file_id_2: isInquiries ? fileId2 || undefined : undefined,
         enabled,
+        update_only: updateOnly,
       });
       setSaveMsg(res.ok ? '保存しました' : (res.error ?? '保存失敗'));
       setStage('idle');
@@ -151,6 +153,14 @@ function DriveSourceCard({
             />
             有効
           </label>
+          <label className="flex items-center gap-1 text-xs" title="既存IDの更新のみ・新規レコードは作成しない">
+            <input
+              type="checkbox"
+              checked={updateOnly}
+              onChange={(e) => setUpdateOnly(e.target.checked)}
+            />
+            更新のみ
+          </label>
           <Button variant="outline" size="sm" onClick={onSave} disabled={busy}>
             {stage === 'saving' ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
@@ -218,6 +228,7 @@ function DriveSourceCard({
             総行数 {preview.totalRows} ／{' '}
             <span className="text-green-700">新規 {preview.newCount}</span> ／{' '}
             <span className="text-primary">更新 {preview.updateCount}</span> ／{' '}
+            {updateOnly && <>スキップ {preview.skippedCount ?? 0} ／ </>}
             <span className={(preview.errorCount ?? 0) > 0 ? 'text-destructive' : ''}>
               エラー {preview.errorCount}
             </span>
@@ -246,6 +257,8 @@ function DriveSourceCard({
         {committed?.ok && (
           <p role="status" className="text-sm text-green-700">
             {committed.upserted?.toLocaleString()} 件を取り込みました。
+            {(committed.skippedCount ?? 0) > 0 &&
+              ` (新規ID ${committed.skippedCount} 件はスキップ)`}
             {(committed.errorCount ?? 0) > 0 && ` (エラー ${committed.errorCount} 件は除外)`}
           </p>
         )}
