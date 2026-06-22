@@ -19,6 +19,8 @@ interface PageProps {
   searchParams: Promise<{
     q?: string;
     owner?: string;
+    sort?: string;
+    dir?: string;
     page?: string;
   }>;
 }
@@ -33,6 +35,8 @@ export default async function MembersPage({ searchParams }: PageProps) {
     listMembers({
       q: sp.q,
       ownerId: sp.owner,
+      sort: sp.sort,
+      dir: sp.dir === 'desc' ? 'desc' : 'asc',
       page,
       pageSize: 50,
     }),

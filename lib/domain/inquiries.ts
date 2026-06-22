@@ -30,9 +30,16 @@ export interface InquiryListParams {
   memberId?: string;
   from?: string;
   to?: string;
+  sort?: string;
+  dir?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
 }
+
+/** 一覧でソート可能な inquiries カラム(ホワイトリスト) */
+const INQUIRY_SORTABLE = new Set<string>([
+  'id', 'registered_at', 'form_id', 'member_id', 'name', 'email', 'phone', 'created_at',
+]);
 
 export interface InquiryListResult {
   rows: InquiryListItem[];
@@ -60,9 +67,15 @@ export async function listInquiries(params: InquiryListParams = {}): Promise<Inq
       `,
       { count: 'exact' },
     )
-    .is('deleted_at', null)
-    .order('registered_at', { ascending: false })
-    .range(from, to);
+    .is('deleted_at', null);
+
+  if (params.sort && INQUIRY_SORTABLE.has(params.sort)) {
+    query = query.order(params.sort, {
+      ascending: params.dir !== 'desc',
+      nullsFirst: false,
+    });
+  }
+  query = query.order('registered_at', { ascending: false }).range(from, to);
 
   if (params.q && params.q.trim()) {
     const q = params.q.trim().replace(/[%_]/g, '\\$&');

@@ -1,3 +1,4 @@
+import { SortHeader } from '@/components/layout/SortHeader';
 import {
   Table,
   TableBody,
@@ -59,7 +60,11 @@ export function DynamicListTable<T extends Record<string, unknown>>({
           <TableRow className="bg-secondary/50 hover:bg-secondary/50">
             {fields.map((f) => (
               <TableHead key={f.id} className="h-9 whitespace-nowrap">
-                {f.label ?? f.field_name}
+                {f.is_in_db ? (
+                  <SortHeader field={f.field_name} label={f.label ?? f.field_name} />
+                ) : (
+                  (f.label ?? f.field_name)
+                )}
               </TableHead>
             ))}
           </TableRow>

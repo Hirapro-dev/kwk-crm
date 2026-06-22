@@ -5,9 +5,21 @@ export interface MemberListParams {
   q?: string; // 名前 / kana / email / phone のあいまい検索
   ownerId?: string; // 'me' / 'free' / uuid
   customerType?: string;
+  /** ソート列(ホワイトリストのみ) / 方向 */
+  sort?: string;
+  dir?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
 }
+
+/** 一覧でソート可能な members カラム(SQL安全のためホワイトリスト) */
+const MEMBER_SORTABLE = new Set<string>([
+  'id', 'name', 'name_kana', 'email1', 'phone1', 'do_not_call',
+  'postal_code', 'address', 'customer_type', 'owner_id', 'owner_name_raw',
+  'gender', 'birthdate', 'first_contact_date', 'registered_at',
+  'total_amount', 'total_paid_amount', 'total_used_amount',
+  'created_at', 'updated_at',
+]);
 
 export interface MemberListResult {
   rows: MemberWithOwner[];
@@ -35,7 +47,16 @@ export async function listMembers(params: MemberListParams = {}): Promise<Member
       `,
       { count: 'exact' },
     )
-    .is('deleted_at', null)
+    .is('deleted_at', null);
+
+  // ソート(ホワイトリスト)→ 既定は登録日時の降順をタイブレークに付与
+  if (params.sort && MEMBER_SORTABLE.has(params.sort)) {
+    query = query.order(params.sort, {
+      ascending: params.dir !== 'desc',
+      nullsFirst: false,
+    });
+  }
+  query = query
     .order('registered_at', { ascending: false, nullsFirst: false })
     .range(from, to);
 

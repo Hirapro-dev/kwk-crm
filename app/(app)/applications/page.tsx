@@ -5,6 +5,7 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { PanelFilterBar, PanelHeader } from '@/components/layout/PanelHeader';
+import { SortHeader } from '@/components/layout/SortHeader';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { PaginationBar } from '@/components/ui/pagination-link';
@@ -30,6 +31,8 @@ interface PageProps {
     q?: string;
     project?: string;
     status?: string;
+    sort?: string;
+    dir?: string;
     page?: string;
   }>;
 }
@@ -55,6 +58,8 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
       q: sp.q,
       projectId,
       status,
+      sort: sp.sort,
+      dir: sp.dir === 'desc' ? 'desc' : 'asc',
       page,
       pageSize: 50,
     }),
@@ -85,14 +90,14 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>申込ID</TableHead>
-              <TableHead>申込日</TableHead>
-              <TableHead>会員</TableHead>
-              <TableHead>案件</TableHead>
-              <TableHead>ステータス</TableHead>
-              <TableHead>区分</TableHead>
-              <TableHead className="text-right">入金額</TableHead>
-              <TableHead>担当</TableHead>
+              <TableHead><SortHeader field="id" label="申込ID" /></TableHead>
+              <TableHead><SortHeader field="application_date" label="申込日" /></TableHead>
+              <TableHead><SortHeader field="member_id" label="会員" /></TableHead>
+              <TableHead><SortHeader field="project_id" label="案件" /></TableHead>
+              <TableHead><SortHeader field="status" label="ステータス" /></TableHead>
+              <TableHead><SortHeader field="flow_type" label="区分" /></TableHead>
+              <TableHead className="text-right"><SortHeader field="payment_amount" label="入金額" /></TableHead>
+              <TableHead><SortHeader field="owner_id" label="担当" /></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

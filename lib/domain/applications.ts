@@ -52,9 +52,18 @@ export interface ApplicationListParams {
   status?: AppStatus;
   ownerId?: string;
   memberId?: string;
+  sort?: string;
+  dir?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
 }
+
+/** 一覧でソート可能な applications カラム(ホワイトリスト) */
+const APPLICATION_SORTABLE = new Set<string>([
+  'id', 'member_id', 'project_id', 'application_date', 'status', 'flow_type',
+  'payment_amount', 'payment_date', 'scheduled_payment_date', 'scheduled_amount',
+  'owner_id', 'withdrawal_amount', 'withdrawal_date',
+]);
 
 export interface ApplicationListResult {
   rows: ApplicationListItem[];
@@ -86,7 +95,15 @@ export async function listApplications(
       `,
       { count: 'exact' },
     )
-    .is('deleted_at', null)
+    .is('deleted_at', null);
+
+  if (params.sort && APPLICATION_SORTABLE.has(params.sort)) {
+    query = query.order(params.sort, {
+      ascending: params.dir !== 'desc',
+      nullsFirst: false,
+    });
+  }
+  query = query
     .order('application_date', { ascending: false, nullsFirst: false })
     .range(from, to);
 

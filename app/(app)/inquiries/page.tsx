@@ -4,6 +4,7 @@
 
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { SortHeader } from '@/components/layout/SortHeader';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { PaginationBar } from '@/components/ui/pagination-link';
@@ -24,6 +25,8 @@ interface PageProps {
     q?: string;
     form?: string;
     unassigned?: string;
+    sort?: string;
+    dir?: string;
     page?: string;
   }>;
 }
@@ -38,6 +41,8 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
       q: sp.q,
       formId,
       unassigned: sp.unassigned === '1',
+      sort: sp.sort,
+      dir: sp.dir === 'desc' ? 'desc' : 'asc',
       page,
       pageSize: 50,
     }),
@@ -82,12 +87,12 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>問合せID</TableHead>
-              <TableHead>登録日時</TableHead>
-              <TableHead>フォーム</TableHead>
-              <TableHead>氏名</TableHead>
-              <TableHead>メール</TableHead>
-              <TableHead>電話</TableHead>
+              <TableHead><SortHeader field="id" label="問合せID" /></TableHead>
+              <TableHead><SortHeader field="registered_at" label="登録日時" /></TableHead>
+              <TableHead><SortHeader field="form_id" label="フォーム" /></TableHead>
+              <TableHead><SortHeader field="name" label="氏名" /></TableHead>
+              <TableHead><SortHeader field="email" label="メール" /></TableHead>
+              <TableHead><SortHeader field="phone" label="電話" /></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
