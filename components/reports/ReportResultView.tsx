@@ -172,33 +172,33 @@ export function ReportResultView({
     </TableRow>
   );
 
-  // ----- 詳細セル(会員氏名はリンク)。skipColIndex はグループ結合列で省略 -----
-  const renderCells = (row: Record<string, unknown>, skipColIndex = -1) => {
+  // ----- 詳細セル1つ分(会員氏名はリンク) -----
+  const renderDetailCell = (row: Record<string, unknown>, c: ReportColumnView) => {
     const memberId = row[MEMBER_LINK_ID_ALIAS];
-    return columns.map((c, ci) => {
-      if (ci === skipColIndex) return null;
-      const text = formatCell(row[c.alias]);
-      const linkable = c.source === 'm.name' && memberId != null && text !== '';
-      return (
-        <TableCell key={c.alias} className="whitespace-nowrap text-xs">
-          {linkable ? (
-            <Link
-              href={`/members/${encodeURIComponent(String(memberId))}`}
-              className="text-primary hover:underline"
-            >
-              {text}
-            </Link>
-          ) : (
-            text
-          )}
-        </TableCell>
-      );
-    });
+    const text = formatCell(row[c.alias]);
+    const linkable = c.source === 'm.name' && memberId != null && text !== '';
+    return (
+      <TableCell key={c.alias} className="whitespace-nowrap text-xs">
+        {linkable ? (
+          <Link
+            href={`/members/${encodeURIComponent(String(memberId))}`}
+            className="text-primary hover:underline"
+          >
+            {text}
+          </Link>
+        ) : (
+          text
+        )}
+      </TableCell>
+    );
   };
+  const renderCells = (row: Record<string, unknown>) =>
+    columns.map((c) => renderDetailCell(row, c));
 
-  // グループ結合セル(rowspan)
-  const groupMergedCell = (g: { key: string; rows: unknown[] }) => (
+  // グループ結合セル(rowspan)。key は配置先のグループ列に合わせる。
+  const groupMergedCell = (g: { key: string; rows: unknown[] }, key: string) => (
     <TableCell
+      key={key}
       rowSpan={g.rows.length}
       className="whitespace-nowrap border-r bg-slate-50/60 align-top text-xs font-semibold text-slate-800"
     >
@@ -331,10 +331,12 @@ export function ReportResultView({
                           key={g.key}
                           group={g}
                           merged={merged}
+                          columns={columns}
                           groupColIndex={groupColIndex}
                           showDetail={showDetail}
                           showSubtotal={showSubtotal && showDetail}
                           renderCells={renderCells}
+                          renderDetailCell={renderDetailCell}
                           renderSummaryRow={(rows2, label) =>
                             renderSummaryRow(rows2, label, 'subtotal', labelColIndex)
                           }
@@ -429,10 +431,12 @@ export function ReportResultView({
 function GroupBlock({
   group,
   merged,
+  columns,
   groupColIndex,
   showDetail,
   showSubtotal,
   renderCells,
+  renderDetailCell,
   renderSummaryRow,
   groupMergedCell,
   groupHeaderRow,
@@ -440,15 +444,23 @@ function GroupBlock({
 }: {
   group: { key: string; rows: Array<Record<string, unknown>> };
   merged: boolean;
+  columns: ReportColumnView[];
   groupColIndex: number;
   showDetail: boolean;
   showSubtotal: boolean;
-  renderCells: (row: Record<string, unknown>, skipColIndex?: number) => React.ReactNode;
+  renderCells: (row: Record<string, unknown>) => React.ReactNode;
+  renderDetailCell: (
+    row: Record<string, unknown>,
+    c: ReportColumnView,
+  ) => React.ReactNode;
   renderSummaryRow: (
     rows: Array<Record<string, unknown>>,
     label: string,
   ) => React.ReactNode;
-  groupMergedCell: (g: { key: string; rows: unknown[] }) => React.ReactNode;
+  groupMergedCell: (
+    g: { key: string; rows: unknown[] },
+    key: string,
+  ) => React.ReactNode;
   groupHeaderRow: (g: { key: string; rows: unknown[] }) => React.ReactNode;
   collapsedRow: (g: { key: string; rows: Array<Record<string, unknown>> }) => React.ReactNode;
 }) {
@@ -470,7 +482,8 @@ function GroupBlock({
     );
   }
 
-  // セル結合スタイル(画像3)
+  // セル結合スタイル(画像3): 結合セルは「グループ列の位置」に置く。
+  // (先頭固定にすると、グループ列より前の列がずれるバグになる)
   return (
     <>
       {group.rows.map((row, i) => (
@@ -478,8 +491,13 @@ function GroupBlock({
           key={i}
           className={i === 0 ? 'border-t-2 border-slate-300' : undefined}
         >
-          {i === 0 && groupMergedCell(group)}
-          {renderCells(row, groupColIndex)}
+          {columns.map((c, ci) => {
+            if (ci === groupColIndex) {
+              // 結合列: 先頭行のみ rowspan セル、以降は省略(rowspanでカバー)
+              return i === 0 ? groupMergedCell(group, c.alias) : null;
+            }
+            return renderDetailCell(row, c);
+          })}
         </TableRow>
       ))}
       {showSubtotal && renderSummaryRow(group.rows, '小計')}
