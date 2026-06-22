@@ -61,7 +61,8 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
   ]);
 
   const totalMinutes = (todayDurations.data ?? []).reduce(
-    (acc, r) => acc + ((r.duration_minutes as number | null) ?? 0),
+    (acc: number, r: { duration_minutes: number | null }) =>
+      acc + (r.duration_minutes ?? 0),
     0,
   );
 

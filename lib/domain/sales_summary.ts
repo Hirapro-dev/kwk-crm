@@ -108,7 +108,9 @@ export async function getSalesSummary(
   }
 
   // 4) users 全件にマージ
-  const rows: SalesSummaryRow[] = (users ?? []).map((u) => {
+  const rows: SalesSummaryRow[] = (
+    users ?? []
+  ).map((u: { id: string; full_name: string | null; email: string }) => {
     const s = summary.get(u.id) ?? { sum: 0, count: 0 };
     return {
       user_id: u.id,

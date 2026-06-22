@@ -73,11 +73,11 @@ export function SalesBarChart({ rows }: Props) {
             width={70}
           />
           <Tooltip
-            formatter={(value: number, _name) => [
-              yenFormatter.format(value),
+            formatter={(value) => [
+              yenFormatter.format(Number(value)),
               '入金額',
             ]}
-            labelFormatter={(label: string) => `担当者: ${label}`}
+            labelFormatter={(label) => `担当者: ${String(label)}`}
             cursor={{ fill: 'rgba(21, 137, 238, 0.08)' }}
             contentStyle={{
               fontSize: 12,
