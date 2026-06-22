@@ -55,7 +55,8 @@ errors/*
 *.tmp.*
 
 # 自動生成
-lib/supabase/types.ts
+# 注: lib/supabase/types.ts はビルドで import されるため追跡対象にする
+#     (除外すると Vercel 等のクリーン環境で "Cannot find module './types'" になる)
 
 # ビルド成果物
 *.tsbuildinfo
