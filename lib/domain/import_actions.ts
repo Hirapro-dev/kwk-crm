@@ -20,7 +20,7 @@ import { IMPORT_OBJECTS } from '@/lib/import/schema';
 import { getCurrentUser } from './auth';
 import { commitInquiriesCsv, previewInquiriesCsv } from './import_inquiries';
 
-const MAX_ROWS = 20_000; // バルクUIの上限(超過分はスクリプト/分割を案内)
+const MAX_ROWS = 60_000; // バルクUIの上限(会員約23,580件に余裕を持たせる。超過分はスクリプト/分割を案内)
 const BATCH = 500;
 
 export interface PreviewResult {

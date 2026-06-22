@@ -23,7 +23,7 @@ import { getCurrentUser } from './auth';
 import type { CommitResult, PreviewResult } from './import_actions';
 
 const BATCH = 500;
-const MAX_ROWS = 30_000;
+const MAX_ROWS = 60_000;
 
 async function assertAdmin(): Promise<string | null> {
   const me = await getCurrentUser();

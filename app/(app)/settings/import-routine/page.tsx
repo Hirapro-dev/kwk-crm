@@ -9,6 +9,9 @@ import { getImportSources } from '@/lib/domain/import_sources';
 import { isDriveConfigured } from '@/lib/google/drive';
 import { DriveImportPanel } from './DriveImportPanel';
 
+// 大量行(会員 約2.4万件)の取込に備え、実行時間上限を確保(Vercel 最大300s)
+export const maxDuration = 300;
+
 export default async function ImportRoutinePage() {
   const sources = await getImportSources();
   const configured = isDriveConfigured();
