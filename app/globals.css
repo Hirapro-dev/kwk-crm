@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Salesforce Lightning Design System (SLDS) 風カラーパレット */
+    --background: 0 0% 95%; /* #f3f3f3 ページ背景 */
+    --foreground: 0 0% 9%; /* #181818 メインテキスト */
+    --card: 0 0% 100%; /* #ffffff カード白 */
+    --card-foreground: 0 0% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 9%;
+    --primary: 212 100% 47%; /* #0070d2 SF ブランドブルー */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96.5%; /* #f7f7f7 セカンダリ背景 */
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.5%;
+    --muted-foreground: 30 3% 43%; /* #706e6b */
+    --accent: 211 100% 96%; /* 淡い水色(ホバー用) */
+    --accent-foreground: 212 100% 35%;
+    --destructive: 0 76% 50%; /* #c23934 SF エラー赤 */
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 4% 86%; /* #dddbda SF 境界線 */
+    --input: 30 4% 86%;
+    --ring: 212 100% 47%;
+    --radius: 0.25rem; /* SF は角丸が小さい */
+
+    /* SF 専用拡張変数 */
+    --sf-header: 216 100% 12%; /* #001639 ヘッダー濃紺 */
+    --sf-header-foreground: 0 0% 100%;
+    --sf-header-hover: 216 100% 18%;
+    --sf-link: 212 100% 35%; /* #006dcc リンク色 */
+    --sf-success: 145 63% 35%; /* #2e844a */
+    --sf-warning: 36 100% 50%; /* #ffb75d */
+    --sf-row-hover: 210 30% 97%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family:
+      'Salesforce Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+      'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Meiryo',
+      sans-serif;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+    font-size: 13px; /* SLDS の標準フォントサイズ */
+    line-height: 1.5;
+  }
+}
+
+/* Salesforce Lightning 風ユーティリティ */
+@layer components {
+  .sf-header {
+    background-color: hsl(var(--sf-header));
+    color: hsl(var(--sf-header-foreground));
+  }
+  .sf-link {
+    color: hsl(var(--sf-link));
+  }
+  .sf-link:hover {
+    text-decoration: underline;
+  }
+  .sf-row-hover:hover {
+    background-color: hsl(var(--sf-row-hover));
+  }
+  /* SLDS スタイルのオブジェクトアイコンチップ */
+  .sf-icon-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.125rem;
+    color: white;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  /*
+   * 各詳細ページ上部の「← 一覧へ戻る」リンク用。
+   * デフォルトの text-muted-foreground だと水色背景 (#b0c4df) に対して
+   * 視認性が悪いため、濃い文字色 (#111) + hover でアクセントオレンジ (#ffaa00) に。
+   */
+  .sf-back-link {
+    color: #111;
+    transition: color 120ms ease-in-out;
+  }
+  .sf-back-link:hover {
+    color: #ffaa00;
+  }
+}

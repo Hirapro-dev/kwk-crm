@@ -1,0 +1,22 @@
+-- ============================================================================
+-- 標準レポート 10件 初期投入
+-- 仕様書 §9.12 の 10 件を是非としてシード化する。
+-- 配置: supabase/migrations/06_seed_standard_reports.sql
+-- 前提: 05_reports_schema.sql が適用済み
+-- ============================================================================
+-- ※ Phase 6 で本実装。Phase 0 ではプレースホルダのみ。
+--   作成者(created_by)には admin ユーザーの id を指定する必要があるため、
+--   実投入は Phase 6 で各レポートタイプの definition (JSON) が固まってから行う。
+
+-- TODO(Phase 6): 10件分の INSERT 文を追加
+--
+-- 例 (RT08: 担当者別 今月活動件数):
+-- INSERT INTO public.reports (name, description, report_type, definition, is_standard, created_by)
+-- VALUES (
+--   '担当者別 今月活動件数',
+--   '担当×活動分類のクロス、対象=今月',
+--   'RT08',
+--   '{"columns":[...],"filters":{...},"group_by":[...]}'::jsonb,
+--   true,
+--   '<admin-user-uuid>'
+-- );

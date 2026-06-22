@@ -1,0 +1,61 @@
+# Node
+node_modules/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js
+.next/
+out/
+build/
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env*.bak
+
+# Google サービスアカウントキー等の秘密JSON(誤コミット防止)
+service-account*.json
+*service_account*.json
+gcp-*.json
+*-credentials.json
+
+# Supabase ローカル
+supabase/.branches/
+supabase/.temp/
+supabase/seed.sql
+supabase/.env
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+._*
+Thumbs.db
+
+# Test
+coverage/
+playwright-report/
+test-results/
+.vitest/
+
+# 移行データ(個人情報含む / 仕様書 §12.4) — csv/ errors/ 配下は .gitkeep 以外すべて除外
+csv/*
+errors/*
+!csv/.gitkeep
+!errors/.gitkeep
+
+# 作業用バックアップ・一時ファイル(誤コミット防止)
+*.bak
+*.attempt*
+*.tmp.*
+
+# 自動生成
+lib/supabase/types.ts
+
+# ビルド成果物
+*.tsbuildinfo

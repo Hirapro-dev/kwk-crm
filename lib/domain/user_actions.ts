@@ -1,0 +1,158 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from './auth';
+
+const ROLES = ['admin', 'manager', 'sales', 'viewer'] as const;
+
+const UpdateRoleSchema = z.object({
+  user_id: z.string().uuid(),
+  role: z.enum(ROLES),
+  is_active: z.boolean().optional(),
+});
+
+export interface UserUpdateResult {
+  ok: boolean;
+  error?: string;
+}
+
+export async function updateUserRole(input: {
+  user_id: string;
+  role: string;
+  is_active?: boolean;
+}): Promise<UserUpdateResult> {
+  const parsed = UpdateRoleSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? '入力エラー' };
+  }
+  const me = await getCurrentUser();
+  if (me.role !== 'admin') {
+    return { ok: false, error: 'ユーザー管理は admin のみ可能です' };
+  }
+  if (parsed.data.user_id === me.id && parsed.data.role !== 'admin') {
+    return { ok: false, error: '自分自身を非 admin に降格することはできません' };
+  }
+
+  const supabase = await createClient();
+  const update: Record<string, unknown> = { role: parsed.data.role };
+  if (parsed.data.is_active !== undefined) update.is_active = parsed.data.is_active;
+
+  const { error } = await supabase.from('users').update(update).eq('id', parsed.data.user_id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath('/admin/users');
+  revalidatePath('/settings/users');
+  return { ok: true };
+}
+
+// ----------------------------------------------------------------------------
+// 招待 (新規ユーザーをメールで招待)
+// ----------------------------------------------------------------------------
+
+const InviteSchema = z.object({
+  email: z.string().email('メールアドレスの形式が正しくありません'),
+  last_name: z.string().min(1, '姓を入力してください').max(100),
+  first_name: z
+    .string()
+    .max(100)
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  role: z.enum(ROLES).default('sales'),
+});
+
+export interface InviteResult {
+  ok: boolean;
+  error?: string;
+  message?: string;
+  user_id?: string;
+}
+
+/**
+ * 新規ユーザーを招待する (管理者のみ)。
+ *
+ * Supabase Admin API の inviteUserByEmail() でメール招待。
+ * 招待リンクから新規パスワード設定するとログイン可能になる。
+ * 招待と同時に public.users 行を upsert し、姓名・ロールを設定。
+ */
+export async function inviteUser(input: {
+  email: string;
+  last_name: string;
+  first_name?: string;
+  role?: 'admin' | 'manager' | 'sales' | 'viewer';
+}): Promise<InviteResult> {
+  const parsed = InviteSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? '入力エラー' };
+  }
+  const me = await getCurrentUser();
+  if (me.role !== 'admin') {
+    return { ok: false, error: '招待は admin のみ可能です' };
+  }
+
+  const supabase = await createClient();
+
+  // 既に同メアドの public.users が居ないかチェック
+  const { data: existing, error: chkErr } = await supabase
+    .from('users')
+    .select('id, email')
+    .eq('email', parsed.data.email)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (chkErr) return { ok: false, error: chkErr.message };
+  if (existing) {
+    return { ok: false, error: '同じメールアドレスのユーザーが既に登録されています' };
+  }
+
+  // Supabase Auth に招待
+  const { data: authData, error: authErr } = await supabase.auth.admin.inviteUserByEmail(
+    parsed.data.email,
+    {
+      data: {
+        last_name: parsed.data.last_name,
+        first_name: parsed.data.first_name ?? null,
+      },
+    },
+  );
+  if (authErr || !authData?.user) {
+    return { ok: false, error: authErr?.message ?? '招待に失敗しました' };
+  }
+
+  const authUserId = authData.user.id;
+  const last_name = parsed.data.last_name.trim();
+  const first_name = parsed.data.first_name?.trim() || null;
+  const full_name = first_name ? `${last_name} ${first_name}` : last_name;
+
+  // public.users を upsert
+  const { error: upsertErr } = await supabase
+    .from('users')
+    .upsert(
+      {
+        id: authUserId,
+        email: parsed.data.email,
+        last_name,
+        first_name,
+        full_name,
+        role: parsed.data.role,
+        is_active: true,
+        legacy_sf_id: null,
+      },
+      { onConflict: 'id' },
+    );
+
+  if (upsertErr) {
+    // auth は残しておくとゴミになるので削除
+    await supabase.auth.admin.deleteUser(authUserId);
+    return { ok: false, error: `public.users upsert失敗: ${upsertErr.message}` };
+  }
+
+  revalidatePath('/admin/users');
+  revalidatePath('/settings/users');
+
+  return {
+    ok: true,
+    user_id: authUserId,
+    message: `${parsed.data.email} に招待メールを送信しました`,
+  };
+}
