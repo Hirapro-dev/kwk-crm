@@ -58,9 +58,27 @@ export default async function MemberDetailPage({ params }: PageProps) {
       listInquiries({ memberId: id, pageSize: 100, page: 1 }),
     ]);
 
-  const ownerLabel = member.owner
+  // プロテクト(担当)。将来は専用システムのユーザー名が入る想定。現状は担当者を表示。
+  const protectLabel = member.owner
     ? (member.owner.full_name ?? member.owner.email)
-    : 'Free';
+    : (member.owner_name_raw ?? 'Free');
+
+  // 弁護士対応 / 番号違い・別人 等のフラグは extra(JSONB) から判定(なければ「なし」)
+  const isExtraOn = (key: string): boolean => {
+    const v = member.extra?.[key];
+    if (v === true) return true;
+    if (typeof v === 'string') {
+      const s = v.trim();
+      return s !== '' && !/^(false|0|なし|no|×|off)$/i.test(s);
+    }
+    return false;
+  };
+  const flagValue = (on: boolean) =>
+    on ? (
+      <Badge variant="destructive">あり</Badge>
+    ) : (
+      <span className="text-muted-foreground">なし</span>
+    );
 
   return (
     <div className="space-y-3">
@@ -77,19 +95,11 @@ export default async function MemberDetailPage({ params }: PageProps) {
         recordName={member.name ?? '(名称未設定)'}
         recordSubName={`${member.id}${member.name_kana ? ` ・ ${member.name_kana}` : ''}`}
         facts={[
-          { label: '担当', value: ownerLabel },
-          { label: '顧客種別', value: member.customer_type ?? '-' },
-          {
-            label: '総取引額',
-            value:
-              member.total_amount !== null
-                ? `¥${Number(member.total_amount).toLocaleString()}`
-                : '-',
-          },
-          {
-            label: '登録日時',
-            value: formatDateTime(member.registered_at) || '-',
-          },
+          { label: 'プロテクト', value: protectLabel },
+          { label: '電話番号', value: member.phone1 ?? '-' },
+          { label: '架電NG', value: flagValue(member.do_not_call) },
+          { label: '弁護士対応', value: flagValue(isExtraOn('弁護士対応')) },
+          { label: '番号違い・別人', value: flagValue(isExtraOn('番号違い・別人')) },
         ]}
         actions={
           <>

@@ -33,6 +33,8 @@ export interface Member {
   total_paid_amount: number | null;
   total_used_amount: number | null;
   registered_at: string | null;
+  /** フォーム固有/可変項目(弁護士対応・番号違い等のフラグもここに格納) */
+  extra: Record<string, unknown> | null;
   deleted_at: string | null;
 }
 
