@@ -90,20 +90,23 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
     ],
   },
 
+  // 問合せは専用ハンドラ(lib/domain/import_inquiries.ts)で取込む。
+  // ここの fields はテンプレCSVのヘッダー(共通列)生成にのみ使用。
+  // フォーム名→form_id 解決、共通列以外→extra(JSONB) はハンドラ側で処理する。
   inquiries: {
     object: 'inquiries',
     table: 'inquiries',
     label: '問合せ',
     idField: 'id',
-    note: '問合せID(TA-XXXXXXX)で突合します。',
+    note: '元のフォーム出力CSVをそのまま使えます。問合せID(TA-)で突合。「フォーム名」はforms名で解決(無ければ新規追加)、共通列以外はextraに格納されます。2フォーム分は定期取込(Drive)で2ファイル指定可。',
     fields: [
       { field: 'id', label: '問合せID', type: 'text', required: true },
-      { field: 'form_id', label: 'フォームID', type: 'number' },
       { field: 'member_id', label: '会員ID', type: 'text' },
+      { field: 'form_name', label: 'フォーム名', type: 'text' },
       { field: 'name', label: '氏名', type: 'text' },
-      { field: 'name_kana', label: '氏名カナ', type: 'text' },
-      { field: 'email', label: 'メール', type: 'text' },
-      { field: 'phone', label: '電話', type: 'text' },
+      { field: 'name_kana', label: '氏名かな', type: 'text' },
+      { field: 'email', label: 'メールアドレス', type: 'text' },
+      { field: 'phone', label: '電話番号', type: 'text' },
       { field: 'postal_code', label: '郵便番号', type: 'text' },
       { field: 'address', label: '住所', type: 'text' },
       { field: 'ad_id', label: '広告ID', type: 'text' },

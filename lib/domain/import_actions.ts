@@ -18,6 +18,7 @@ import { createClient } from '@/lib/supabase/server';
 import { mapAndValidate, parseCsv, type RowError } from '@/lib/import/parse';
 import { IMPORT_OBJECTS } from '@/lib/import/schema';
 import { getCurrentUser } from './auth';
+import { commitInquiriesCsv, previewInquiriesCsv } from './import_inquiries';
 
 const MAX_ROWS = 20_000; // バルクUIの上限(超過分はスクリプト/分割を案内)
 const BATCH = 500;
@@ -84,6 +85,9 @@ export async function previewImport(
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
 
+  // 問合せは2フォーム統合 + extra(JSONB) + フォーム名解決のため専用ハンドラに委譲
+  if (object === 'inquiries') return previewInquiriesCsv([csvText]);
+
   const def = IMPORT_OBJECTS[object];
   if (!def) return { ok: false, error: '不明なオブジェクトです' };
 
@@ -147,6 +151,9 @@ export async function commitImport(
 ): Promise<CommitResult> {
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
+
+  // 問合せは専用ハンドラに委譲(2フォーム統合 + extra + フォーム名解決)
+  if (object === 'inquiries') return commitInquiriesCsv([csvText]);
 
   const def = IMPORT_OBJECTS[object];
   if (!def) return { ok: false, error: '不明なオブジェクトです' };

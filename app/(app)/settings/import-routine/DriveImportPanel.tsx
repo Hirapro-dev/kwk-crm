@@ -63,7 +63,9 @@ function DriveSourceCard({
   const router = useRouter();
   const def = IMPORT_OBJECTS[source.object];
   const [fileId, setFileId] = useState(source.drive_file_id ?? '');
+  const [fileId2, setFileId2] = useState(source.drive_file_id_2 ?? '');
   const [enabled, setEnabled] = useState(source.enabled);
+  const isInquiries = source.object === 'inquiries';
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [committed, setCommitted] = useState<CommitResult | null>(null);
@@ -79,6 +81,7 @@ function DriveSourceCard({
       const res = await saveImportSource({
         object: source.object,
         drive_file_id: fileId,
+        drive_file_id_2: isInquiries ? fileId2 || undefined : undefined,
         enabled,
       });
       setSaveMsg(res.ok ? '保存しました' : (res.error ?? '保存失敗'));
@@ -157,6 +160,25 @@ function DriveSourceCard({
             保存
           </Button>
         </div>
+
+        {/* 問合せは2フォーム(KAWARA版 / 機密保持・CP)を統合取込するため2ファイル目を指定可能 */}
+        {isInquiries && (
+          <div className="space-y-1">
+            <label className="text-[11px] text-muted-foreground" htmlFor={`f2-${source.object}`}>
+              2つ目のファイル(任意・問合せの別フォーム由来CSV)
+            </label>
+            <Input
+              id={`f2-${source.object}`}
+              value={fileId2}
+              onChange={(e) => setFileId2(e.target.value)}
+              placeholder="例: 機密保持・CP のCSVファイルID / 共有URL"
+              className="h-8 text-sm"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              2フォームのCSVを統合し、問合せID(TA-)で突合します。共通列はカラム、フォーム固有列は extra に格納されます。
+            </p>
+          </div>
+        )}
         {saveMsg && <p className="text-xs text-muted-foreground">{saveMsg}</p>}
 
         <div className="flex flex-wrap items-center gap-2">

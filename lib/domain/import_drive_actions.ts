@@ -21,6 +21,7 @@ import {
   previewImport,
   type PreviewResult,
 } from './import_actions';
+import { commitInquiriesCsv, previewInquiriesCsv } from './import_inquiries';
 
 export interface SimpleResult {
   ok: boolean;
@@ -42,6 +43,7 @@ export async function getDriveStatus(): Promise<{ configured: boolean }> {
 export async function saveImportSource(input: {
   object: string;
   drive_file_id: string;
+  drive_file_id_2?: string;
   enabled: boolean;
 }): Promise<SimpleResult> {
   const adminErr = await assertAdmin();
@@ -49,11 +51,13 @@ export async function saveImportSource(input: {
   if (!IMPORT_OBJECTS[input.object]) return { ok: false, error: '不明なオブジェクトです' };
 
   const fileId = input.drive_file_id ? extractDriveFileId(input.drive_file_id) : null;
+  const fileId2 = input.drive_file_id_2 ? extractDriveFileId(input.drive_file_id_2) : null;
   const supabase = await createClient();
   const { error } = await supabase.from('import_sources').upsert(
     {
       object: input.object,
       drive_file_id: fileId,
+      drive_file_id_2: fileId2,
       enabled: input.enabled,
     },
     { onConflict: 'object' },
@@ -63,16 +67,27 @@ export async function saveImportSource(input: {
   return { ok: true, message: '保存しました' };
 }
 
-/** 保存済みの Drive ファイルIDを取得 */
-async function loadFileId(object: string): Promise<string | null> {
+/** 保存済みの Drive ファイルID(1つ目/2つ目)を取得 */
+async function loadFileIds(
+  object: string,
+): Promise<{ file1: string | null; file2: string | null }> {
   const supabase = await createClient();
   const { data } = await supabase
     .from('import_sources')
-    .select('drive_file_id')
+    .select('drive_file_id,drive_file_id_2')
     .eq('object', object)
     .maybeSingle();
-  const v = (data as { drive_file_id?: string | null } | null)?.drive_file_id;
-  return v ?? null;
+  const row = data as { drive_file_id?: string | null; drive_file_id_2?: string | null } | null;
+  return { file1: row?.drive_file_id ?? null, file2: row?.drive_file_id_2 ?? null };
+}
+
+/** 設定済みファイルを Drive から取得して CSV テキスト配列にする */
+async function fetchConfiguredCsvs(object: string): Promise<string[]> {
+  const { file1, file2 } = await loadFileIds(object);
+  const ids = [file1, file2].filter((v): v is string => !!v);
+  const texts: string[] = [];
+  for (const id of ids) texts.push(await fetchDriveFileCsv(id));
+  return texts;
 }
 
 export async function previewDriveImport(object: string): Promise<PreviewResult> {
@@ -81,16 +96,20 @@ export async function previewDriveImport(object: string): Promise<PreviewResult>
   if (!isDriveConfigured()) {
     return { ok: false, error: 'Google サービスアカウントが未設定です (GOOGLE_SERVICE_ACCOUNT_JSON)' };
   }
-  const fileId = await loadFileId(object);
-  if (!fileId) return { ok: false, error: 'Drive ファイルが未設定です。先にファイルを保存してください。' };
 
-  let csv: string;
+  let texts: string[];
   try {
-    csv = await fetchDriveFileCsv(fileId);
+    texts = await fetchConfiguredCsvs(object);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
-  return previewImport(object, csv);
+  if (texts.length === 0) {
+    return { ok: false, error: 'Drive ファイルが未設定です。先にファイルを保存してください。' };
+  }
+
+  // 問合せは2ファイルを統合して専用ハンドラへ。他は1ファイルを汎用ハンドラへ。
+  if (object === 'inquiries') return previewInquiriesCsv(texts);
+  return previewImport(object, texts[0] as string);
 }
 
 export async function runDriveImport(object: string): Promise<CommitResult> {
@@ -99,19 +118,21 @@ export async function runDriveImport(object: string): Promise<CommitResult> {
   if (!isDriveConfigured()) {
     return { ok: false, error: 'Google サービスアカウントが未設定です (GOOGLE_SERVICE_ACCOUNT_JSON)' };
   }
-  const fileId = await loadFileId(object);
-  if (!fileId) return { ok: false, error: 'Drive ファイルが未設定です。' };
 
-  let result: CommitResult;
-  let csv: string;
+  let texts: string[];
   try {
-    csv = await fetchDriveFileCsv(fileId);
+    texts = await fetchConfiguredCsvs(object);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await recordRun(object, 'error', msg);
     return { ok: false, error: msg };
   }
-  result = await commitImport(object, csv);
+  if (texts.length === 0) return { ok: false, error: 'Drive ファイルが未設定です。' };
+
+  const result =
+    object === 'inquiries'
+      ? await commitInquiriesCsv(texts)
+      : await commitImport(object, texts[0] as string);
   await recordRun(
     object,
     result.ok ? 'success' : 'error',
