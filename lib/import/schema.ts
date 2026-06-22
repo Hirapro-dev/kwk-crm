@@ -37,32 +37,30 @@ export interface ImportObjectDef {
 }
 
 export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
+  // 会員は専用ハンドラ(lib/domain/import_members.ts)で取込む。
+  // ここの fields はテンプレCSVのヘッダー生成にのみ使用(実CSVの日本語ヘッダーに一致)。
   members: {
     object: 'members',
     table: 'members',
     label: '会員',
     idField: 'id',
-    note: '会員ID(K-XXXXXXX)で突合します。空なら取込不可。',
+    note: '元の会員CSVをそのまま使えます。会員ID(K-)で突合。電話番号末尾の「架電NG」は自動分離、永久担当は担当者名で解決します。',
     fields: [
       { field: 'id', label: '会員ID', type: 'text', required: true },
-      { field: 'name', label: '氏名', type: 'text' },
-      { field: 'name_kana', label: '氏名カナ', type: 'text' },
-      { field: 'real_name', label: '実質名義人', type: 'text' },
-      { field: 'email1', label: 'メール1', type: 'text' },
-      { field: 'email2', label: 'メール2', type: 'text' },
-      { field: 'email3', label: 'メール3', type: 'text' },
-      { field: 'phone1', label: '電話', type: 'text' },
-      { field: 'do_not_call', label: '架電NG', type: 'boolean' },
-      { field: 'postal_code', label: '郵便番号', type: 'text' },
-      { field: 'address', label: '住所', type: 'text' },
+      { field: 'name', label: '会員氏名', type: 'text', required: true },
+      { field: 'name_kana', label: '会員かな', type: 'text' },
+      { field: 'owner_name_raw', label: '永久担当', type: 'text' },
+      { field: 'email1', label: 'Eメール1', type: 'text' },
+      { field: 'phone1', label: '電話番号1', type: 'text' },
+      { field: 'address', label: '住所(フル)', type: 'text' },
       { field: 'customer_type', label: '顧客種別', type: 'text' },
       { field: 'gender', label: '性別', type: 'text' },
       { field: 'birthdate', label: '生年月日', type: 'date' },
       { field: 'first_contact_date', label: '初回接触日', type: 'date' },
-      { field: 'registered_at', label: '登録日時', type: 'datetime' },
-      { field: 'total_amount', label: '総取引額', type: 'number' },
-      { field: 'total_paid_amount', label: '総入金額', type: 'number' },
-      { field: 'total_used_amount', label: '総利用額', type: 'number' },
+      { field: 'registered_at', label: '登録日', type: 'datetime' },
+      { field: 'total_amount', label: '総合計額', type: 'number' },
+      { field: 'total_paid_amount', label: '総合計実入金額', type: 'number' },
+      { field: 'total_used_amount', label: '総利用額合計', type: 'number' },
     ],
   },
 

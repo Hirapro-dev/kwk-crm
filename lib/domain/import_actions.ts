@@ -19,6 +19,7 @@ import { mapAndValidate, parseCsv, type RowError } from '@/lib/import/parse';
 import { IMPORT_OBJECTS } from '@/lib/import/schema';
 import { getCurrentUser } from './auth';
 import { commitInquiriesCsv, previewInquiriesCsv } from './import_inquiries';
+import { commitMembersCsv, previewMembersCsv } from './import_members';
 
 const MAX_ROWS = 60_000; // バルクUIの上限(会員約23,580件に余裕を持たせる。超過分はスクリプト/分割を案内)
 const BATCH = 500;
@@ -90,7 +91,8 @@ export async function previewImport(
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
 
-  // 問合せは2フォーム統合 + extra(JSONB) + フォーム名解決のため専用ハンドラに委譲
+  // 専用ハンドラに委譲(実CSVヘッダー対応 / 架電NG分離 / 担当解決 / extra・フォーム解決)
+  if (object === 'members') return previewMembersCsv([csvText], updateOnly);
   if (object === 'inquiries') return previewInquiriesCsv([csvText], updateOnly);
 
   const def = IMPORT_OBJECTS[object];
@@ -170,7 +172,8 @@ export async function commitImport(
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
 
-  // 問合せは専用ハンドラに委譲(2フォーム統合 + extra + フォーム名解決)
+  // 専用ハンドラに委譲
+  if (object === 'members') return commitMembersCsv([csvText], updateOnly);
   if (object === 'inquiries') return commitInquiriesCsv([csvText], updateOnly);
 
   const def = IMPORT_OBJECTS[object];
