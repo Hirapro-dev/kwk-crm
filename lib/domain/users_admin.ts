@@ -36,3 +36,17 @@ export async function listAllUsers(opts?: {
   if (error) throw new Error(`ユーザー一覧取得に失敗: ${error.message}`);
   return (data ?? []) as AdminUserRow[];
 }
+
+export async function getUserById(id: string): Promise<AdminUserRow | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('users')
+    .select(
+      'id, email, full_name, first_name, last_name, role, is_active, legacy_sf_id, created_at',
+    )
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (error) throw new Error(`ユーザー取得に失敗: ${error.message}`);
+  return (data as AdminUserRow) ?? null;
+}

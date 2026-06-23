@@ -1,9 +1,9 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { deleteUser } from '@/lib/domain/user_actions';
+import { useRouter } from 'next/navigation';
+import { useState, useTransition } from 'react';
 
 /**
  * ユーザー1名を論理削除する(admin限定 / 物理削除はしない)。
@@ -13,10 +13,13 @@ export function UserDeleteButton({
   userId,
   userName,
   isSelf,
+  redirectTo,
 }: {
   userId: string;
   userName: string;
   isSelf: boolean;
+  /** 削除後の遷移先。未指定なら一覧をその場で再取得 */
+  redirectTo?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -27,7 +30,11 @@ export function UserDeleteButton({
   }
 
   const onDelete = () => {
-    if (!window.confirm(`「${userName}」を削除しますか?\n(担当として紐づく会員・対応歴の記録は残ります)`)) {
+    if (
+      !window.confirm(
+        `「${userName}」を削除しますか?\n(担当として紐づく会員・対応歴の記録は残ります)`,
+      )
+    ) {
       return;
     }
     setError(null);
@@ -37,7 +44,8 @@ export function UserDeleteButton({
         setError(res.error ?? '削除に失敗しました');
         return;
       }
-      router.refresh();
+      if (redirectTo) router.push(redirectTo);
+      else router.refresh();
     });
   };
 

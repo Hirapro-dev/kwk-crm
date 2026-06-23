@@ -5,7 +5,6 @@
  * /settings 配下のため、layout.tsx で admin チェック済 (二重チェックなし)。
  */
 
-import { Suspense } from 'react';
 import { PanelFilterBar, PanelHeader } from '@/components/layout/PanelHeader';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -17,13 +16,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getCurrentUser } from '@/lib/domain/auth';
-import { listAllUsers } from '@/lib/domain/users_admin';
 import type { UserRole } from '@/lib/domain/types';
-import { formatDateTime } from '@/lib/utils/date';
-import { UserRoleEditor } from '@/app/(app)/admin/users/UserRoleEditor';
+import { listAllUsers } from '@/lib/domain/users_admin';
+import Link from 'next/link';
+import { Suspense } from 'react';
 import { InviteUserForm } from './InviteUserForm';
-import { UserDeleteButton } from './UserDeleteButton';
 import { UsersFilterBar } from './UsersFilterBar';
 
 const ROLES: UserRole[] = ['admin', 'manager', 'sales', 'viewer'];
@@ -34,7 +31,6 @@ interface PageProps {
 
 export default async function SettingsUsersPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const me = await getCurrentUser();
 
   // 既定は「有効のみ」。active=all のときだけ全件表示。
   const activeOnly = sp.active !== 'all';
@@ -77,18 +73,16 @@ export default async function SettingsUsersPage({ searchParams }: PageProps) {
         <Table>
           <TableHeader>
             <TableRow className="bg-secondary/50 hover:bg-secondary/50">
-              <TableHead className="h-9">氏名</TableHead>
-              <TableHead className="h-9">メール</TableHead>
-              <TableHead className="h-9">旧Salesforce ID</TableHead>
-              <TableHead className="h-9">権限編集</TableHead>
-              <TableHead className="h-9">登録日時</TableHead>
-              <TableHead className="h-9">削除</TableHead>
+              <TableHead className="h-9">名前</TableHead>
+              <TableHead className="h-9">メールアドレス</TableHead>
+              <TableHead className="h-9">権限</TableHead>
+              <TableHead className="h-9">有効</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
                   ユーザーが登録されていません
                 </TableCell>
               </TableRow>
@@ -96,34 +90,23 @@ export default async function SettingsUsersPage({ searchParams }: PageProps) {
               users.map((u) => (
                 <TableRow key={u.id} className="sf-row-hover">
                   <TableCell className="py-2">
-                    <div className="font-medium">{u.full_name ?? '-'}</div>
-                    {!u.is_active && (
-                      <Badge variant="destructive" className="mt-1">
-                        無効
-                      </Badge>
-                    )}
+                    <Link
+                      href={`/settings/users/${u.id}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {u.full_name ?? '(氏名未設定)'}
+                    </Link>
                   </TableCell>
                   <TableCell className="py-2 text-sm">{u.email}</TableCell>
-                  <TableCell className="py-2 font-mono text-xs">
-                    {u.legacy_sf_id ?? '-'}
+                  <TableCell className="py-2">
+                    <Badge variant="outline">{u.role}</Badge>
                   </TableCell>
                   <TableCell className="py-2">
-                    <UserRoleEditor
-                      userId={u.id}
-                      initialRole={u.role}
-                      initialActive={u.is_active}
-                      isSelf={u.id === me.id}
-                    />
-                  </TableCell>
-                  <TableCell className="py-2 text-xs">
-                    {formatDateTime(u.created_at)}
-                  </TableCell>
-                  <TableCell className="py-2">
-                    <UserDeleteButton
-                      userId={u.id}
-                      userName={u.full_name ?? u.email}
-                      isSelf={u.id === me.id}
-                    />
+                    {u.is_active ? (
+                      <Badge variant="success">有効</Badge>
+                    ) : (
+                      <Badge variant="destructive">無効</Badge>
+                    )}
                   </TableCell>
                 </TableRow>
               ))
