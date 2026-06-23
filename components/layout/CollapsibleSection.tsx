@@ -26,20 +26,20 @@ export function CollapsibleSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between border-b px-4 py-3 text-left hover:bg-accent/30"
+        className="flex w-full items-center justify-between bg-slate-600 px-4 py-2.5 text-left hover:bg-slate-500 transition-colors"
       >
-        <span className="text-sm font-bold">{title}</span>
+        <span className="text-sm font-semibold tracking-wide text-white">{title}</span>
         <span className="flex items-center gap-2">
           {count != null && (
-            <span className="text-xs text-muted-foreground">{count.toLocaleString()}件</span>
+            <span className="text-xs text-slate-300">{count.toLocaleString()}件</span>
           )}
           <ChevronDown
-            className={cn('h-4 w-4 text-muted-foreground transition-transform', !open && '-rotate-90')}
+            className={cn('h-4 w-4 text-slate-300 transition-transform duration-200', !open && '-rotate-90')}
             aria-hidden="true"
           />
         </span>

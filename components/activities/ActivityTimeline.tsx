@@ -60,10 +60,7 @@ export function ActivityTimeline({ activities }: { activities: ActivityListItem[
                 <TableCell className="whitespace-nowrap py-2 text-sm">
                   {a.s_bunrui ?? '-'}
                 </TableCell>
-                <TableCell
-                  className="max-w-[400px] truncate py-2 text-sm text-muted-foreground"
-                  title={description || undefined}
-                >
+                <TableCell className="py-2 text-sm text-muted-foreground">
                   {description || '-'}
                 </TableCell>
               </TableRow>

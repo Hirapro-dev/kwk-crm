@@ -20,23 +20,23 @@ export function CollapsibleFieldGroup({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section>
+    <section className="rounded-md overflow-hidden border border-slate-200">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="mb-2 flex w-full items-center justify-between border-b pb-1 text-left"
+        className="flex w-full items-center justify-between bg-slate-100 px-3 py-2 text-left hover:bg-slate-200 transition-colors"
       >
-        <span className="text-sm font-bold tracking-wide text-slate-800">{title}</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">{title}</span>
         <ChevronDown
           className={cn(
-            'h-4 w-4 text-muted-foreground transition-transform',
+            'h-3.5 w-3.5 text-slate-400 transition-transform duration-200',
             !open && '-rotate-90',
           )}
           aria-hidden="true"
         />
       </button>
-      {open && children}
+      {open && <div className="p-3 bg-white">{children}</div>}
     </section>
   );
 }
