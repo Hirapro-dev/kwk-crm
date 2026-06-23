@@ -72,17 +72,27 @@ async function main() {
   const { users, resolver } = await loadUsersForOwnerResolver(sb);
   logger.info(`Loaded ${users.length} users for name resolution`);
 
-  // 有効な会員IDセットを構築 (member_id バリデーション用)
-  logger.info('Loading valid member IDs...');
-  const { data: memberRows, error: memberErr } = await sb
-    .from('members')
-    .select('id')
-    .is('deleted_at', null);
-  if (memberErr) {
-    logger.error('Failed to load members: ' + memberErr.message);
-    process.exit(1);
+  // 有効な会員IDセットを全件ページネーションで構築
+  // Supabase デフォルト上限は1000件のため、必ずページングする
+  logger.info('Loading valid member IDs (paginated)...');
+  const validMemberIds = new Set<string>();
+  const PAGE_SIZE = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error: memberErr } = await sb
+      .from('members')
+      .select('id')
+      .is('deleted_at', null)
+      .range(from, from + PAGE_SIZE - 1);
+    if (memberErr) {
+      logger.error('Failed to load members: ' + memberErr.message);
+      process.exit(1);
+    }
+    if (!data || data.length === 0) break;
+    for (const r of data as { id: string }[]) validMemberIds.add(r.id);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
   }
-  const validMemberIds = new Set((memberRows ?? []).map((r: { id: string }) => r.id));
   logger.info(`Valid members: ${validMemberIds.size}`);
 
   // --- 既存データ削除 (バッチ方式) ---
