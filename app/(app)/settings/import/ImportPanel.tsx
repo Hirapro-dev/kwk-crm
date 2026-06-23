@@ -9,19 +9,19 @@
  * 4. 「この内容で取込」で確定(upsert)
  */
 
-import { Download, FileUp, Loader2 } from 'lucide-react';
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import {
-  commitImport,
   type CommitResult,
-  previewImport,
   type PreviewResult,
+  commitImport,
+  previewImport,
 } from '@/lib/domain/import_actions';
 import { IMPORT_OBJECTS, IMPORT_OBJECT_KEYS } from '@/lib/import/schema';
+import { Download, FileUp, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState, useTransition } from 'react';
 
 export function ImportPanel() {
   const router = useRouter();
@@ -71,18 +71,39 @@ export function ImportPanel() {
     setCsvText(await f.text());
   };
 
+  // Server Action のボディ上限(25MB)に対する安全マージン。これを超える大量データは
+  // Web取込ではなく移行スクリプト(npm run migrate:activities 等)を案内する。
+  const MAX_UPLOAD_BYTES = 18 * 1024 * 1024;
+  const tooLargeError = (): string | null => {
+    if (file && file.size > MAX_UPLOAD_BYTES) {
+      return `ファイルが大きすぎます(${(file.size / 1024 / 1024).toFixed(1)}MB)。Web取込は約18MBまでです。大量データの移行(対応歴など)は移行スクリプトをご利用ください(下の注意書き参照)。`;
+    }
+    return null;
+  };
+
   const runPreview = () => {
     if (!csvText) return;
+    const sizeErr = tooLargeError();
+    if (sizeErr) {
+      setPreview({ ok: false, error: sizeErr });
+      return;
+    }
     setCommitted(null);
     setStage('previewing');
     startBusy(async () => {
       try {
         const res = await previewImport(objectKey, csvText, updateOnly);
         setPreview(
-          res ?? { ok: false, error: '結果を取得できませんでした。ページを再読み込みしてください。' },
+          res ?? {
+            ok: false,
+            error: '結果を取得できませんでした。ページを再読み込みしてください。',
+          },
         );
       } catch (e) {
-        setPreview({ ok: false, error: e instanceof Error ? e.message : 'プレビューに失敗しました' });
+        setPreview({
+          ok: false,
+          error: e instanceof Error ? e.message : 'プレビューに失敗しました',
+        });
       } finally {
         setStage('idle');
       }
@@ -91,12 +112,20 @@ export function ImportPanel() {
 
   const runCommit = () => {
     if (!csvText) return;
+    const sizeErr = tooLargeError();
+    if (sizeErr) {
+      setCommitted({ ok: false, error: sizeErr });
+      return;
+    }
     setStage('committing');
     startBusy(async () => {
       try {
         const res = await commitImport(objectKey, csvText, updateOnly);
         setCommitted(
-          res ?? { ok: false, error: '結果を取得できませんでした。ページを再読み込みしてください。' },
+          res ?? {
+            ok: false,
+            error: '結果を取得できませんでした。ページを再読み込みしてください。',
+          },
         );
         if (res?.ok) router.refresh();
       } catch (e) {
@@ -156,11 +185,7 @@ export function ImportPanel() {
               onChange={(e) => void onFileChange(e.target.files?.[0] ?? null)}
               className="text-sm file:mr-3 file:rounded file:border file:border-input file:bg-card file:px-3 file:py-1.5 file:text-sm"
             />
-            <Button
-              size="sm"
-              onClick={runPreview}
-              disabled={!csvText || busy}
-            >
+            <Button size="sm" onClick={runPreview} disabled={!csvText || busy}>
               {stage === 'previewing' ? (
                 <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
               ) : (
@@ -168,9 +193,7 @@ export function ImportPanel() {
               )}
               プレビュー
             </Button>
-            {file && (
-              <span className="text-xs text-muted-foreground">{file.name}</span>
-            )}
+            {file && <span className="text-xs text-muted-foreground">{file.name}</span>}
           </div>
 
           <label className="flex items-center gap-1.5 text-xs">
@@ -185,6 +208,15 @@ export function ImportPanel() {
             更新のみ（既存IDの更新だけ・新規レコードは作成しない）
           </label>
 
+          <p className="rounded bg-muted/50 p-2 text-xs text-muted-foreground">
+            ※ Web取込は約18MB(目安: 数万件)まで。対応歴など大量データの初期移行は
+            ターミナルで移行スクリプトを実行してください:
+            <code className="mx-1 rounded bg-background px-1 py-0.5">
+              npm run migrate:activities -- --file ./csv/extract.csv
+            </code>
+            (会員/申込/問合せは migrate:members / migrate:applications / migrate:inquiries)。
+          </p>
+
           {preview && !preview.ok && (
             <p role="alert" className="text-sm text-destructive">
               {preview.error}
@@ -197,9 +229,7 @@ export function ImportPanel() {
                 <Stat label="総行数" value={preview.totalRows ?? 0} />
                 <Stat label="新規" value={preview.newCount ?? 0} tone="new" />
                 <Stat label="更新" value={preview.updateCount ?? 0} tone="update" />
-                {updateOnly && (
-                  <Stat label="スキップ(新規)" value={preview.skippedCount ?? 0} />
-                )}
+                {updateOnly && <Stat label="スキップ(新規)" value={preview.skippedCount ?? 0} />}
                 <Stat
                   label="エラー"
                   value={preview.errorCount ?? 0}
@@ -250,13 +280,7 @@ export function ImportPanel() {
                           <td className="px-2 py-0.5">{s.row}</td>
                           <td className="px-2 py-0.5 font-mono">{s.id}</td>
                           <td className="px-2 py-0.5">
-                            <span
-                              className={
-                                s.mode === '新規'
-                                  ? 'text-green-700'
-                                  : 'text-primary'
-                              }
-                            >
+                            <span className={s.mode === '新規' ? 'text-green-700' : 'text-primary'}>
                               {s.mode}
                             </span>
                           </td>
@@ -280,22 +304,19 @@ export function ImportPanel() {
             <p className="text-xs text-muted-foreground">
               {updateOnly ? (
                 <>
-                  更新のみ: 既存 {preview.updateCount} 件を更新します(新規ID{' '}
-                  {preview.skippedCount} 件はスキップ)。
+                  更新のみ: 既存 {preview.updateCount} 件を更新します(新規ID {preview.skippedCount}{' '}
+                  件はスキップ)。
                 </>
               ) : (
                 <>
-                  有効な {preview.validCount?.toLocaleString()} 行(新規{' '}
-                  {preview.newCount} / 更新 {preview.updateCount})を {def.label}{' '}
-                  に取り込みます。
+                  有効な {preview.validCount?.toLocaleString()} 行(新規 {preview.newCount} / 更新{' '}
+                  {preview.updateCount})を {def.label} に取り込みます。
                 </>
               )}
               この操作はレコードを上書きします。
             </p>
             <Button onClick={runCommit} disabled={busy}>
-              {stage === 'committing' && (
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-              )}
+              {stage === 'committing' && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               この内容で取込
             </Button>
 
@@ -310,8 +331,7 @@ export function ImportPanel() {
                 {committed.upserted?.toLocaleString()} 件を取り込みました。
                 {(committed.skippedCount ?? 0) > 0 &&
                   ` (新規ID ${committed.skippedCount} 件はスキップ)`}
-                {(committed.errorCount ?? 0) > 0 &&
-                  ` (エラー ${committed.errorCount} 件は除外)`}
+                {(committed.errorCount ?? 0) > 0 && ` (エラー ${committed.errorCount} 件は除外)`}
               </p>
             )}
           </CardContent>
@@ -341,9 +361,7 @@ function Stat({
   return (
     <div className="rounded border bg-card px-3 py-1.5 shadow-sm">
       <div className="text-[10px] text-muted-foreground">{label}</div>
-      <div className={`text-base font-bold tabular-nums ${color}`}>
-        {value.toLocaleString()}
-      </div>
+      <div className={`text-base font-bold tabular-nums ${color}`}>{value.toLocaleString()}</div>
     </div>
   );
 }
