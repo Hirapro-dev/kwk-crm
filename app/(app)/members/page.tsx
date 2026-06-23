@@ -3,17 +3,16 @@
  * Server Component。検索条件は URL クエリで管理。
  */
 
-import Link from 'next/link';
-import { Suspense } from 'react';
 import { PanelFilterBar, PanelHeader } from '@/components/layout/PanelHeader';
-import { DynamicListTable } from '@/components/objects/DynamicListTable';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { PaginationBar } from '@/components/ui/pagination-link';
 import { getCurrentUser } from '@/lib/domain/auth';
+import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { listMembers } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
+import { Suspense } from 'react';
 import { MembersFilterBar } from './MembersFilterBar';
+import { MembersInfinite } from './MembersInfinite';
 
 interface PageProps {
   searchParams: Promise<{
@@ -29,17 +28,12 @@ export default async function MembersPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const me = await getCurrentUser();
 
-  const page = Number.parseInt(sp.page ?? '1', 10) || 1;
+  const dir = sp.dir === 'desc' ? 'desc' : 'asc';
+  const memberParams = { q: sp.q, ownerId: sp.owner, sort: sp.sort, dir } as const;
 
   const [result, listFields] = await Promise.all([
-    listMembers({
-      q: sp.q,
-      ownerId: sp.owner,
-      sort: sp.sort,
-      dir: sp.dir === 'desc' ? 'desc' : 'asc',
-      page,
-      pageSize: 50,
-    }),
+    // 無限スクロール: 初期は1ページ目のみ取得
+    listMembers({ ...memberParams, page: 1, pageSize: LIST_PAGE_SIZE }),
     // Phase 2: オブジェクト管理 (/settings/objects/members) の表示制御に従う
     getVisibleFields('members', 'list'),
   ]);
@@ -76,39 +70,17 @@ export default async function MembersPage({ searchParams }: PageProps) {
         </PanelFilterBar>
 
         {/*
-          Phase 2: オブジェクト管理画面 (/settings/objects/members) の
-          「一覧」表示ONになっているフィールドだけを動的にレンダリングする。
-          - 1列目はクリッカブルなリンクとして会員詳細へ遷移できるよう、
-            firstColRenderer で値をリンクで囲む。
+          無限スクロール表示。一覧/詳細の表示カラムはオブジェクト管理に従う。
+          フィルタ・ソート変更時は key で再マウントして初期化する。
         */}
-        <DynamicListTable
-          rows={result.rows as unknown as Record<string, unknown>[]}
+        <MembersInfinite
+          key={`${sp.q ?? ''}|${sp.owner ?? ''}|${sp.sort ?? ''}|${dir}`}
+          initialRows={result.rows}
           fields={listFields}
-          rowKey={(row) => String(row.id)}
-          firstColRenderer={(row, field) => {
-            const id = String(row.id ?? '');
-            // 値を取り出す: DB列なら row[field_name]、extraなら row.extra[field_name]
-            const raw = field.is_in_db
-              ? row[field.field_name]
-              : (row.extra as Record<string, unknown> | null | undefined)?.[field.field_name];
-            const text = raw === null || raw === undefined || raw === '' ? id : String(raw);
-            return (
-              <Link href={`/members/${id}`} className="sf-link font-medium">
-                {text}
-              </Link>
-            );
-          }}
-          emptyMessage="該当する会員がいません"
+          total={result.total}
+          params={memberParams}
         />
       </Card>
-
-      <PaginationBar
-        page={result.page}
-        pageSize={result.pageSize}
-        total={result.total}
-        basePath="/members"
-        searchParams={sp}
-      />
     </div>
   );
 }

@@ -2,24 +2,12 @@
  * 問合せ一覧画面(仕様書 §8.1)
  */
 
-import Link from 'next/link';
-import { Suspense } from 'react';
-import { PhoneLink } from '@/components/layout/PhoneLink';
-import { SortHeader } from '@/components/layout/SortHeader';
-import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { PaginationBar } from '@/components/ui/pagination-link';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { listForms, listInquiries } from '@/lib/domain/inquiries';
-import { formatDate } from '@/lib/utils/date';
+import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
+import { Suspense } from 'react';
 import { InquiriesFilterBar } from './InquiriesFilterBar';
+import { InquiriesInfinite } from './InquiriesInfinite';
 
 interface PageProps {
   searchParams: Promise<{
@@ -34,7 +22,6 @@ interface PageProps {
 
 export default async function InquiriesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const page = Number.parseInt(sp.page ?? '1', 10) || 1;
   const formId = sp.form ? Number.parseInt(sp.form, 10) : undefined;
 
   const [result, forms] = await Promise.all([
@@ -44,8 +31,8 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
       unassigned: sp.unassigned === '1',
       sort: sp.sort,
       dir: sp.dir === 'desc' ? 'desc' : 'asc',
-      page,
-      pageSize: 50,
+      page: 1,
+      pageSize: LIST_PAGE_SIZE,
     }),
     listForms(),
   ]);
@@ -84,82 +71,20 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
           </Suspense>
         </div>
 
-        {/* テーブル */}
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead><SortHeader field="id" label="問合せID" /></TableHead>
-              <TableHead><SortHeader field="registered_at" label="登録日時" /></TableHead>
-              <TableHead><SortHeader field="form_id" label="フォーム" /></TableHead>
-              <TableHead><SortHeader field="name" label="氏名" /></TableHead>
-              <TableHead><SortHeader field="email" label="メール" /></TableHead>
-              <TableHead><SortHeader field="phone" label="電話" /></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {result.rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                  該当する問合せがありません
-                </TableCell>
-              </TableRow>
-            ) : (
-              result.rows.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell className="font-mono text-xs">
-                    <Link href={`/inquiries/${r.id}`} className="text-primary hover:underline">
-                      {r.id}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-xs">{formatDate(r.registered_at)}</TableCell>
-                  <TableCell className="text-xs">
-                    {r.form ? (
-                      <>
-                        {r.form.category && (
-                          <Badge variant="outline" className="mr-1">
-                            {r.form.category}
-                          </Badge>
-                        )}
-                        {r.form.name}
-                      </>
-                    ) : (
-                      '-'
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {r.name ? (
-                      r.member ? (
-                        <Link
-                          href={`/members/${r.member.id}`}
-                          className="text-primary hover:underline"
-                        >
-                          {r.name}
-                        </Link>
-                      ) : (
-                        r.name
-                      )
-                    ) : (
-                      '-'
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs">{r.email ?? '-'}</TableCell>
-                  <TableCell className="text-xs">
-                    <PhoneLink value={r.phone} />
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+        {/* 無限スクロール表示 */}
+        <InquiriesInfinite
+          key={`${sp.q ?? ''}|${sp.form ?? ''}|${sp.unassigned ?? ''}|${sp.sort ?? ''}|${sp.dir ?? ''}`}
+          initialRows={result.rows}
+          total={result.total}
+          params={{
+            q: sp.q,
+            formId,
+            unassigned: sp.unassigned === '1',
+            sort: sp.sort,
+            dir: sp.dir === 'desc' ? 'desc' : 'asc',
+          }}
+        />
       </Card>
-
-      <PaginationBar
-        page={result.page}
-        pageSize={result.pageSize}
-        total={result.total}
-        basePath="/inquiries"
-        searchParams={sp}
-      />
     </div>
   );
 }
