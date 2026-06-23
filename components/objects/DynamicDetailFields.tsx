@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import { formatFieldValue, getFieldValue } from '@/lib/utils/format_field';
+import type { ReactNode } from 'react';
+import { CollapsibleFieldGroup } from './CollapsibleFieldGroup';
 
 /**
  * field_definitions に基づいて、レコードの詳細フィールドを動的に並べる。
@@ -95,24 +96,13 @@ export function DynamicDetailFields({
 
   return (
     <div className="space-y-5">
-      {groups.map((group, gi) => (
-        <section key={gi}>
-          {group.name && (
-            <h3 className="mb-2 border-b pb-1 text-sm font-bold tracking-wide text-slate-800">
-              {group.name}
-            </h3>
-          )}
+      {groups.map((group, gi) => {
+        const body = (
           <dl className={COLUMN_CLASSES[columns]}>
             {group.fields.map((f) => {
               // 空白セル: ラベルも値も表示せず、グリッドの1マスだけ確保
               if (f.is_placeholder) {
-                return (
-                  <div
-                    key={f.id}
-                    aria-hidden="true"
-                    className="pb-2"
-                  />
-                );
+                return <div key={f.id} aria-hidden="true" className="pb-2" />;
               }
               const label = f.label ?? f.field_name;
               // 上書き描画があればそれを優先
@@ -126,16 +116,22 @@ export function DynamicDetailFields({
               }
               return (
                 <div key={f.id} className="flex flex-col border-b pb-2 last:border-b-0">
-                  <dt className="text-xs font-semibold tracking-wide text-slate-600">
-                    {label}
-                  </dt>
+                  <dt className="text-xs font-semibold tracking-wide text-slate-600">{label}</dt>
                   <dd className="text-[15px] text-slate-900">{valueNode}</dd>
                 </div>
               );
             })}
           </dl>
-        </section>
-      ))}
+        );
+        // 名前付きセクションは見出しクリックで開閉。無名(その他)は常に表示。
+        return group.name ? (
+          <CollapsibleFieldGroup key={gi} title={group.name}>
+            {body}
+          </CollapsibleFieldGroup>
+        ) : (
+          <section key={gi}>{body}</section>
+        );
+      })}
     </div>
   );
 }
