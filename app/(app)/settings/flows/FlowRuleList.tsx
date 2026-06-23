@@ -15,7 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { deleteFlowRule, toggleFlowRule } from '@/lib/domain/flow_rule_actions';
-import { formatDuration, type FlowRule } from '@/lib/domain/flow_rules';
+import { formatDuration, type FlowRule } from '@/lib/domain/flow_rules_types';
 import { FlowRuleDialog } from './FlowRuleDialog';
 
 interface Props {

@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { upsertFlowRule, type FlowRuleInput } from '@/lib/domain/flow_rule_actions';
-import type { DurationType, FlowRule } from '@/lib/domain/flow_rules';
+import type { DurationType, FlowRule } from '@/lib/domain/flow_rules_types';
 
 interface Props {
   open: boolean;
