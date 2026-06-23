@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from './auth';
 import { ActivityCreateSchema, type ActivityCreateInput } from './activity_schema';
+import { applyProtect, detectProtectTrigger } from './protect';
 
 export interface ActivityCreateResult {
   ok: boolean;
@@ -73,6 +74,14 @@ export async function createActivity(input: ActivityCreateInput): Promise<Activi
 
   if (error || !data) {
     return { ok: false, error: error?.message ?? '登録に失敗しました' };
+  }
+
+  // 時限プロテクト: 通電→7日、接触対応→10日
+  if (values.member_id) {
+    const trigger = detectProtectTrigger(values.s_bunrui ?? null);
+    if (trigger) {
+      await applyProtect(supabase, values.member_id, me.id, me.full_name ?? me.email, trigger);
+    }
   }
 
   // 関連ページのキャッシュをパージ
