@@ -1,6 +1,7 @@
-import { Bell, HelpCircle, Search } from 'lucide-react';
+import { Bell, HelpCircle } from 'lucide-react';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/domain/auth';
+import { HeaderSearch } from './HeaderSearch';
 import { SettingsMenu } from './SettingsMenu';
 
 /**
@@ -37,17 +38,7 @@ export async function Topbar() {
 
       {/* 中央: 検索 (固定幅、ml-4 で左にだけ余白) */}
       <div className="ml-4 hidden w-80 md:block">
-        <div className="relative w-full">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            placeholder="検索..."
-            className="h-8 w-full rounded border-0 bg-white/95 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-white"
-          />
-        </div>
+        <HeaderSearch />
       </div>
 
       {/* 右: アイコン群 (ml-auto で右端固定) */}
