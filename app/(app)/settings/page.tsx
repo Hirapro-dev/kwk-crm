@@ -5,7 +5,7 @@
  * 各設定エリアへのリンクカードを並べる。今後 /settings/* が増えたら追加する。
  */
 
-import { Boxes, Briefcase, ChevronRight, Users } from 'lucide-react';
+import { Boxes, Briefcase, ChevronRight, GitBranch, Users } from 'lucide-react';
 import Link from 'next/link';
 import { PanelHeader } from '@/components/layout/PanelHeader';
 import { Card } from '@/components/ui/card';
@@ -35,6 +35,12 @@ const QUICK_LINKS: QuickLink[] = [
     title: 'オブジェクト管理',
     description: '各オブジェクトのフィールド表示制御・カスタム項目追加',
     icon: <Boxes className="h-5 w-5" />,
+  },
+  {
+    href: '/settings/flows',
+    title: 'フロー',
+    description: '対応歴の状態フラグに連動した自動プロテクトルールの設定',
+    icon: <GitBranch className="h-5 w-5" />,
   },
 ];
 
