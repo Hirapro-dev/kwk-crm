@@ -3,7 +3,6 @@
 import { Pencil, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -36,19 +35,17 @@ export function FieldEditor({ fields }: { fields: FieldDefinition[] }) {
               <TableHead className="h-9">フィールド名</TableHead>
               <TableHead className="h-9">ラベル / CSV列名</TableHead>
               <TableHead className="h-9">型</TableHead>
-              <TableHead className="h-9 text-center">DB</TableHead>
               <TableHead className="h-9 text-center">一覧</TableHead>
               <TableHead className="h-9 text-center">詳細</TableHead>
               <TableHead className="h-9 text-right">並び(一覧)</TableHead>
               <TableHead className="h-9 text-right">並び(詳細)</TableHead>
-              <TableHead className="h-9">区分</TableHead>
               <TableHead className="h-9 w-28 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {fields.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
                   フィールドがありません
                 </TableCell>
               </TableRow>
@@ -129,7 +126,14 @@ function FieldRow({ field }: { field: FieldDefinition }) {
       <TableRow className="sf-row-hover">
         <TableCell className="py-2 font-mono text-xs">{field.field_name}</TableCell>
         <TableCell className="py-2">
-          <div className="text-sm">{field.label ?? field.field_name}</div>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-left text-sm hover:text-primary hover:underline"
+            title="クリックしてラベルを編集"
+          >
+            {field.label ?? field.field_name}
+          </button>
           {field.csv_column_name && field.csv_column_name !== field.label && (
             <div className="text-[10px] text-muted-foreground">
               CSV: {field.csv_column_name}
@@ -137,13 +141,6 @@ function FieldRow({ field }: { field: FieldDefinition }) {
           )}
         </TableCell>
         <TableCell className="py-2 text-xs text-muted-foreground">{field.data_type}</TableCell>
-        <TableCell className="py-2 text-center">
-          {field.is_in_db ? (
-            <Badge variant="outline" className="text-[10px]">DB</Badge>
-          ) : (
-            <Badge variant="secondary" className="text-[10px]">extra</Badge>
-          )}
-        </TableCell>
         <TableCell className="py-2 text-center">
           <input
             type="checkbox"
@@ -167,15 +164,6 @@ function FieldRow({ field }: { field: FieldDefinition }) {
         </TableCell>
         <TableCell className="py-2 text-right tabular-nums text-xs">
           {field.sort_order_detail}
-        </TableCell>
-        <TableCell className="py-2">
-          {field.is_system ? (
-            <Badge variant="outline">標準</Badge>
-          ) : field.is_custom ? (
-            <Badge variant="success">カスタム</Badge>
-          ) : (
-            <Badge variant="secondary">通常</Badge>
-          )}
         </TableCell>
         <TableCell className="py-2 text-right">
           <div className="flex justify-end gap-1">
@@ -235,13 +223,6 @@ function FieldRow({ field }: { field: FieldDefinition }) {
           ))}
         </Select>
       </TableCell>
-      <TableCell className="py-2 text-center">
-        {field.is_in_db ? (
-          <Badge variant="outline" className="text-[10px]">DB</Badge>
-        ) : (
-          <Badge variant="secondary" className="text-[10px]">extra</Badge>
-        )}
-      </TableCell>
       <TableCell className="py-2 text-center text-xs text-muted-foreground">―</TableCell>
       <TableCell className="py-2 text-center text-xs text-muted-foreground">―</TableCell>
       <TableCell className="py-2">
@@ -261,9 +242,6 @@ function FieldRow({ field }: { field: FieldDefinition }) {
           className="w-20 text-right"
           aria-label="詳細並び順"
         />
-      </TableCell>
-      <TableCell className="py-2">
-        {field.is_system && <Badge variant="outline">標準</Badge>}
       </TableCell>
       <TableCell className="py-2 text-right">
         <div className="flex flex-col items-end gap-1">
