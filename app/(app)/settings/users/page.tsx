@@ -21,6 +21,7 @@ import { listAllUsers } from '@/lib/domain/users_admin';
 import { formatDateTime } from '@/lib/utils/date';
 import { UserRoleEditor } from '@/app/(app)/admin/users/UserRoleEditor';
 import { InviteUserForm } from './InviteUserForm';
+import { UserDeleteButton } from './UserDeleteButton';
 
 export default async function SettingsUsersPage() {
   const me = await getCurrentUser();
@@ -57,12 +58,13 @@ export default async function SettingsUsersPage() {
               <TableHead className="h-9">旧Salesforce ID</TableHead>
               <TableHead className="h-9">権限編集</TableHead>
               <TableHead className="h-9">登録日時</TableHead>
+              <TableHead className="h-9">削除</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                   ユーザーが登録されていません
                 </TableCell>
               </TableRow>
@@ -91,6 +93,13 @@ export default async function SettingsUsersPage() {
                   </TableCell>
                   <TableCell className="py-2 text-xs">
                     {formatDateTime(u.created_at)}
+                  </TableCell>
+                  <TableCell className="py-2">
+                    <UserDeleteButton
+                      userId={u.id}
+                      userName={u.full_name ?? u.email}
+                      isSelf={u.id === me.id}
+                    />
                   </TableCell>
                 </TableRow>
               ))

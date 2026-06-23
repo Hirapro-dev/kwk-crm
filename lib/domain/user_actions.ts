@@ -48,6 +48,40 @@ export async function updateUserRole(input: {
 }
 
 // ----------------------------------------------------------------------------
+// 削除 (論理削除: deleted_at をセット。物理削除は禁止 — 仕様書 §4.3)
+// ----------------------------------------------------------------------------
+
+const DeleteSchema = z.object({ user_id: z.string().uuid() });
+
+export async function deleteUser(input: { user_id: string }): Promise<UserUpdateResult> {
+  const parsed = DeleteSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? '入力エラー' };
+  }
+  const me = await getCurrentUser();
+  if (me.role !== 'admin') {
+    return { ok: false, error: 'ユーザー管理は admin のみ可能です' };
+  }
+  if (parsed.data.user_id === me.id) {
+    return { ok: false, error: '自分自身は削除できません' };
+  }
+
+  const supabase = await createClient();
+  // 論理削除: deleted_at をセットし、無効化もしておく。
+  // members/activities 等の owner_id 参照はそのまま残るため FK は壊れない。
+  const { error } = await supabase
+    .from('users')
+    .update({ deleted_at: new Date().toISOString(), is_active: false })
+    .eq('id', parsed.data.user_id)
+    .is('deleted_at', null);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath('/admin/users');
+  revalidatePath('/settings/users');
+  return { ok: true };
+}
+
+// ----------------------------------------------------------------------------
 // 招待 (新規ユーザーをメールで招待)
 // ----------------------------------------------------------------------------
 
