@@ -24,6 +24,7 @@
     "migrate:inquiries": "tsx scripts/migrate/05_inquiries.ts",
     "migrate:applications": "tsx scripts/migrate/06_applications.ts",
     "migrate:activities": "tsx scripts/migrate/07_activities.ts",
+    "migrate:protect": "tsx scripts/migrate/08_members_protect.ts",
     "sample:csv": "tsx scripts/sample/extract.ts",
     "seed:sales": "tsx scripts/seed/sales_users.ts",
     "seed:sales:inactive": "tsx scripts/seed/sales_users_inactive.ts",
