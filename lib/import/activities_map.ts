@@ -12,9 +12,23 @@
  * 純粋関数。担当解決マップ・既存会員IDは action 側で構築して渡す。
  */
 
-import { createHash } from 'node:crypto';
 import { coerceValue, isCoerceErr } from './coerce';
 import type { ImportFieldType } from './schema';
+
+/**
+ * 行内容から安定したハッシュ文字列を生成(外部依存なし)。
+ * 同一内容の重複排除に使うだけなので暗号強度は不要(FNV系の簡易ハッシュ)。
+ */
+function hashKey(s: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0xc2b2ae35;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193);
+    h2 = Math.imul(h2 ^ c, 0x85ebca6b);
+  }
+  return (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+}
 
 /** 会員ID列の別名(action 側で「会員ID列の distinct」を取るのにも使う) */
 export const ACTIVITY_MEMBER_HEADERS = ['会員ID', 'WhoId', 'member_id'];
@@ -117,8 +131,7 @@ export function convertActivityRow(
   // legacy_sf_id: 明示IDがあれば優先、無ければ行内容のハッシュで生成(重複防止)
   const explicitId = pick(raw, 'legacy_sf_id');
   const dedupKey = [memberId, dB, mB, sB, description, dt ?? date, ownerName].join('|');
-  const legacyId =
-    explicitId ?? `act_${createHash('sha256').update(dedupKey).digest('hex').slice(0, 24)}`;
+  const legacyId = explicitId ?? `act_${hashKey(dedupKey)}`;
 
   return {
     record: {

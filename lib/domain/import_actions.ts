@@ -92,11 +92,16 @@ export async function previewImport(
   if (adminErr) return { ok: false, error: adminErr };
 
   // 専用ハンドラに委譲(実CSVヘッダー対応 / 架電NG分離 / 担当・案件解決 / extra)
-  if (object === 'members') return previewMembersCsv([csvText], updateOnly);
-  if (object === 'inquiries') return previewInquiriesCsv([csvText], updateOnly);
-  if (object === 'applications') return previewApplicationsCsv([csvText], updateOnly);
-  if (object === 'activities') return previewActivitiesCsv([csvText], updateOnly);
-  if (object === 'users') return previewUsersCsv([csvText], updateOnly);
+  // 例外は握りつぶさず構造化エラーとして返す(クライアントに実メッセージを表示)。
+  try {
+    if (object === 'members') return await previewMembersCsv([csvText], updateOnly);
+    if (object === 'inquiries') return await previewInquiriesCsv([csvText], updateOnly);
+    if (object === 'applications') return await previewApplicationsCsv([csvText], updateOnly);
+    if (object === 'activities') return await previewActivitiesCsv([csvText], updateOnly);
+    if (object === 'users') return await previewUsersCsv([csvText], updateOnly);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 
   const def = IMPORT_OBJECTS[object];
   if (!def) return { ok: false, error: '不明なオブジェクトです' };
@@ -181,12 +186,16 @@ export async function commitImport(
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
 
-  // 専用ハンドラに委譲
-  if (object === 'members') return commitMembersCsv([csvText], updateOnly);
-  if (object === 'inquiries') return commitInquiriesCsv([csvText], updateOnly);
-  if (object === 'applications') return commitApplicationsCsv([csvText], updateOnly);
-  if (object === 'activities') return commitActivitiesCsv([csvText], updateOnly);
-  if (object === 'users') return commitUsersCsv([csvText], updateOnly);
+  // 専用ハンドラに委譲(例外は構造化エラーとして返す)
+  try {
+    if (object === 'members') return await commitMembersCsv([csvText], updateOnly);
+    if (object === 'inquiries') return await commitInquiriesCsv([csvText], updateOnly);
+    if (object === 'applications') return await commitApplicationsCsv([csvText], updateOnly);
+    if (object === 'activities') return await commitActivitiesCsv([csvText], updateOnly);
+    if (object === 'users') return await commitUsersCsv([csvText], updateOnly);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 
   const def = IMPORT_OBJECTS[object];
   if (!def) return { ok: false, error: '不明なオブジェクトです' };

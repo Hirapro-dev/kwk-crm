@@ -10,9 +10,12 @@
  * 純粋関数。既存ユーザーの突合マップは action 側で構築して渡す。
  */
 
-import { randomUUID } from 'node:crypto';
-
 type Role = 'admin' | 'manager' | 'sales' | 'viewer';
+
+/** UUID 生成(Node18+/Edge どちらでも使える Web Crypto グローバル)。 */
+function newUuid(): string {
+  return globalThis.crypto.randomUUID();
+}
 
 const ALIASES: Record<string, string[]> = {
   legacy_sf_id: ['ユーザーID', 'Id', 'legacy_sf_id'],
@@ -101,7 +104,7 @@ export function convertUserRow(
   // 既存 id を突合(legacy → email)。無ければ新規 UUID。
   const existingId =
     (legacy ? maps.idByLegacy.get(legacy) : undefined) ?? maps.idByEmail.get(emailLc) ?? null;
-  const id = existingId ?? randomUUID();
+  const id = existingId ?? newUuid();
 
   const firstName = pick(raw, 'first_name');
   const lastName = pick(raw, 'last_name');
