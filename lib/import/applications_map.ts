@@ -116,9 +116,13 @@ export function convertApplicationRow(
   const headers = new Set(Object.keys(raw));
   const data: AppRecord = { id, member_id: memRaw, application_date: appDate };
 
-  // 案件名 → project_id(未解決は null)
+  // 案件名 → project_id(NOT NULL のため未解決はエラーで除外)
   const projName = nz(raw['投資案件']);
-  data.project_id = projName ? (maps.projectNameToId.get(projName) ?? null) : null;
+  const projectId = projName ? (maps.projectNameToId.get(projName) ?? null) : null;
+  if (!projectId) {
+    return { error: `${rowNum}行目: 投資案件「${projName ?? '(空)'}」が案件マスタに未登録です` };
+  }
+  data.project_id = projectId;
 
   // 問合せ管理ID(任意・既存のみ)
   const inqRaw = nz(raw['問合せ管理ID']);
