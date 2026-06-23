@@ -206,12 +206,19 @@ export async function commitInquiriesCsv(
   let formMap = await loadFormMap(supabase);
   const newForms = distinctFormNames(rawRows).filter((n) => !formMap.has(n));
   if (newForms.length > 0) {
+    // forms.id は serial だが過去の明示ID投入で sequence がずれているため、
+    // 既存 max(id)+1 から明示採番して PK 衝突(forms_pkey)を回避する
+    const { data: maxRow } = await supabase
+      .from('forms')
+      .select('id')
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    let nextId = (((maxRow as { id?: number } | null)?.id ?? 0) as number) + 1;
+    const formRows = newForms.map((name) => ({ id: nextId++, name, is_active: true }));
     const { error: fErr } = await supabase
       .from('forms')
-      .upsert(
-        newForms.map((name) => ({ name, is_active: true })),
-        { onConflict: 'name', ignoreDuplicates: true },
-      );
+      .upsert(formRows, { onConflict: 'name', ignoreDuplicates: true });
     if (fErr) return { ok: false, error: `フォーム追加に失敗: ${fErr.message}` };
     formMap = await loadFormMap(supabase);
   }
