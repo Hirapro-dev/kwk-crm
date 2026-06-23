@@ -8,10 +8,10 @@
  *
  *   - 主軸オブジェクト(base)は必須、結合オブジェクト(related)は任意
  *   - 結合キーが定義済みの組み合わせのみ relations に列挙する(未定義の組み合わせは選べない)
- *   - 申込/活動/問合せ系の RT は元々関連オブジェクトを全て JOIN 済みのため、
+ *   - 申込/対応歴/問合せ系の RT は元々関連オブジェクトを全て JOIN 済みのため、
  *     related を変えても同じ RT に解決される(その場合 related はカラム選択の意図表明)
  *
- * 集計系テンプレート(RT02 会員サマリ / RT08 活動マトリクス / RT10 案件別実績)は
+ * 集計系テンプレート(RT02 会員サマリ / RT08 対応歴マトリクス / RT10 案件別実績)は
  * 1行=複数レコードでありオブジェクト選択フローに馴染まないため、本対応表には含めず
  * 新規作成画面の「集計テンプレート」セクションから別途選択する。
  */
@@ -49,7 +49,7 @@ export const BASE_OBJECTS: BaseObjectDef[] = [
     soloDescription: '会員と担当者の一覧',
     relations: [
       { key: 'applications', label: '申込', type: 'RT03' },
-      { key: 'activities', label: '活動履歴', type: 'RT04' },
+      { key: 'activities', label: '対応歴', type: 'RT04' },
       { key: 'inquiries', label: '問合せ', type: 'RT05' },
     ],
   },
@@ -67,10 +67,10 @@ export const BASE_OBJECTS: BaseObjectDef[] = [
   },
   {
     key: 'activities',
-    label: '活動履歴',
+    label: '対応歴',
     iconLabel: 'ACT',
     soloType: 'RT07',
-    soloDescription: '活動とその会員・担当者の一覧',
+    soloDescription: '対応歴とその会員・担当者の一覧',
     relations: [
       { key: 'members', label: '会員', type: 'RT07' },
       { key: 'users', label: '担当者', type: 'RT07' },

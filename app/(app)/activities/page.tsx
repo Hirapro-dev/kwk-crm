@@ -1,5 +1,5 @@
 /**
- * 活動一覧画面(仕様書 §8.1, §8.2)
+ * 対応歴一覧画面(仕様書 §8.1, §8.2)
  *
  * 本システムの中核画面。新規入力フォームを上部に常設し、
  * その下に一覧をタイムライン形式で表示する。
@@ -57,7 +57,7 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
         <PanelHeader
           iconLabel="ACT"
           iconColor="#1589ee"
-          viewName="活動履歴"
+          viewName="対応歴"
           totalCount={result.total}
         />
 

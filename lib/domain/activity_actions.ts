@@ -13,7 +13,7 @@ export interface ActivityCreateResult {
 }
 
 /**
- * 活動入力の Server Action(仕様書 §8.2 「主役画面」)。
+ * 対応歴入力の Server Action(仕様書 §8.2 「主役画面」)。
  * RLS により sales は自分作成のもののみ、admin/manager は全件。
  *
  * 仕様書 §12.1: フォーム検証は Zod。

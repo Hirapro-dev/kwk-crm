@@ -6,7 +6,9 @@
  *   - upsert は idField で突合(無ければ新規作成)
  *   - 値の型変換は coerce.ts が type を見て行う
  *
- * activities(120万件級)は対象外。members / applications / inquiries / projects のみ。
+ * members / applications / inquiries / projects に加え、対応歴(activities)も対応。
+ * 対応歴はID列が無いことが多いため、専用ハンドラ(import_activities)が行内容のハッシュで
+ * legacy_sf_id を生成して突合する(同一内容は重複しない)。ここの fields はテンプレ生成用。
  */
 
 export type ImportFieldType = 'text' | 'number' | 'date' | 'datetime' | 'boolean';
@@ -130,6 +132,34 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
       { field: 'is_active', label: '有効', type: 'boolean', default: true },
     ],
   },
+
+  // 対応歴(activities)は専用ハンドラ(lib/domain/import_activities.ts)で取込む。
+  // ID列が無いため行内容のハッシュで突合(同一内容は重複しない)。任意で「対応歴ID」列があれば優先。
+  // ここの fields はテンプレCSVのヘッダー生成にのみ使用。
+  activities: {
+    object: 'activities',
+    table: 'activities',
+    label: '対応歴',
+    idField: 'legacy_sf_id',
+    note: '会員ID(K-)で会員に紐付け、担当は担当者名で解決します。ID列が無くても取込可能で、同一内容の行は重複しません(再取込しても増えません)。「対応歴ID」列があればそれで突合します。',
+    fields: [
+      { field: 'legacy_sf_id', label: '対応歴ID', type: 'text' },
+      { field: 'member_id', label: '会員ID', type: 'text' },
+      { field: 'owner_name', label: '担当', type: 'text' },
+      { field: 'd_bunrui', label: '大分類', type: 'text' },
+      { field: 'm_bunrui', label: '中分類', type: 'text' },
+      { field: 's_bunrui', label: '小分類', type: 'text' },
+      { field: 'duration_minutes', label: '所要時間(分)', type: 'number' },
+      { field: 'registered_datetime', label: '登録日時', type: 'datetime' },
+      { field: 'description', label: 'コメント', type: 'text' },
+    ],
+  },
 };
 
 export const IMPORT_OBJECT_KEYS = Object.keys(IMPORT_OBJECTS);
+
+/**
+ * 定期取込(Drive 連携 #1)の対象キー。
+ * 対応歴(activities)は定期取込の対象外(突発アップロードのみ)。
+ */
+export const ROUTINE_OBJECT_KEYS = IMPORT_OBJECT_KEYS.filter((k) => k !== 'activities');

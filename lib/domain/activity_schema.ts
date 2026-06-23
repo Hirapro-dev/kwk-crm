@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * 活動入力フォーム用 Zod スキーマ(仕様書 §8.2)。
+ * 対応歴入力フォーム用 Zod スキーマ(仕様書 §8.2)。
  *
  * member_id の検証:
  *   - CSV 由来データの ID: K-XXXXXXX(7桁)

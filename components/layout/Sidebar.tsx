@@ -6,7 +6,7 @@ import Link from 'next/link';
  */
 const NAV_ITEMS: { href: string; label: string }[] = [
   { href: '/', label: 'ダッシュボード' },
-  { href: '/activities', label: '活動履歴' },
+  { href: '/activities', label: '対応歴' },
   { href: '/members', label: '会員' },
   { href: '/inquiries', label: '問合せ' },
   { href: '/applications', label: '申込' },

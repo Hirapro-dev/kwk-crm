@@ -68,11 +68,11 @@ export const REPORT_SCHEMAS: Partial<Record<ReportTypeId, ReportTypeSchema>> = {
       },
       {
         source: 'acts.registered_datetime',
-        label: '最終活動日',
+        label: '最終対応日',
         dataType: 'datetime',
         aggregatable: true,
       },
-      { source: 'acts.id', label: '活動件数', dataType: 'text', aggregatable: true },
+      { source: 'acts.id', label: '対応件数', dataType: 'text', aggregatable: true },
     ],
   },
 };

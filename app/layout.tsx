@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'ひらプロCRM',
-  description: '擬似Salesforce - 営業活動ログ管理システム',
+  description: '擬似Salesforce - 対応歴ログ管理システム',
   robots: { index: false, follow: false }, // 社内システムのためインデックス禁止
 };
 

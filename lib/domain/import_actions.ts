@@ -18,6 +18,7 @@ import { createClient } from '@/lib/supabase/server';
 import { mapAndValidate, parseCsv, type RowError } from '@/lib/import/parse';
 import { IMPORT_OBJECTS } from '@/lib/import/schema';
 import { getCurrentUser } from './auth';
+import { commitActivitiesCsv, previewActivitiesCsv } from './import_activities';
 import {
   commitApplicationsCsv,
   previewApplicationsCsv,
@@ -99,6 +100,7 @@ export async function previewImport(
   if (object === 'members') return previewMembersCsv([csvText], updateOnly);
   if (object === 'inquiries') return previewInquiriesCsv([csvText], updateOnly);
   if (object === 'applications') return previewApplicationsCsv([csvText], updateOnly);
+  if (object === 'activities') return previewActivitiesCsv([csvText], updateOnly);
 
   const def = IMPORT_OBJECTS[object];
   if (!def) return { ok: false, error: '不明なオブジェクトです' };
@@ -181,6 +183,7 @@ export async function commitImport(
   if (object === 'members') return commitMembersCsv([csvText], updateOnly);
   if (object === 'inquiries') return commitInquiriesCsv([csvText], updateOnly);
   if (object === 'applications') return commitApplicationsCsv([csvText], updateOnly);
+  if (object === 'activities') return commitActivitiesCsv([csvText], updateOnly);
 
   const def = IMPORT_OBJECTS[object];
   if (!def) return { ok: false, error: '不明なオブジェクトです' };

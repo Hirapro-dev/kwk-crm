@@ -134,9 +134,9 @@ const APP_COLUMNS = (alias: string): AllowedColumnDef[] => [
 ];
 
 const ACTIVITY_COLUMNS = (alias: string): AllowedColumnDef[] => [
-  { source: `${alias}.id`, label: '活動ID', dataType: 'number', filterable: true, aggregatable: true },
-  { source: `${alias}.legacy_sf_id`, label: '旧SF活動ID', dataType: 'text', filterable: true },
-  { source: `${alias}.owner_id`, label: '活動担当ID', dataType: 'text', filterable: true, groupable: true },
+  { source: `${alias}.id`, label: '対応歴ID', dataType: 'number', filterable: true, aggregatable: true },
+  { source: `${alias}.legacy_sf_id`, label: '旧SF対応歴ID', dataType: 'text', filterable: true },
+  { source: `${alias}.owner_id`, label: '対応担当ID', dataType: 'text', filterable: true, groupable: true },
   { source: `${alias}.member_id`, label: '会員ID(紐付け)', dataType: 'text', filterable: true, groupable: true },
   { source: `${alias}.created_by_id`, label: '作成者ID', dataType: 'text', filterable: true, groupable: true },
   { source: `${alias}.duration_minutes`, label: '所要時間(分)', dataType: 'number', filterable: true, sortable: true, aggregatable: true },
@@ -145,8 +145,8 @@ const ACTIVITY_COLUMNS = (alias: string): AllowedColumnDef[] => [
   { source: `${alias}.d_bunrui`, label: '大分類', dataType: 'text', filterable: true, groupable: true, sortable: true },
   { source: `${alias}.m_bunrui`, label: '中分類', dataType: 'text', filterable: true, groupable: true },
   { source: `${alias}.s_bunrui`, label: '小分類', dataType: 'text', filterable: true, groupable: true },
-  { source: `${alias}.registered_date`, label: '活動日', dataType: 'date', filterable: true, sortable: true, groupable: true },
-  { source: `${alias}.registered_datetime`, label: '活動日時', dataType: 'datetime', filterable: true, sortable: true, groupable: true, aggregatable: true },
+  { source: `${alias}.registered_date`, label: '対応日', dataType: 'date', filterable: true, sortable: true, groupable: true },
+  { source: `${alias}.registered_datetime`, label: '対応日時', dataType: 'datetime', filterable: true, sortable: true, groupable: true, aggregatable: true },
   { source: `${alias}.created_at`, label: '作成日時', dataType: 'datetime', filterable: true, sortable: true },
   { source: `${alias}.updated_at`, label: '更新日時', dataType: 'datetime', filterable: true, sortable: true },
 ];
@@ -294,19 +294,19 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
       },
       {
         source: 'acts.id',
-        label: '活動件数',
+        label: '対応件数',
         dataType: 'number',
         aggregatable: true,
       },
       {
         source: 'acts.registered_datetime',
-        label: '最終活動日',
+        label: '最終対応日',
         dataType: 'datetime',
         aggregatable: true,
       },
       {
         source: 'acts.duration_minutes',
-        label: '活動時間合計',
+        label: '対応時間合計',
         dataType: 'number',
         aggregatable: true,
       },
@@ -328,7 +328,7 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     ],
   },
 
-  // RT04: 会員と活動 — 1活動=1行
+  // RT04: 会員と対応歴 — 1対応=1行
   RT04: {
     reportType: 'RT04',
     baseTable: 'activities',
@@ -371,7 +371,7 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     ],
   },
 
-  // RT07: 活動一覧 — 1活動=1行
+  // RT07: 対応歴一覧 — 1対応=1行
   RT07: {
     reportType: 'RT07',
     baseTable: 'activities',
@@ -385,7 +385,7 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     ],
   },
 
-  // RT08: 活動マトリクス — クロス集計(担当×期間×分類)
+  // RT08: 対応歴マトリクス — クロス集計(担当×期間×分類)
   RT08: {
     reportType: 'RT08',
     baseTable: 'activities',

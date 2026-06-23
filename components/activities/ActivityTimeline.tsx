@@ -10,7 +10,7 @@ import type { ActivityListItem } from '@/lib/domain/types';
 import { formatDateTime } from '@/lib/utils/date';
 
 /**
- * 活動履歴を表形式で表示する。
+ * 対応歴を表形式で表示する。
  *
  * 仕様 (2026-05 確定):
  *   カラム: 日時 / 対応者 / 接触種別 / 接触内容 / 状態 / コメント
@@ -22,7 +22,7 @@ import { formatDateTime } from '@/lib/utils/date';
 export function ActivityTimeline({ activities }: { activities: ActivityListItem[] }) {
   if (activities.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">活動履歴はありません</p>
+      <p className="py-8 text-center text-sm text-muted-foreground">対応歴はありません</p>
     );
   }
 

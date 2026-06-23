@@ -41,7 +41,7 @@ export const REPORT_TYPES: Record<ReportTypeId, ReportTypeMeta> = {
     id: 'RT02',
     name: '会員サマリ',
     baseTable: 'members',
-    description: '会員ごとの申込件数・総入金額・最終活動日・活動件数を1行に集計',
+    description: '会員ごとの申込件数・総入金額・最終対応日・対応件数を1行に集計',
     unit: '1会員=1行(集計済)',
   },
   RT03: {
@@ -53,10 +53,10 @@ export const REPORT_TYPES: Record<ReportTypeId, ReportTypeMeta> = {
   },
   RT04: {
     id: 'RT04',
-    name: '会員と活動',
+    name: '会員と対応歴',
     baseTable: 'members_activities',
-    description: '会員と活動の結合一覧',
-    unit: '1活動=1行',
+    description: '会員と対応歴の結合一覧',
+    unit: '1対応=1行',
   },
   RT05: {
     id: 'RT05',
@@ -74,14 +74,14 @@ export const REPORT_TYPES: Record<ReportTypeId, ReportTypeMeta> = {
   },
   RT07: {
     id: 'RT07',
-    name: '活動一覧',
+    name: '対応歴一覧',
     baseTable: 'activities',
-    description: '活動とその会員・担当者の結合一覧',
-    unit: '1活動=1行',
+    description: '対応歴とその会員・担当者の結合一覧',
+    unit: '1対応=1行',
   },
   RT08: {
     id: 'RT08',
-    name: '活動マトリクス',
+    name: '対応歴マトリクス',
     baseTable: 'activities',
     description: '担当×期間×分類のクロス集計',
     unit: '担当者×期間×分類',

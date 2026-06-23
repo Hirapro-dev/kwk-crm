@@ -28,7 +28,7 @@ const FLAG_ABSENT = '不在';
 const FLAG_IN_PERSON = '接触対応';
 
 /**
- * 活動入力フォーム(仕様書 §8.2「主役画面」)。
+ * 対応歴入力フォーム(仕様書 §8.2「主役画面」)。
  *
  * - member_id は親(会員詳細画面の場合)から受け取って固定。
  *   グローバル(/activities)から呼ぶ場合は memberLocked=false で入力欄を表示。
@@ -147,7 +147,7 @@ export function ActivityForm({
   if (!open) {
     return (
       <Button onClick={() => setOpen(true)} variant="default">
-        + 活動を追加
+        + 対応歴を追加
       </Button>
     );
   }
@@ -156,10 +156,10 @@ export function ActivityForm({
     <form
       onSubmit={onSubmit}
       className="space-y-3 rounded-lg border bg-card p-4"
-      aria-label="活動入力フォーム"
+      aria-label="対応歴入力フォーム"
     >
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">活動を記録</h2>
+        <h2 className="text-base font-semibold">対応歴を記録</h2>
         {!initiallyOpen && (
           <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
             閉じる
@@ -170,7 +170,7 @@ export function ActivityForm({
       {!fixedMemberId && (
         <Field
           label="対象会員ID"
-          hint="未指定でも記録できます(社内活動など)"
+          hint="未指定でも記録できます(社内対応歴など)"
           errors={fieldErrors['member_id']}
         >
           <Input
@@ -257,7 +257,7 @@ export function ActivityForm({
           rows={4}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="活動内容を記入"
+          placeholder="対応内容を記入"
         />
       </Field>
 

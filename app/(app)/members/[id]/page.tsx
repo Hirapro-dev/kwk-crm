@@ -3,11 +3,11 @@
  * Salesforce Lightning Record Page 風レイアウト:
  *  - Highlight Panel (上部サマリ)
  *  - 上部タブ (詳細/関連)
- *  - 詳細タブ: 2カラム(左=基本情報、右=活動カード)
+ *  - 詳細タブ: 2カラム(左=基本情報、右=対応歴カード)
  *
  * 2026-05 更新:
- *  - 「活動」タブを削除し、活動操作は詳細タブ右カラムに集約
- *  - 右カラムは「+ 活動を追加」ボタン + 表形式の活動履歴
+ *  - 「対応歴」タブを削除し、対応歴操作は詳細タブ右カラムに集約
+ *  - 右カラムは「+ 対応歴を追加」ボタン + 表形式の対応歴
  */
 
 import { notFound } from 'next/navigation';
@@ -119,7 +119,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
       />
 
       {/*
-        左: 詳細/関連タブカード, 右: 活動カード (独立) を横並び 1:1。
+        左: 詳細/関連タブカード, 右: 対応歴カード (独立) を横並び 1:1。
         lg 未満は縦並び。
       */}
       <div className="grid gap-3 lg:grid-cols-2">
@@ -240,11 +240,11 @@ export default async function MemberDetailPage({ params }: PageProps) {
           }
         />
 
-        {/* 右カラム: 活動カード (タブの外、独立) */}
+        {/* 右カラム: 対応歴カード (タブの外、独立) */}
         <Card>
           <CardHeader className="border-b py-3">
             <CardTitle className="flex items-center justify-between text-sm">
-              <span>活動</span>
+              <span>対応歴</span>
               <span className="text-xs font-normal text-muted-foreground">
                 {activities.total.toLocaleString()}件
               </span>

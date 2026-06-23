@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Topbar />
-      <TabsNav appName="営業活動管理" tabs={navTabs} />
+      <TabsNav appName="対応歴管理" tabs={navTabs} />
       {/*
         Salesforce Lightning 風 背景:
           - 上部 約280px に lightning_blue_background.png を no-repeat で表示

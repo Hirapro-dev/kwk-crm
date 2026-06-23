@@ -50,7 +50,7 @@ export async function listActivities(params: ActivityListParams = {}): Promise<A
   if (params.to) query = query.lte('registered_datetime', params.to);
 
   const { data, error, count } = await query;
-  if (error) throw new Error(`活動一覧取得に失敗: ${error.message}`);
+  if (error) throw new Error(`対応歴一覧取得に失敗: ${error.message}`);
 
   return {
     rows: (data ?? []) as unknown as ActivityListItem[],
@@ -61,12 +61,12 @@ export async function listActivities(params: ActivityListParams = {}): Promise<A
 }
 
 /**
- * 活動分類のユニーク値を取得(プルダウン用)。
+ * 対応分類のユニーク値を取得(プルダウン用)。
  * 仕様書 §8.3: 既存値を抽出し分類マスタとして提示する。
  */
 export async function getDBunruiList(): Promise<string[]> {
   const supabase = await createClient();
-  // RPC が無いので 1ページ分(=最近の活動の分類)から重複排除する簡易版。
+  // RPC が無いので 1ページ分(=最近の対応歴の分類)から重複排除する簡易版。
   // 将来は activities_d_bunrui_unique のような view を作る。
   const { data, error } = await supabase
     .from('activities')

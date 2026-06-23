@@ -4,7 +4,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { IMPORT_OBJECT_KEYS } from '@/lib/import/schema';
+import { ROUTINE_OBJECT_KEYS } from '@/lib/import/schema';
 
 export interface ImportSource {
   object: string;
@@ -35,7 +35,7 @@ function blank(object: string): ImportSource {
 }
 
 function defaults(): ImportSource[] {
-  return IMPORT_OBJECT_KEYS.map((object) => blank(object));
+  return ROUTINE_OBJECT_KEYS.map((object) => blank(object));
 }
 
 const COLS =
@@ -49,7 +49,7 @@ export async function getImportSources(): Promise<ImportSource[]> {
     // 既知の取込対象オブジェクト分を、行が無ければ既定で補完して返す
     const byObj = new Map<string, ImportSource>();
     for (const r of data as unknown as ImportSource[]) byObj.set(r.object, r);
-    return IMPORT_OBJECT_KEYS.map((object) => byObj.get(object) ?? blank(object));
+    return ROUTINE_OBJECT_KEYS.map((object) => byObj.get(object) ?? blank(object));
   } catch {
     return defaults();
   }

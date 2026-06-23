@@ -8,10 +8,10 @@ import type { BunruiPair } from '@/lib/domain/activities_types';
  * ActivityForm の Server Component から呼べるラッパー。
  *
  * 役割:
- *   - 活動登録成功後に router.refresh() を呼び、親 Server Component の活動履歴を再取得
- *   - 折りたたみ状態(initiallyOpen=false) で初期表示し、「+ 活動を追加」ボタンから展開
+ *   - 対応歴登録成功後に router.refresh() を呼び、親 Server Component の対応歴を再取得
+ *   - 折りたたみ状態(initiallyOpen=false) で初期表示し、「+ 対応歴を追加」ボタンから展開
  *
- * 利用箇所: 会員詳細ページの「活動」カード
+ * 利用箇所: 会員詳細ページの「対応歴」カード
  */
 export function ActivityFormCard({
   memberId,

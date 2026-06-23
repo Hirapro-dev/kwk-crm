@@ -77,7 +77,7 @@ export function ActivitiesFilterBar({
         onChange={(e) => setOwner(e.target.value)}
       >
         <option value="all">担当: すべて</option>
-        <option value="me">自分の活動</option>
+        <option value="me">自分の対応</option>
       </Select>
       <div className="flex items-center gap-1">
         <Input

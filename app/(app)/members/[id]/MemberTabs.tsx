@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils/cn';
 /**
  * Salesforce Lightning 風 Record Page の上部タブ (詳細/関連)。
  *
- * 2026-05 更新: 活動操作は詳細タブ右カラムに集約したため「活動」タブを削除。
+ * 2026-05 更新: 対応歴操作は詳細タブ右カラムに集約したため「対応歴」タブを削除。
  *
  * 単純な showTab state で表示切替する Client Component。
  * 各タブのコンテンツは Server Component から children に分けて受け取る。

@@ -2,9 +2,9 @@
  * ダッシュボード(仕様書 §8.1, §9.15)
  *
  * Phase 7 完成版:
- *   - 今日: 自分の活動件数、累計時間
- *   - 今月: 自分の活動件数、担当会員数
- *   - 最新活動 10件
+ *   - 今日: 自分の対応件数、累計時間
+ *   - 今月: 自分の対応件数、担当会員数
+ *   - 最新対応歴 10件
  *   - お気に入りレポート最大3個(Phase 6 連携)
  */
 
@@ -43,7 +43,7 @@ export default async function DashboardPage() {
                 href="/activities"
                 className="inline-flex h-8 items-center rounded bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90"
               >
-                + 活動を記録
+                + 対応歴を記録
               </Link>
             </>
           }
@@ -51,12 +51,12 @@ export default async function DashboardPage() {
       </Card>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="今日の活動件数" value={stats.todayActivities.toLocaleString()} />
+        <StatCard label="今日の対応件数" value={stats.todayActivities.toLocaleString()} />
         <StatCard
           label="今日の累計時間"
           value={`${stats.todayCallMinutes.toLocaleString()} 分`}
         />
-        <StatCard label="今月の活動件数" value={stats.monthActivities.toLocaleString()} />
+        <StatCard label="今月の対応件数" value={stats.monthActivities.toLocaleString()} />
         <StatCard label="担当会員数" value={stats.monthMembers.toLocaleString()} />
       </section>
 
@@ -73,7 +73,7 @@ export default async function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>最新活動 10件(自分担当)</CardTitle>
+          <CardTitle>最新対応歴 10件(自分担当)</CardTitle>
         </CardHeader>
         <CardContent>
           <ActivityTimeline activities={recent} />
