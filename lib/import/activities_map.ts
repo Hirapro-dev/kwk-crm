@@ -2,7 +2,7 @@
  * 対応歴(activities)専用の取込変換ロジック (CLAUDE.md §5.7 / §6)
  *
  * - 会員ID(K-)→member_id(既存のみ・無ければ null)、担当→owner_id(名前解決)
- * - 大/中/小分類・所要時間・コメント・登録日時を直接マッピング
+ * - 大/中/小分類・コメント・登録日時を直接マッピング
  * - activities には extra 列が無いため、未マッピング列は無視する
  * - ID列が無いことが多いので、行内容のハッシュで legacy_sf_id を生成して突合
  *   (同一内容の行は同じ legacy_sf_id → upsert で重複しない)
@@ -28,7 +28,6 @@ const ALIASES: Record<string, string[]> = {
   d_bunrui: ['大分類', 'Dbunrui__c', 'd_bunrui'],
   m_bunrui: ['中分類', 'Mbunrui__c', 'm_bunrui'],
   s_bunrui: ['小分類', 'Sbunrui__c', 's_bunrui'],
-  duration_minutes: ['所要時間(分)', '所要時間', 'duration_minutes'],
   description: ['コメント', '内容', '対応内容', 'Description', 'description'],
   registered_datetime: ['登録日時', 'tourokunitiji__c', 'ActivityDateTime', 'registered_datetime'],
   registered_date: ['登録日', 'tourokuhi__c', 'ActivityDate', 'registered_date'],
@@ -69,7 +68,6 @@ export interface ActivityRecord {
   owner_id: string | null;
   member_id: string | null;
   created_by_id: string | null;
-  duration_minutes: number | null;
   description: string | null;
   d_bunrui: string | null;
   m_bunrui: string | null;
@@ -108,7 +106,6 @@ export function convertActivityRow(
   const sB = pick(raw, 's_bunrui');
   const dt = lenient('datetime', pick(raw, 'registered_datetime')) as string | null;
   const date = lenient('date', pick(raw, 'registered_date')) as string | null;
-  const dur = lenient('number', pick(raw, 'duration_minutes')) as number | null;
 
   // 完全に空の行はスキップ(エラー扱い)
   if (!memberRaw && !ownerName && !description && !dB && !mB && !sB && !dt && !date) {
@@ -117,7 +114,7 @@ export function convertActivityRow(
 
   // legacy_sf_id: 明示IDがあれば優先、無ければ行内容のハッシュで生成(重複防止)
   const explicitId = pick(raw, 'legacy_sf_id');
-  const dedupKey = [memberId, dB, mB, sB, description, dt ?? date, dur, ownerName].join('|');
+  const dedupKey = [memberId, dB, mB, sB, description, dt ?? date, ownerName].join('|');
   const legacyId =
     explicitId ?? `act_${createHash('sha256').update(dedupKey).digest('hex').slice(0, 24)}`;
 
@@ -127,7 +124,6 @@ export function convertActivityRow(
       owner_id: resolveOwner(ownerName, maps),
       member_id: memberId,
       created_by_id: resolveOwner(createdByName, maps),
-      duration_minutes: dur,
       description,
       d_bunrui: dB,
       m_bunrui: mB,

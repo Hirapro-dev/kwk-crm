@@ -32,7 +32,7 @@ export async function listActivities(params: ActivityListParams = {}): Promise<A
     .select(
       `
         id, legacy_sf_id, owner_id, member_id, created_by_id,
-        duration_minutes, description, d_bunrui, m_bunrui, s_bunrui,
+        description, d_bunrui, m_bunrui, s_bunrui,
         registered_date, registered_datetime, created_at, updated_at,
         owner:users!activities_owner_id_fkey(id, full_name),
         member:members!activities_member_id_fkey(id, name)

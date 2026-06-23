@@ -9,7 +9,6 @@ import { z } from 'zod';
  *   両方を受け入れるため、緩めの検証(空 or 1文字以上)とし、存在チェックは
  *   DB 側の FK 制約に任せる。
  *
- * - duration_minutes は正の整数(または空)
  * - description は最大 5,000 文字(現実的な制限)
  */
 export const ActivityCreateSchema = z.object({
@@ -30,13 +29,6 @@ export const ActivityCreateSchema = z.object({
     .max(100)
     .optional()
     .or(z.literal('').transform(() => undefined)),
-  duration_minutes: z
-    .number({ coerce: true })
-    .int()
-    .min(0)
-    .max(60 * 24)
-    .optional()
-    .or(z.nan().transform(() => undefined)),
   description: z.string().max(5000).optional().or(z.literal('').transform(() => undefined)),
   /** ローカル日時 YYYY-MM-DDTHH:mm。未指定なら現在時刻。 */
   registered_at_local: z

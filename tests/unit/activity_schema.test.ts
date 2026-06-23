@@ -42,17 +42,6 @@ describe('ActivityCreateSchema', () => {
     ).toBe(false);
   });
 
-  it('duration_minutes が文字列でも coerce', () => {
-    const r = ActivityCreateSchema.safeParse({ d_bunrui: '架電', duration_minutes: '30' });
-    expect(r.success).toBe(true);
-    if (r.success) expect(r.data.duration_minutes).toBe(30);
-  });
-
-  it('duration_minutes が異常値ならエラー', () => {
-    const r = ActivityCreateSchema.safeParse({ d_bunrui: '架電', duration_minutes: 9999 });
-    expect(r.success).toBe(false);
-  });
-
   it('description は 5000字以内', () => {
     const long = 'a'.repeat(5001);
     expect(ActivityCreateSchema.safeParse({ d_bunrui: '架電', description: long }).success).toBe(

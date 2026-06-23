@@ -10,7 +10,6 @@ import type { ActivityListItem } from './types';
 
 export interface DashboardStats {
   todayActivities: number;
-  todayCallMinutes: number; // 自分の今日の架電累計分
   monthActivities: number;
   monthMembers: number; // 自分担当の会員数(参考)
 }
@@ -33,20 +32,13 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
   const today = todayStartIso();
   const monthStart = monthStartIso();
 
-  const [todayCount, todayDurations, monthCount, members] = await Promise.all([
+  const [todayCount, monthCount, members] = await Promise.all([
     supabase
       .from('activities')
       .select('id', { count: 'exact', head: true })
       .is('deleted_at', null)
       .eq('owner_id', userId)
       .gte('registered_datetime', today),
-    supabase
-      .from('activities')
-      .select('duration_minutes')
-      .is('deleted_at', null)
-      .eq('owner_id', userId)
-      .gte('registered_datetime', today)
-      .not('duration_minutes', 'is', null),
     supabase
       .from('activities')
       .select('id', { count: 'exact', head: true })
@@ -60,15 +52,8 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
       .eq('owner_id', userId),
   ]);
 
-  const totalMinutes = (todayDurations.data ?? []).reduce(
-    (acc: number, r: { duration_minutes: number | null }) =>
-      acc + (r.duration_minutes ?? 0),
-    0,
-  );
-
   return {
     todayActivities: todayCount.count ?? 0,
-    todayCallMinutes: totalMinutes,
     monthActivities: monthCount.count ?? 0,
     monthMembers: members.count ?? 0,
   };
@@ -84,7 +69,7 @@ export async function getMyRecentActivities(
     .select(
       `
         id, legacy_sf_id, owner_id, member_id, created_by_id,
-        duration_minutes, description, d_bunrui, m_bunrui, s_bunrui,
+        description, d_bunrui, m_bunrui, s_bunrui,
         registered_date, registered_datetime, created_at, updated_at,
         owner:users!activities_owner_id_fkey(id, full_name),
         member:members!activities_member_id_fkey(id, name)

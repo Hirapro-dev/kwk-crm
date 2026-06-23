@@ -64,7 +64,6 @@ export async function createActivity(input: ActivityCreateInput): Promise<Activi
       d_bunrui: values.d_bunrui,
       m_bunrui: values.m_bunrui ?? null,
       s_bunrui: values.s_bunrui ?? null,
-      duration_minutes: values.duration_minutes ?? null,
       description: values.description ?? null,
       registered_date: registeredDate,
       registered_datetime: registeredDatetimeIso,

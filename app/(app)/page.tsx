@@ -2,7 +2,7 @@
  * ダッシュボード(仕様書 §8.1, §9.15)
  *
  * Phase 7 完成版:
- *   - 今日: 自分の対応件数、累計時間
+ *   - 今日: 自分の対応件数
  *   - 今月: 自分の対応件数、担当会員数
  *   - 最新対応歴 10件
  *   - お気に入りレポート最大3個(Phase 6 連携)
@@ -52,10 +52,6 @@ export default async function DashboardPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="今日の対応件数" value={stats.todayActivities.toLocaleString()} />
-        <StatCard
-          label="今日の累計時間"
-          value={`${stats.todayCallMinutes.toLocaleString()} 分`}
-        />
         <StatCard label="今月の対応件数" value={stats.monthActivities.toLocaleString()} />
         <StatCard label="担当会員数" value={stats.monthMembers.toLocaleString()} />
       </section>

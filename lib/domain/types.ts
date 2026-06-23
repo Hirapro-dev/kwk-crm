@@ -50,7 +50,6 @@ export interface Activity {
   owner_id: string | null;
   member_id: string | null;
   created_by_id: string | null;
-  duration_minutes: number | null;
   description: string | null;
   d_bunrui: string | null;
   m_bunrui: string | null;
