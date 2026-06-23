@@ -88,6 +88,7 @@ async function main() {
     // "User not found" → auth アカウントがないので新規作成
     if (updateErr.message.includes('User not found') || updateErr.status === 404) {
       const { error: createErr } = await supabase.auth.admin.createUser({
+        id: user.id, // public.users の UUID と一致させる(必須)
         email: user.email,
         password: args.password,
         email_confirm: true, // メール確認をスキップしてすぐにログイン可能に

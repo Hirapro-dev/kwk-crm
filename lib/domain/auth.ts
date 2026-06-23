@@ -38,7 +38,9 @@ export async function getCurrentUser(): Promise<AppUser> {
     .maybeSingle();
 
   if (error || !data) {
-    throw new Error('ユーザー情報が見つかりません。管理者に連絡してください。');
+    // auth.users に存在するが public.users に対応レコードがない場合はログイン画面へ。
+    // (パスワードリセット等でUUIDが不一致になった場合もここで救済)
+    redirect('/login');
   }
 
   return data as AppUser;
