@@ -64,23 +64,26 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
     ],
   },
 
+  // 申込は専用ハンドラ(lib/domain/import_applications.ts)で取込む。
+  // fields はテンプレCSVのヘッダー生成にのみ使用(実CSVの日本語ヘッダーに一致)。
   applications: {
     object: 'applications',
     table: 'applications',
     label: '申込',
     idField: 'id',
-    note: '申込ID(M-XXXXXXX)で突合します。会員ID・案件IDは既存のものを指定してください。',
+    note: '元の申込CSVをそのまま使えます。申込情報ID(M-)で突合。投資案件は案件名で解決、会員ID/問合せ管理IDは既存のもの、永久担当/申込獲得者は担当者名で解決します。案件固有列は extra に格納。',
     fields: [
-      { field: 'id', label: '申込ID', type: 'text', required: true },
+      { field: 'id', label: '申込情報ID', type: 'text', required: true },
+      { field: 'project_id', label: '投資案件', type: 'text' },
       { field: 'member_id', label: '会員ID', type: 'text' },
-      { field: 'project_id', label: '案件ID', type: 'text' },
+      { field: 'inquiry_id', label: '問合せ管理ID', type: 'text' },
       { field: 'application_date', label: '申込日', type: 'date' },
       { field: 'status', label: 'ステータス', type: 'text' },
-      { field: 'flow_type', label: '入出金区分', type: 'text' },
-      { field: 'payment_amount', label: '入金額', type: 'number' },
+      { field: 'flow_type', label: '入金/移動', type: 'text' },
+      { field: 'owner_name_raw', label: '永久担当', type: 'text' },
+      { field: 'acquirer_name_raw', label: '申込獲得者', type: 'text' },
       { field: 'payment_date', label: '入金日', type: 'date' },
-      { field: 'scheduled_payment_date', label: '入金予定日', type: 'date' },
-      { field: 'scheduled_amount', label: '入金予定額', type: 'number' },
+      { field: 'payment_amount', label: '入金額', type: 'number' },
       { field: 'withdrawal_amount', label: '出金額', type: 'number' },
       { field: 'withdrawal_date', label: '出金日', type: 'date' },
       { field: 'start_month', label: '起算月', type: 'text' },

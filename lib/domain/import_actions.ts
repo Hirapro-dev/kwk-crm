@@ -18,6 +18,10 @@ import { createClient } from '@/lib/supabase/server';
 import { mapAndValidate, parseCsv, type RowError } from '@/lib/import/parse';
 import { IMPORT_OBJECTS } from '@/lib/import/schema';
 import { getCurrentUser } from './auth';
+import {
+  commitApplicationsCsv,
+  previewApplicationsCsv,
+} from './import_applications';
 import { commitInquiriesCsv, previewInquiriesCsv } from './import_inquiries';
 import { commitMembersCsv, previewMembersCsv } from './import_members';
 
@@ -91,9 +95,10 @@ export async function previewImport(
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
 
-  // 専用ハンドラに委譲(実CSVヘッダー対応 / 架電NG分離 / 担当解決 / extra・フォーム解決)
+  // 専用ハンドラに委譲(実CSVヘッダー対応 / 架電NG分離 / 担当・案件解決 / extra)
   if (object === 'members') return previewMembersCsv([csvText], updateOnly);
   if (object === 'inquiries') return previewInquiriesCsv([csvText], updateOnly);
+  if (object === 'applications') return previewApplicationsCsv([csvText], updateOnly);
 
   const def = IMPORT_OBJECTS[object];
   if (!def) return { ok: false, error: '不明なオブジェクトです' };
@@ -175,6 +180,7 @@ export async function commitImport(
   // 専用ハンドラに委譲
   if (object === 'members') return commitMembersCsv([csvText], updateOnly);
   if (object === 'inquiries') return commitInquiriesCsv([csvText], updateOnly);
+  if (object === 'applications') return commitApplicationsCsv([csvText], updateOnly);
 
   const def = IMPORT_OBJECTS[object];
   if (!def) return { ok: false, error: '不明なオブジェクトです' };
