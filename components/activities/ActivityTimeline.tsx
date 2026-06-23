@@ -13,10 +13,10 @@ import { formatDateTime } from '@/lib/utils/date';
  * 対応歴を表形式で表示する。
  *
  * 仕様 (2026-05 確定):
- *   カラム: 日時 / 対応者 / 接触種別 / 接触内容 / 状態 / コメント
+ *   カラム: 日時 / 対応者 / 接触種別 / 接触内容 / 状態 / 対応詳細
  *   - s_bunrui (状態) は ActivityForm で「通電|不在|接触対応」のパイプ区切り文字列が
  *     格納されている想定 (古いデータは1つの文字列)。
- *   - コメントは1行省略表示、title 属性で全文ホバー表示。
+ *   - 対応詳細は1行省略表示、title 属性で全文ホバー表示。
  *   - 横スクロール可能 (overflow-auto + min-width)。
  */
 export function ActivityTimeline({ activities }: { activities: ActivityListItem[] }) {
@@ -36,7 +36,7 @@ export function ActivityTimeline({ activities }: { activities: ActivityListItem[
             <TableHead className="h-9 whitespace-nowrap">接触種別</TableHead>
             <TableHead className="h-9 whitespace-nowrap">接触内容</TableHead>
             <TableHead className="h-9 whitespace-nowrap">状態</TableHead>
-            <TableHead className="h-9 w-full">コメント</TableHead>
+            <TableHead className="h-9 w-full">対応詳細</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

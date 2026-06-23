@@ -150,7 +150,7 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
       { field: 'm_bunrui', label: '中分類', type: 'text' },
       { field: 's_bunrui', label: '小分類', type: 'text' },
       { field: 'registered_datetime', label: '登録日時', type: 'datetime' },
-      { field: 'description', label: 'コメント', type: 'text' },
+      { field: 'description', label: '対応詳細', type: 'text' },
     ],
   },
 };

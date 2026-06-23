@@ -140,7 +140,7 @@ const ACTIVITY_COLUMNS = (alias: string): AllowedColumnDef[] => [
   { source: `${alias}.member_id`, label: '会員ID(紐付け)', dataType: 'text', filterable: true, groupable: true },
   { source: `${alias}.created_by_id`, label: '作成者ID', dataType: 'text', filterable: true, groupable: true },
   { source: `${alias}.todo_time`, label: 'TODO時間', dataType: 'number', filterable: true, sortable: true, aggregatable: true },
-  { source: `${alias}.description`, label: '説明', dataType: 'text', filterable: true },
+  { source: `${alias}.description`, label: '対応詳細', dataType: 'text', filterable: true },
   { source: `${alias}.d_bunrui`, label: '大分類', dataType: 'text', filterable: true, groupable: true, sortable: true },
   { source: `${alias}.m_bunrui`, label: '中分類', dataType: 'text', filterable: true, groupable: true },
   { source: `${alias}.s_bunrui`, label: '小分類', dataType: 'text', filterable: true, groupable: true },

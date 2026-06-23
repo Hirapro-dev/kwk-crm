@@ -2,7 +2,7 @@
  * 対応歴(activities)専用の取込変換ロジック (CLAUDE.md §5.7 / §6)
  *
  * - 会員ID(K-)→member_id(既存のみ・無ければ null)、担当→owner_id(名前解決)
- * - 大/中/小分類・コメント・登録日時を直接マッピング
+ * - 接触種別/接触内容/状態・対応詳細・登録日時を直接マッピング
  * - activities には extra 列が無いため、未マッピング列は無視する
  * - ID列が無いことが多いので、行内容のハッシュで legacy_sf_id を生成して突合
  *   (同一内容の行は同じ legacy_sf_id → upsert で重複しない)
@@ -28,7 +28,7 @@ const ALIASES: Record<string, string[]> = {
   d_bunrui: ['大分類', 'Dbunrui__c', 'd_bunrui'],
   m_bunrui: ['中分類', 'Mbunrui__c', 'm_bunrui'],
   s_bunrui: ['小分類', 'Sbunrui__c', 's_bunrui'],
-  description: ['コメント', '内容', '対応内容', 'Description', 'description'],
+  description: ['対応詳細', 'コメント', '内容', '対応内容', 'Description', 'description'],
   registered_datetime: ['登録日時', 'tourokunitiji__c', 'ActivityDateTime', 'registered_datetime'],
   registered_date: ['登録日', 'tourokuhi__c', 'ActivityDate', 'registered_date'],
 };

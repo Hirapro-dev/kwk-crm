@@ -252,12 +252,12 @@ export function ActivityForm({
         />
       </Field>
 
-      <Field label="コメント" errors={fieldErrors['description']}>
+      <Field label="対応詳細" errors={fieldErrors['description']}>
         <Textarea
           rows={4}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="対応内容を記入"
+          placeholder="対応詳細を記入"
         />
       </Field>
 
