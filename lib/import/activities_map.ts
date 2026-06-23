@@ -25,9 +25,11 @@ const ALIASES: Record<string, string[]> = {
   member_id: ACTIVITY_MEMBER_HEADERS,
   owner_name: ['担当', '担当者', 'OwnerId', 'owner'],
   created_by_name: ['作成者', 'CreatedById'],
-  d_bunrui: ['大分類', 'Dbunrui__c', 'd_bunrui'],
-  m_bunrui: ['中分類', 'Mbunrui__c', 'm_bunrui'],
-  s_bunrui: ['小分類', 'Sbunrui__c', 's_bunrui'],
+  // 接触種別/接触内容/状態(現行の表示名)に加え、旧名(大/中/小分類)とSF列も許容。
+  // 値は自由文字列で取込む(選択肢以外でもそのまま保存)。
+  d_bunrui: ['接触種別', '大分類', 'Dbunrui__c', 'd_bunrui'],
+  m_bunrui: ['接触内容', '中分類', 'Mbunrui__c', 'm_bunrui'],
+  s_bunrui: ['状態', '小分類', 'Sbunrui__c', 's_bunrui'],
   description: ['対応詳細', 'コメント', '内容', '対応内容', 'Description', 'description'],
   registered_datetime: ['登録日時', 'tourokunitiji__c', 'ActivityDateTime', 'registered_datetime'],
   registered_date: ['登録日', 'tourokuhi__c', 'ActivityDate', 'registered_date'],
