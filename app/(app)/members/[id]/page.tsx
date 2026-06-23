@@ -14,7 +14,9 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ActivityFormCard } from '@/components/activities/ActivityFormCard';
 import { ActivityTimeline } from '@/components/activities/ActivityTimeline';
+import { CollapsibleSection } from '@/components/layout/CollapsibleSection';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
+import { PhoneLink } from '@/components/layout/PhoneLink';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -96,7 +98,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
         recordSubName={`${member.id}${member.name_kana ? ` ・ ${member.name_kana}` : ''}`}
         facts={[
           { label: 'プロテクト', value: protectLabel },
-          { label: '電話番号', value: member.phone1 ?? '-' },
+          { label: '電話番号', value: <PhoneLink value={member.phone1} /> },
           { label: '架電NG', value: flagValue(member.do_not_call) },
           { label: '弁護士対応', value: flagValue(isExtraOn('弁護士対応')) },
           { label: '番号違い・別人', value: flagValue(isExtraOn('番号違い・別人')) },
@@ -124,33 +126,21 @@ export default async function MemberDetailPage({ params }: PageProps) {
         {/* 左カラム: 詳細/関連 タブ */}
         <MemberTabs
           detailsContent={
-            <Card>
-              <CardHeader className="border-b py-3">
-                <CardTitle className="text-sm">基本情報</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                {/*
-                  Phase 2: オブジェクト管理機能 (/settings/objects/members) で
-                  「詳細」表示ONになっているフィールドのみ動的にレンダリングする。
-                */}
-                <DynamicDetailFields
-                  record={member as unknown as Record<string, unknown>}
-                  fields={detailFields}
-                />
-              </CardContent>
-            </Card>
+            <CollapsibleSection title="基本情報">
+              {/*
+                Phase 2: オブジェクト管理機能 (/settings/objects/members) で
+                「詳細」表示ONになっているフィールドのみ動的にレンダリングする。
+              */}
+              <DynamicDetailFields
+                record={member as unknown as Record<string, unknown>}
+                fields={detailFields}
+              />
+            </CollapsibleSection>
           }
           relatedContent={
             <div className="space-y-3">
               {/* 申込履歴 (member_id で紐付け) */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between border-b py-3">
-                  <CardTitle className="text-sm">申込履歴</CardTitle>
-                  <span className="text-xs text-muted-foreground">
-                    {relApps.total.toLocaleString()}件
-                  </span>
-                </CardHeader>
-                <CardContent className="p-0">
+              <CollapsibleSection title="申込履歴" count={relApps.total} bodyClassName="p-0">
                   {relApps.rows.length === 0 ? (
                     <p className="p-4 text-sm text-muted-foreground">
                       申込はありません
@@ -200,18 +190,10 @@ export default async function MemberDetailPage({ params }: PageProps) {
                       </Table>
                     </div>
                   )}
-                </CardContent>
-              </Card>
+              </CollapsibleSection>
 
               {/* 問合せ履歴 (member_id で紐付け) */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between border-b py-3">
-                  <CardTitle className="text-sm">問合せ履歴</CardTitle>
-                  <span className="text-xs text-muted-foreground">
-                    {relInqs.total.toLocaleString()}件
-                  </span>
-                </CardHeader>
-                <CardContent className="p-0">
+              <CollapsibleSection title="問合せ履歴" count={relInqs.total} bodyClassName="p-0">
                   {relInqs.rows.length === 0 ? (
                     <p className="p-4 text-sm text-muted-foreground">
                       問合せはありません
@@ -253,8 +235,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
                       </Table>
                     </div>
                   )}
-                </CardContent>
-              </Card>
+              </CollapsibleSection>
             </div>
           }
         />

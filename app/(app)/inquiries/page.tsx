@@ -4,6 +4,7 @@
 
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { PhoneLink } from '@/components/layout/PhoneLink';
 import { SortHeader } from '@/components/layout/SortHeader';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -142,7 +143,9 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
                     )}
                   </TableCell>
                   <TableCell className="text-xs">{r.email ?? '-'}</TableCell>
-                  <TableCell className="text-xs">{r.phone ?? '-'}</TableCell>
+                  <TableCell className="text-xs">
+                    <PhoneLink value={r.phone} />
+                  </TableCell>
                 </TableRow>
               ))
             )}
