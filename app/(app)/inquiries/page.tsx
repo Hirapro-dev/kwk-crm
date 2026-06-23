@@ -17,7 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { listForms, listInquiries } from '@/lib/domain/inquiries';
-import { formatDateTime } from '@/lib/utils/date';
+import { formatDate } from '@/lib/utils/date';
 import { InquiriesFilterBar } from './InquiriesFilterBar';
 
 interface PageProps {
@@ -110,7 +110,7 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
                       {r.id}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-xs">{formatDateTime(r.registered_at)}</TableCell>
+                  <TableCell className="text-xs">{formatDate(r.registered_at)}</TableCell>
                   <TableCell className="text-xs">
                     {r.form ? (
                       <>
