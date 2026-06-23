@@ -5,7 +5,8 @@
  * /settings 配下のため、layout.tsx で admin チェック済 (二重チェックなし)。
  */
 
-import { PanelHeader } from '@/components/layout/PanelHeader';
+import { Suspense } from 'react';
+import { PanelFilterBar, PanelHeader } from '@/components/layout/PanelHeader';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import {
@@ -18,14 +19,28 @@ import {
 } from '@/components/ui/table';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { listAllUsers } from '@/lib/domain/users_admin';
+import type { UserRole } from '@/lib/domain/types';
 import { formatDateTime } from '@/lib/utils/date';
 import { UserRoleEditor } from '@/app/(app)/admin/users/UserRoleEditor';
 import { InviteUserForm } from './InviteUserForm';
 import { UserDeleteButton } from './UserDeleteButton';
+import { UsersFilterBar } from './UsersFilterBar';
 
-export default async function SettingsUsersPage() {
+const ROLES: UserRole[] = ['admin', 'manager', 'sales', 'viewer'];
+
+interface PageProps {
+  searchParams: Promise<{ active?: string; role?: string }>;
+}
+
+export default async function SettingsUsersPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
   const me = await getCurrentUser();
-  const users = await listAllUsers();
+
+  // 既定は「有効のみ」。active=all のときだけ全件表示。
+  const activeOnly = sp.active !== 'all';
+  const roleFilter = ROLES.includes(sp.role as UserRole) ? (sp.role as UserRole) : undefined;
+
+  const users = await listAllUsers({ activeOnly, role: roleFilter });
 
   const counts = users.reduce<Record<string, number>>((acc, u) => {
     acc[u.role] = (acc[u.role] ?? 0) + 1;
@@ -49,6 +64,15 @@ export default async function SettingsUsersPage() {
             </span>
           }
         />
+
+        <PanelFilterBar>
+          <Suspense>
+            <UsersFilterBar
+              initialActive={activeOnly ? 'active' : 'all'}
+              initialRole={roleFilter ?? ''}
+            />
+          </Suspense>
+        </PanelFilterBar>
 
         <Table>
           <TableHeader>
