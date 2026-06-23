@@ -13,18 +13,16 @@
  *   - RLS は実行ユーザー(admin)権限で適用される
  */
 
-import { revalidatePath } from 'next/cache';
-import { createClient } from '@/lib/supabase/server';
-import { mapAndValidate, parseCsv, type RowError } from '@/lib/import/parse';
+import { type RowError, mapAndValidate, parseCsv } from '@/lib/import/parse';
 import { IMPORT_OBJECTS } from '@/lib/import/schema';
+import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from './auth';
 import { commitActivitiesCsv, previewActivitiesCsv } from './import_activities';
-import {
-  commitApplicationsCsv,
-  previewApplicationsCsv,
-} from './import_applications';
+import { commitApplicationsCsv, previewApplicationsCsv } from './import_applications';
 import { commitInquiriesCsv, previewInquiriesCsv } from './import_inquiries';
 import { commitMembersCsv, previewMembersCsv } from './import_members';
+import { commitUsersCsv, previewUsersCsv } from './import_users';
 
 const MAX_ROWS = 60_000; // バルクUIの上限(会員約23,580件に余裕を持たせる。超過分はスクリプト/分割を案内)
 const BATCH = 500;
@@ -75,10 +73,7 @@ async function findExistingIds(
   const existing = new Set<string>();
   for (let i = 0; i < ids.length; i += BATCH) {
     const chunk = ids.slice(i, i + BATCH);
-    const { data, error } = await supabase
-      .from(table)
-      .select(idField)
-      .in(idField, chunk);
+    const { data, error } = await supabase.from(table).select(idField).in(idField, chunk);
     if (error) throw new Error(error.message);
     for (const r of data ?? []) {
       const v = (r as Record<string, unknown>)[idField];
@@ -101,6 +96,7 @@ export async function previewImport(
   if (object === 'inquiries') return previewInquiriesCsv([csvText], updateOnly);
   if (object === 'applications') return previewApplicationsCsv([csvText], updateOnly);
   if (object === 'activities') return previewActivitiesCsv([csvText], updateOnly);
+  if (object === 'users') return previewUsersCsv([csvText], updateOnly);
 
   const def = IMPORT_OBJECTS[object];
   if (!def) return { ok: false, error: '不明なオブジェクトです' };
@@ -120,7 +116,10 @@ export async function previewImport(
   if (mapped.presentFields.length <= 1) {
     return {
       ok: false,
-      error: `取込対象の列が見つかりません。テンプレートのヘッダー(${def.fields.map((f) => f.label).slice(0, 4).join(' / ')} 等)を使用してください`,
+      error: `取込対象の列が見つかりません。テンプレートのヘッダー(${def.fields
+        .map((f) => f.label)
+        .slice(0, 4)
+        .join(' / ')} 等)を使用してください`,
     };
   }
 
@@ -132,7 +131,10 @@ export async function previewImport(
       mapped.records.map((r) => r.id),
     );
   } catch (e) {
-    return { ok: false, error: `既存データ照会に失敗: ${e instanceof Error ? e.message : String(e)}` };
+    return {
+      ok: false,
+      error: `既存データ照会に失敗: ${e instanceof Error ? e.message : String(e)}`,
+    };
   }
 
   let newCount = 0;
@@ -184,6 +186,7 @@ export async function commitImport(
   if (object === 'inquiries') return commitInquiriesCsv([csvText], updateOnly);
   if (object === 'applications') return commitApplicationsCsv([csvText], updateOnly);
   if (object === 'activities') return commitActivitiesCsv([csvText], updateOnly);
+  if (object === 'users') return commitUsersCsv([csvText], updateOnly);
 
   const def = IMPORT_OBJECTS[object];
   if (!def) return { ok: false, error: '不明なオブジェクトです' };
@@ -224,7 +227,10 @@ export async function commitImport(
         mapped.records.map((r) => r.id),
       );
     } catch (e) {
-      return { ok: false, error: `既存データ照会に失敗: ${e instanceof Error ? e.message : String(e)}` };
+      return {
+        ok: false,
+        error: `既存データ照会に失敗: ${e instanceof Error ? e.message : String(e)}`,
+      };
     }
     const before = targetRecords.length;
     targetRecords = targetRecords.filter((r) => existing.has(r.id));
@@ -234,9 +240,7 @@ export async function commitImport(
   const rows = targetRecords.map((r) => r.data);
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
-    const { error } = await supabase
-      .from(def.table)
-      .upsert(batch, { onConflict: def.idField });
+    const { error } = await supabase.from(def.table).upsert(batch, { onConflict: def.idField });
     if (error) {
       return {
         ok: false,

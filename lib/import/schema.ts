@@ -153,12 +153,32 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
       { field: 'description', label: '対応詳細', type: 'text' },
     ],
   },
+
+  // 従業員(users)は専用ハンドラ(lib/domain/import_users.ts)で取込む。
+  // email で突合(legacy_sf_id があれば優先)、新規は UUID 採番。ここの fields はテンプレ生成用。
+  users: {
+    object: 'users',
+    table: 'users',
+    label: '従業員',
+    idField: 'id',
+    note: 'メール(必須)で突合します。「ユーザーID」(旧Salesforce ID)があれば優先。権限は admin/manager/sales/viewer(営業/役員/管理 等の表記も可、不明は viewer)。CSV取込ユーザーはログイン不可(担当者として利用)。',
+    fields: [
+      { field: 'legacy_sf_id', label: 'ユーザーID', type: 'text' },
+      { field: 'email', label: 'メール', type: 'text', required: true },
+      { field: 'last_name', label: '姓', type: 'text' },
+      { field: 'first_name', label: '名', type: 'text' },
+      { field: 'full_name', label: '氏名', type: 'text' },
+      { field: 'role', label: '権限', type: 'text' },
+      { field: 'is_active', label: '有効', type: 'boolean', default: true },
+    ],
+  },
 };
 
 export const IMPORT_OBJECT_KEYS = Object.keys(IMPORT_OBJECTS);
 
 /**
  * 定期取込(Drive 連携 #1)の対象キー。
- * 対応歴(activities)は定期取込の対象外(突発アップロードのみ)。
+ * 対応歴(activities)・従業員(users)は定期取込の対象外(突発アップロードのみ)。
  */
-export const ROUTINE_OBJECT_KEYS = IMPORT_OBJECT_KEYS.filter((k) => k !== 'activities');
+const ROUTINE_EXCLUDED = new Set(['activities', 'users']);
+export const ROUTINE_OBJECT_KEYS = IMPORT_OBJECT_KEYS.filter((k) => !ROUTINE_EXCLUDED.has(k));
