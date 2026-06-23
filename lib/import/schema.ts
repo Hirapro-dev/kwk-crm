@@ -123,7 +123,7 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
     note: '案件IDで突合します。新規案件は新しいIDを指定してください。',
     fields: [
       { field: 'id', label: '案件ID', type: 'text', required: true },
-      { field: 'name', label: '案件名', type: 'text', required: true },
+      { field: 'name', label: '案件', type: 'text', required: true },
       { field: 'description', label: '説明', type: 'text' },
       { field: 'is_active', label: '有効', type: 'boolean' },
     ],
