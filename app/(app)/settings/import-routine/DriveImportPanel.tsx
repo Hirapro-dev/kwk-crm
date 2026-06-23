@@ -79,16 +79,21 @@ function DriveSourceCard({
     setSaveMsg(null);
     setStage('saving');
     startBusy(async () => {
-      const res = await saveImportSource({
-        object: source.object,
-        drive_file_id: fileId,
-        drive_file_id_2: isInquiries ? fileId2 || undefined : undefined,
-        enabled,
-        update_only: updateOnly,
-      });
-      setSaveMsg(res.ok ? '保存しました' : (res.error ?? '保存失敗'));
-      setStage('idle');
-      if (res.ok) router.refresh();
+      try {
+        const res = await saveImportSource({
+          object: source.object,
+          drive_file_id: fileId,
+          drive_file_id_2: isInquiries ? fileId2 || undefined : undefined,
+          enabled,
+          update_only: updateOnly,
+        });
+        setSaveMsg(res?.ok ? '保存しました' : (res?.error ?? '保存に失敗しました'));
+        if (res?.ok) router.refresh();
+      } catch (e) {
+        setSaveMsg(e instanceof Error ? e.message : '保存に失敗しました');
+      } finally {
+        setStage('idle');
+      }
     });
   };
 
@@ -96,19 +101,33 @@ function DriveSourceCard({
     setCommitted(null);
     setStage('previewing');
     startBusy(async () => {
-      const res = await previewDriveImport(source.object);
-      setPreview(res);
-      setStage('idle');
+      try {
+        const res = await previewDriveImport(source.object);
+        setPreview(
+          res ?? { ok: false, error: '結果を取得できませんでした。ページを再読み込みしてください。' },
+        );
+      } catch (e) {
+        setPreview({ ok: false, error: e instanceof Error ? e.message : '取得に失敗しました' });
+      } finally {
+        setStage('idle');
+      }
     });
   };
 
   const onRun = () => {
     setStage('running');
     startBusy(async () => {
-      const res = await runDriveImport(source.object);
-      setCommitted(res);
-      setStage('idle');
-      router.refresh();
+      try {
+        const res = await runDriveImport(source.object);
+        setCommitted(
+          res ?? { ok: false, error: '結果を取得できませんでした。ページを再読み込みしてください。' },
+        );
+        if (res?.ok) router.refresh();
+      } catch (e) {
+        setCommitted({ ok: false, error: e instanceof Error ? e.message : '取込に失敗しました' });
+      } finally {
+        setStage('idle');
+      }
     });
   };
 

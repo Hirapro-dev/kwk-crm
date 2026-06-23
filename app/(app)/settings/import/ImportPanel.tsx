@@ -76,9 +76,16 @@ export function ImportPanel() {
     setCommitted(null);
     setStage('previewing');
     startBusy(async () => {
-      const res = await previewImport(objectKey, csvText, updateOnly);
-      setPreview(res);
-      setStage('idle');
+      try {
+        const res = await previewImport(objectKey, csvText, updateOnly);
+        setPreview(
+          res ?? { ok: false, error: '結果を取得できませんでした。ページを再読み込みしてください。' },
+        );
+      } catch (e) {
+        setPreview({ ok: false, error: e instanceof Error ? e.message : 'プレビューに失敗しました' });
+      } finally {
+        setStage('idle');
+      }
     });
   };
 
@@ -86,10 +93,17 @@ export function ImportPanel() {
     if (!csvText) return;
     setStage('committing');
     startBusy(async () => {
-      const res = await commitImport(objectKey, csvText, updateOnly);
-      setCommitted(res);
-      setStage('idle');
-      if (res.ok) router.refresh();
+      try {
+        const res = await commitImport(objectKey, csvText, updateOnly);
+        setCommitted(
+          res ?? { ok: false, error: '結果を取得できませんでした。ページを再読み込みしてください。' },
+        );
+        if (res?.ok) router.refresh();
+      } catch (e) {
+        setCommitted({ ok: false, error: e instanceof Error ? e.message : '取込に失敗しました' });
+      } finally {
+        setStage('idle');
+      }
     });
   };
 
