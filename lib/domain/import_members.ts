@@ -22,7 +22,8 @@ import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from './auth';
 import type { CommitResult, PreviewResult } from './import_actions';
 
-const BATCH = 500;
+// extra に多数の列(案件別利用額170列超)が入りペイロードが大きくなるため小さめ
+const BATCH = 200;
 const MAX_ROWS = 60_000;
 
 // biome-ignore lint/suspicious/noExplicitAny: Tables 型が空のため supabase クライアントは緩い型

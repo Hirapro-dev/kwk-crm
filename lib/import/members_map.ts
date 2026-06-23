@@ -37,6 +37,19 @@ const DIRECT_FIELDS: Array<{ header: string; field: string; type: ImportFieldTyp
   { header: '総利用額合計', field: 'total_used_amount', type: 'number' },
 ];
 
+/** 標準カラムとして消費するヘッダー(これら以外は extra に格納) */
+const CONSUMED_HEADERS = new Set<string>([
+  '会員ID',
+  '会員氏名',
+  '電話番号1',
+  '永久担当',
+  '住所(フル)',
+  '住所(フル）',
+  'ｱﾌｨﾘID',
+  'アフィリID',
+  ...DIRECT_FIELDS.map((f) => f.header),
+]);
+
 /** テンプレCSVの共通ヘッダー(ダウンロード用) */
 export const MEMBER_TEMPLATE_HEADERS = [
   '会員ID',
@@ -156,6 +169,17 @@ export function convertMemberRow(
     }
     data.owner_id = ownerId;
   }
+
+  // 標準カラムに無い列はすべて extra(JSONB) に保存(案件別利用額・任意フラグ等)
+  const extra: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (CONSUMED_HEADERS.has(k)) continue;
+    const cleaned = nz(v);
+    if (cleaned === null) continue;
+    if (/^#{7,}$/.test(cleaned)) continue; // ####... 埋め文字は無視
+    extra[k] = cleaned;
+  }
+  data.extra = extra;
 
   return { record: data };
 }
