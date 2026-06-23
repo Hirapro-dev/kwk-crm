@@ -81,11 +81,14 @@ export function mapAndValidate(
         rowErrors.push(`${f.label}: ${res.error}`);
         continue;
       }
-      if (f.required && (res.value === null || res.value === '')) {
+      // 空(null)のとき既定値があれば補完(NOT NULL カラム向け)
+      let value = res.value;
+      if (value === null && f.default !== undefined) value = f.default;
+      if (f.required && (value === null || value === '')) {
         rowErrors.push(`${f.label} は必須です`);
         continue;
       }
-      data[f.field] = res.value;
+      data[f.field] = value;
     }
 
     if (rowErrors.length > 0) {

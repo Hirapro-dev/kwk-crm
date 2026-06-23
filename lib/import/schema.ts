@@ -19,6 +19,8 @@ export interface ImportField {
   type: ImportFieldType;
   /** 必須(空ならエラー)。主キーは必須。 */
   required?: boolean;
+  /** 値が空(null)のときに使う既定値(NOT NULL カラム向け) */
+  default?: string | number | boolean;
 }
 
 export interface ImportObjectDef {
@@ -125,7 +127,7 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
       { field: 'id', label: '案件ID', type: 'text', required: true },
       { field: 'name', label: '案件', type: 'text', required: true },
       { field: 'description', label: '説明', type: 'text' },
-      { field: 'is_active', label: '有効', type: 'boolean' },
+      { field: 'is_active', label: '有効', type: 'boolean', default: true },
     ],
   },
 };
