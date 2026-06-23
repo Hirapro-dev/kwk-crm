@@ -20,6 +20,7 @@ import {
 import { parseCsv, type RowError } from '@/lib/import/parse';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from './auth';
+import { registerExtraFields } from './field_registry';
 import type { CommitResult, PreviewResult } from './import_actions';
 
 const BATCH = 500;
@@ -260,6 +261,16 @@ export async function commitInquiriesCsv(
       };
     }
     upserted += batch.length;
+  }
+
+  try {
+    const keys = new Set<string>();
+    for (const r of records) {
+      for (const k of Object.keys((r.extra as Record<string, unknown>) ?? {})) keys.add(k);
+    }
+    await registerExtraFields('inquiries', [...keys]);
+  } catch {
+    /* フィールド登録の失敗は取込本体に影響させない */
   }
 
   revalidatePath('/inquiries');

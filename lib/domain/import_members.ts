@@ -20,6 +20,7 @@ import {
 import { parseCsv, type RowError } from '@/lib/import/parse';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from './auth';
+import { registerExtraFields } from './field_registry';
 import type { CommitResult, PreviewResult } from './import_actions';
 
 // extra に多数の列(案件別利用額170列超)が入りペイロードが大きくなるため小さめ
@@ -199,6 +200,17 @@ export async function commitMembersCsv(
       };
     }
     upserted += batch.length;
+  }
+
+  // extra に入った新カラムをフィールド管理へ自動登録(失敗しても取込は成功扱い)
+  try {
+    const keys = new Set<string>();
+    for (const r of records) {
+      for (const k of Object.keys((r.extra as Record<string, unknown>) ?? {})) keys.add(k);
+    }
+    await registerExtraFields('members', [...keys]);
+  } catch {
+    /* フィールド登録の失敗は取込本体に影響させない */
   }
 
   revalidatePath('/members');
