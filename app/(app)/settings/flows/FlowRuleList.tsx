@@ -131,6 +131,7 @@ export function FlowRuleList({ rules }: Props) {
       </Table>
 
       <FlowRuleDialog
+        key={editTarget?.id ?? 'new'}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         rule={editTarget}
