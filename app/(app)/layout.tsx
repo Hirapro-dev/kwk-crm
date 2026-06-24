@@ -23,19 +23,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Topbar />
       <TabsNav appName="対応歴管理" tabs={navTabs} />
       {/*
-        Salesforce Lightning 風 背景:
-          - 上部 約280px に lightning_blue_background.png を no-repeat で表示
-          - その下のレイヤーは指定色 (#e1fffc) でベタ塗り
-          - 画像とベタ塗りが地続きに見えるよう、background を 2 レイヤー重ねる
+        背景: lightning_blue_background.png を上部に表示、背景色 #f0fffd
       */}
       <main
         className="relative flex-1 overflow-y-auto px-4 py-4"
         style={{
-          backgroundColor: '#ffffff',
+          backgroundColor: '#f0fffd',
           backgroundImage: 'url(/lightning_blue_background.png)',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'top center',
-          backgroundSize: '100% 280px',
         }}
       >
         {children}
