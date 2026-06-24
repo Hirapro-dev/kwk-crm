@@ -72,7 +72,11 @@ export default async function DashboardPage() {
           <CardTitle>最新対応歴 10件(自分担当)</CardTitle>
         </CardHeader>
         <CardContent>
-          <ActivityTimeline activities={recent} />
+          <ActivityTimeline
+              activities={recent}
+              currentUserId={me.id}
+              currentUserRole={me.role}
+            />
         </CardContent>
       </Card>
 

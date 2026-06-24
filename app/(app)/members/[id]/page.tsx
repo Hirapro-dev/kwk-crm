@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/table';
 import { getDBunruiList, getRecentBunruiPairs, listActivities } from '@/lib/domain/activities';
 import { listApplications } from '@/lib/domain/applications';
+import { getCurrentUser } from '@/lib/domain/auth';
 import { listInquiries } from '@/lib/domain/inquiries';
 import { getMember } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
@@ -47,6 +48,8 @@ export default async function MemberDetailPage({ params }: PageProps) {
   if (!member) {
     notFound();
   }
+
+  const me = await getCurrentUser();
 
   const [activities, bunruiList, recentPairs, detailFields, highlightFields, relApps, relInqs] =
     await Promise.all([
@@ -251,7 +254,11 @@ export default async function MemberDetailPage({ params }: PageProps) {
               bunruiList={bunruiList}
               recentPairs={recentPairs}
             />
-            <ActivityTimeline activities={activities.rows} />
+            <ActivityTimeline
+              activities={activities.rows}
+              currentUserId={me.id}
+              currentUserRole={me.role}
+            />
           </CardContent>
         </Card>
       </div>

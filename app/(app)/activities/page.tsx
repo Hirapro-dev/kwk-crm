@@ -74,7 +74,11 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
         </PanelFilterBar>
 
         <div className="p-2">
-          <ActivityTimeline activities={result.rows} />
+          <ActivityTimeline
+              activities={result.rows}
+              currentUserId={me.id}
+              currentUserRole={me.role}
+            />
         </div>
       </Card>
 
