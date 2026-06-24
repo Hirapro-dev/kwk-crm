@@ -48,7 +48,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
             value: app.status ? <Badge>{app.status}</Badge> : '-',
           },
           {
-            label: '入出金区分',
+            label: '入金/移動',
             value: app.flow_type ? <Badge variant="outline">{app.flow_type}</Badge> : '-',
           },
           {
@@ -56,7 +56,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
             value: formatDate(app.application_date) || '-',
           },
           {
-            label: '会員',
+            label: '会員ID',
             value: app.member ? (
               <Link
                 href={`/members/${app.member.id}`}

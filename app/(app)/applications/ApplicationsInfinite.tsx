@@ -30,12 +30,12 @@ const STATUS_VARIANT: Record<AppStatus, 'default' | 'secondary' | 'outline' | 's
 };
 
 const COLUMNS: InfiniteCol[] = [
-  { header: '申込ID', sortField: 'id' },
+  { header: '申込情報ID', sortField: 'id' },
   { header: '申込日', sortField: 'application_date' },
-  { header: '会員', sortField: 'member_id' },
-  { header: '案件', sortField: 'project_id' },
+  { header: '会員ID', sortField: 'member_id' },
+  { header: '投資案件', sortField: 'project_id' },
   { header: 'ステータス', sortField: 'status' },
-  { header: '区分', sortField: 'flow_type' },
+  { header: '入金/移動', sortField: 'flow_type' },
   {
     header: '入金額',
     sortField: 'payment_amount',

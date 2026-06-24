@@ -25,10 +25,10 @@ interface Props {
 const COLUMNS: InfiniteCol[] = [
   { header: '問合せID', sortField: 'id' },
   { header: '登録日時', sortField: 'registered_at' },
-  { header: 'フォーム', sortField: 'form_id' },
+  { header: 'フォーム名', sortField: 'form_id' },
   { header: '氏名', sortField: 'name' },
-  { header: 'メール', sortField: 'email' },
-  { header: '電話', sortField: 'phone' },
+  { header: 'メールアドレス', sortField: 'email' },
+  { header: '電話番号', sortField: 'phone' },
 ];
 
 export function InquiriesInfinite({ initialRows, total, params }: Props) {

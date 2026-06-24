@@ -53,7 +53,7 @@ export default async function InquiryDetailPage({ params }: PageProps) {
             ),
           },
           {
-            label: 'フォーム',
+            label: 'フォーム名',
             value: inquiry.form?.name ?? '-',
           },
           {
@@ -61,7 +61,7 @@ export default async function InquiryDetailPage({ params }: PageProps) {
             value: formatDateTime(inquiry.registered_at) || '-',
           },
           {
-            label: '会員',
+            label: '会員ID',
             value: inquiry.member ? (
               <Link
                 href={`/members/${inquiry.member.id}`}
