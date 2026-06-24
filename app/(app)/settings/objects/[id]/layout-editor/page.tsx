@@ -40,7 +40,7 @@ export default async function LayoutEditorPage({ params }: PageProps) {
       <Card className="overflow-hidden p-0 shadow-sm">
         <PanelHeader
           iconLabel={obj.icon_label ?? '???'}
-          iconColor={obj.icon_color ?? '#1589ee'}
+          iconColor={obj.icon_color ?? '#00C896'}
           viewName={`${obj.label} のレイアウトエディタ`}
         />
         <div className="px-4 py-3 text-xs text-muted-foreground">

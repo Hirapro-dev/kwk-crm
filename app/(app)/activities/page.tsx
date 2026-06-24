@@ -56,7 +56,7 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
       <Card className="overflow-hidden p-0 shadow-sm">
         <PanelHeader
           iconLabel="ACT"
-          iconColor="#1589ee"
+          iconColor="#00C896"
           viewName="対応歴"
           totalCount={result.total}
         />

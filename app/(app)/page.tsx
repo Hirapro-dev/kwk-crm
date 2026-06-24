@@ -31,7 +31,7 @@ export default async function DashboardPage() {
       <Card className="overflow-hidden p-0 shadow-sm">
         <PanelHeader
           iconLabel="HOM"
-          iconColor="#1589ee"
+          iconColor="#00C896"
           viewName="ダッシュボード"
           actions={
             <>

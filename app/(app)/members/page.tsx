@@ -43,7 +43,7 @@ export default async function MembersPage({ searchParams }: PageProps) {
       <Card className="overflow-hidden p-0 shadow-sm">
         <PanelHeader
           iconLabel="MEM"
-          iconColor="#1589ee"
+          iconColor="#00C896"
           viewName="顧客情報一覧"
           totalCount={result.total}
           actions={

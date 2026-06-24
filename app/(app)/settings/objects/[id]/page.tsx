@@ -45,7 +45,7 @@ export default async function ObjectFieldsPage({ params }: PageProps) {
       <Card className="overflow-hidden p-0 shadow-sm">
         <PanelHeader
           iconLabel={obj.icon_label ?? '???'}
-          iconColor={obj.icon_color ?? '#1589ee'}
+          iconColor={obj.icon_color ?? '#00C896'}
           viewName={`${obj.label} のフィールド管理`}
           actions={
             <div className="flex items-center gap-3">

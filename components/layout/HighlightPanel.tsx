@@ -22,7 +22,7 @@ interface Props {
 
 export function HighlightPanel({
   iconLabel,
-  iconColor = '#1589ee',
+  iconColor = '#00C896',
   objectLabel,
   recordName,
   recordSubName,

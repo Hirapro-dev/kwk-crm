@@ -87,7 +87,7 @@ export function SalesBarChart({ rows }: Props) {
           />
           <Bar
             dataKey="total_payment_amount"
-            fill="#1589ee"
+            fill="#00C896"
             radius={[4, 4, 0, 0]}
             maxBarSize={48}
           />

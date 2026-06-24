@@ -32,7 +32,7 @@ import type { ChartData } from '@/lib/reports/chart_data';
 import type { ChartType } from '@/lib/reports/types';
 
 const PALETTE = [
-  '#1589ee',
+  '#00C896',
   '#9333ea',
   '#16a34a',
   '#f59e0b',
@@ -45,7 +45,7 @@ const PALETTE = [
   '#64748b',
   '#84cc16',
 ];
-const BAR_COLOR = '#1589ee';
+const BAR_COLOR = '#00C896';
 
 const compact = new Intl.NumberFormat('ja-JP', {
   notation: 'compact',

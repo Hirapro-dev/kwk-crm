@@ -67,7 +67,7 @@ export default async function SummaryPage({ searchParams }: PageProps) {
       <Card className="overflow-hidden p-0 shadow-sm">
         <PanelHeader
           iconLabel="SUM"
-          iconColor="#1589ee"
+          iconColor="#00C896"
           viewName="ユーザー別 入金サマリ"
           totalCount={summary.rows.length}
         />

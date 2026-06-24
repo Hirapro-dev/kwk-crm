@@ -4,36 +4,36 @@
 
 @layer base {
   :root {
-    /* Salesforce Lightning Design System (SLDS) 風カラーパレット */
+    /* グリーンベースカラーパレット (#00C896 = hsl(165,100%,39%)) */
     --background: 0 0% 95%; /* #f3f3f3 ページ背景 */
     --foreground: 0 0% 9%; /* #181818 メインテキスト */
     --card: 0 0% 100%; /* #ffffff カード白 */
     --card-foreground: 0 0% 9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 9%;
-    --primary: 212 100% 47%; /* #0070d2 SF ブランドブルー */
+    --primary: 165 100% 39%; /* #00C896 ブランドグリーン */
     --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 96.5%; /* #f7f7f7 セカンダリ背景 */
     --secondary-foreground: 0 0% 9%;
     --muted: 0 0% 96.5%;
     --muted-foreground: 30 3% 43%; /* #706e6b */
-    --accent: 211 100% 96%; /* 淡い水色(ホバー用) */
-    --accent-foreground: 212 100% 35%;
-    --destructive: 0 76% 50%; /* #c23934 SF エラー赤 */
+    --accent: 165 80% 94%; /* 淡いミントグリーン(ホバー用) */
+    --accent-foreground: 165 100% 20%;
+    --destructive: 0 76% 50%; /* #c23934 エラー赤 */
     --destructive-foreground: 0 0% 100%;
-    --border: 30 4% 86%; /* #dddbda SF 境界線 */
+    --border: 30 4% 86%; /* #dddbda 境界線 */
     --input: 30 4% 86%;
-    --ring: 212 100% 47%;
-    --radius: 0.25rem; /* SF は角丸が小さい */
+    --ring: 165 100% 39%;
+    --radius: 0.25rem;
 
-    /* SF 専用拡張変数 */
-    --sf-header: 216 100% 12%; /* #001639 ヘッダー濃紺 */
+    /* 専用拡張変数 */
+    --sf-header: 165 60% 16%; /* #0f4a38 ヘッダー濃グリーン */
     --sf-header-foreground: 0 0% 100%;
-    --sf-header-hover: 216 100% 18%;
-    --sf-link: 212 100% 35%; /* #006dcc リンク色 */
+    --sf-header-hover: 165 60% 22%;
+    --sf-link: 165 100% 28%; /* #008c6a リンク色 */
     --sf-success: 145 63% 35%; /* #2e844a */
     --sf-warning: 36 100% 50%; /* #ffb75d */
-    --sf-row-hover: 210 30% 97%;
+    --sf-row-hover: 165 60% 97%;
   }
 
   .dark {

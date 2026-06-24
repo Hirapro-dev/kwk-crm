@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.object_definitions (
   id            text PRIMARY KEY,                                -- 物理テーブル名 (members 等)
   label         text NOT NULL,                                   -- 表示名 (顧客情報 等)
   icon_label    text,                                            -- リストヘッダー3文字 (MEM)
-  icon_color    text,                                            -- カラー (#1589ee)
+  icon_color    text,                                            -- カラー (#00C896)
   sort_order    int NOT NULL DEFAULT 100,
   is_system     boolean NOT NULL DEFAULT false,                  -- システム標準 (削除不可)
   created_at    timestamptz NOT NULL DEFAULT now(),
@@ -104,11 +104,11 @@ CREATE POLICY field_definitions_modify ON public.field_definitions
 -- 4) 初期シード: 7つのオブジェクト
 -- ========================================================
 INSERT INTO public.object_definitions (id, label, icon_label, icon_color, sort_order, is_system) VALUES
-  ('members',      '顧客情報',   'MEM', '#1589ee', 10, true),
-  ('inquiries',    '問合せ',     'INQ', '#1589ee', 20, true),
-  ('applications', '申込',       'APP', '#1589ee', 30, true),
+  ('members',      '顧客情報',   'MEM', '#00C896', 10, true),
+  ('inquiries',    '問合せ',     'INQ', '#00C896', 20, true),
+  ('applications', '申込',       'APP', '#00C896', 30, true),
   ('projects',     '案件マスタ', 'PRJ', '#04844b', 40, true),
-  ('activities',   '活動履歴',   'ACT', '#1589ee', 50, true),
+  ('activities',   '活動履歴',   'ACT', '#00C896', 50, true),
   ('users',        'ユーザー',   'USR', '#04844b', 60, true),
   ('forms',        'フォーム',   'FRM', '#9333ea', 70, true)
 ON CONFLICT (id) DO NOTHING;

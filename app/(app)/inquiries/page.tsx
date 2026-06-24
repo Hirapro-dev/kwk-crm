@@ -45,7 +45,7 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
           <div className="flex items-center gap-3">
             <span
               className="sf-icon-chip"
-              style={{ backgroundColor: '#1589ee' }}
+              style={{ backgroundColor: '#00C896' }}
               aria-hidden="true"
             >
               INQ

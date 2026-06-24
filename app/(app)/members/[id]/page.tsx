@@ -93,7 +93,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
       {/* Highlight Panel */}
       <HighlightPanel
         iconLabel="MEM"
-        iconColor="#1589ee"
+        iconColor="#00C896"
         objectLabel="会員"
         recordName={member.name ?? '(名称未設定)'}
         recordSubName={`${member.id}${member.name_kana ? ` ・ ${member.name_kana}` : ''}`}

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
  *
  * 使い方:
  *   <Card className="overflow-hidden p-0 shadow-sm">
- *     <PanelHeader iconLabel="MEM" iconColor="#1589ee" objectLabel="顧客情報"
+ *     <PanelHeader iconLabel="MEM" iconColor="#00C896" objectLabel="顧客情報"
  *                  viewName="全顧客" totalCount={result.total}
  *                  actions={<Button>新規</Button>} />
  *     <PanelFilterBar><YourFilterBar /></PanelFilterBar>
@@ -15,7 +15,7 @@ import type { ReactNode } from 'react';
 interface Props {
   /** 例: "MEM", "INQ", "APP", "PRJ", "USR", "SUM" */
   iconLabel: string;
-  /** 例: "#1589ee" (青) */
+  /** 例: "#00C896" (青) */
   iconColor?: string;
   /**
    * 上に薄く出るオブジェクト名 例: "顧客情報"
@@ -32,7 +32,7 @@ interface Props {
 
 export function PanelHeader({
   iconLabel,
-  iconColor = '#1589ee',
+  iconColor = '#00C896',
   objectLabel,
   viewName,
   totalCount,

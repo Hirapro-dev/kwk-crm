@@ -23,7 +23,7 @@ export default async function AccountPage() {
     <div className="space-y-3">
       <HighlightPanel
         iconLabel="ME"
-        iconColor="#1589ee"
+        iconColor="#00C896"
         objectLabel="プロフィール"
         recordName={me.full_name ?? me.email}
         recordSubName={me.email}

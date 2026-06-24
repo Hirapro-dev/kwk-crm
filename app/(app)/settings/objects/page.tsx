@@ -40,7 +40,7 @@ export default async function SettingsObjectsPage() {
             <Card className="flex h-full items-center gap-3 p-4 transition-colors hover:bg-accent">
               <span
                 className="sf-icon-chip"
-                style={{ backgroundColor: o.icon_color ?? '#1589ee' }}
+                style={{ backgroundColor: o.icon_color ?? '#00C896' }}
                 aria-hidden="true"
               >
                 {o.icon_label ?? '???'}

@@ -29,7 +29,7 @@ interface Props {
   tabs: TabItem[];
 }
 
-export function TabsNav({ appName, appColor = '#1589ee', tabs }: Props) {
+export function TabsNav({ appName, appColor = '#00C896', tabs }: Props) {
   const pathname = usePathname();
 
   const isActive = (tab: TabItem): boolean => {

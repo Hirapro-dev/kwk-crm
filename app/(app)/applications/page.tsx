@@ -48,7 +48,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
       <Card className="overflow-hidden p-0 shadow-sm">
         <PanelHeader
           iconLabel="APP"
-          iconColor="#1589ee"
+          iconColor="#00C896"
           viewName="申込一覧"
           totalCount={result.total}
         />

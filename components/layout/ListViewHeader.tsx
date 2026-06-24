@@ -28,7 +28,7 @@ interface Props {
 export function ListViewHeader({
   objectLabel,
   iconLabel,
-  iconColor = '#1589ee',
+  iconColor = '#00C896',
   viewName = '最近参照したデータ',
   totalCount,
   actions,
