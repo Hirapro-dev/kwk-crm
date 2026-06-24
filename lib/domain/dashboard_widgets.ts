@@ -20,6 +20,30 @@ export interface DashboardWidget {
 
 const MAX_WIDGETS = 3;
 const WIDGET_ROW_LIMIT = 10;
+const MAX_FAVORITE_LIST = 20;
+
+export interface FavoriteReportItem {
+  id: string;
+  name: string;
+  report_type: string;
+  updated_at: string;
+}
+
+/** ダッシュボード一覧用: レポートを実行せず名前・IDだけ取得(最大20件) */
+export async function getFavoriteReportList(
+  userId: string,
+): Promise<FavoriteReportItem[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('reports')
+    .select('id, name, report_type, updated_at')
+    .is('deleted_at', null)
+    .contains('favorited_by', [userId])
+    .order('name')
+    .limit(MAX_FAVORITE_LIST);
+  if (error || !data) return [];
+  return data as FavoriteReportItem[];
+}
 
 export async function getFavoriteReportWidgets(
   userId: string,

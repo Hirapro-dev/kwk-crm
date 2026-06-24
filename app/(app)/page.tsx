@@ -3,14 +3,13 @@
  *
  * Phase 7 完成版:
  *   - 今日/今月の対応件数、プロテクト数
- *   - お気に入りレポート(クリックでレポートへ遷移)
- *   - プロテクト会員(3日以内解除予定)
+ *   - お気に入りレポート一覧(最大20件)
+ *   - プロテクト会員(3日以内解除予定 or 全件最大20件)
  *   - 直近対応歴(過去24時間・全員)
  */
 
 import Link from 'next/link';
 import { ActivityTimeline } from '@/components/activities/ActivityTimeline';
-import { ReportWidget } from '@/components/dashboard/ReportWidget';
 import { PanelHeader } from '@/components/layout/PanelHeader';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,16 +27,16 @@ import {
   getProtectExpiringSoon,
   getRecentActivities24h,
 } from '@/lib/domain/dashboard';
-import { getFavoriteReportWidgets } from '@/lib/domain/dashboard_widgets';
+import { getFavoriteReportList } from '@/lib/domain/dashboard_widgets';
 import { formatDateTime } from '@/lib/utils/date';
 
 export default async function DashboardPage() {
   const me = await getCurrentUser();
-  const [stats, protectExpiring, recent, widgets] = await Promise.all([
+  const [stats, protectExpiring, recent, favorites] = await Promise.all([
     getMyDashboardStats(me.id),
     getProtectExpiringSoon(me.id),
     getRecentActivities24h(100),
-    getFavoriteReportWidgets(me.id),
+    getFavoriteReportList(me.id),
   ]);
 
   return (
@@ -71,26 +70,45 @@ export default async function DashboardPage() {
         <StatCard label="プロテクト数" value={stats.protectCount.toLocaleString()} />
       </section>
 
-      {/* お気に入りレポート */}
-      {widgets.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-base font-semibold">お気に入りレポート</h2>
-          <div className="grid gap-4 lg:grid-cols-3">
-            {widgets.map((w) => (
-              <ReportWidget key={w.reportId} widget={w} />
-            ))}
-          </div>
-        </section>
-      )}
-      {widgets.length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          ヒント:{' '}
-          <Link href="/reports" className="text-primary hover:underline">
-            レポート画面
-          </Link>
-          {' '}でレポート名横の★をタップすると、このダッシュボードにウィジェットが表示されます(最大3個)。
-        </p>
-      )}
+      {/* お気に入りレポート一覧 */}
+      <Card>
+        <CardHeader className="border-b py-3">
+          <CardTitle className="flex items-center justify-between text-sm">
+            <span>お気に入りレポート</span>
+            <Link
+              href="/reports?favorites=1"
+              className="text-xs font-normal text-primary hover:underline"
+            >
+              全て表示 →
+            </Link>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {favorites.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground">
+              お気に入りレポートがありません。
+              <Link href="/reports" className="ml-1 text-primary hover:underline">
+                レポート画面
+              </Link>
+              でレポート名横の★をタップして追加できます。
+            </p>
+          ) : (
+            <ul className="divide-y">
+              {favorites.map((r) => (
+                <li key={r.id}>
+                  <Link
+                    href={`/reports/${r.id}`}
+                    className="flex items-center justify-between px-4 py-2.5 hover:bg-accent/50 transition-colors"
+                  >
+                    <span className="text-sm font-medium">★ {r.name}</span>
+                    <Badge variant="outline" className="text-xs">{r.report_type}</Badge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       {/* プロテクト会員 */}
       <Card>
