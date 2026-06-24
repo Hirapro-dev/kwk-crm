@@ -5,7 +5,7 @@ import { LoginForm } from './LoginForm';
 export default function LoginPage() {
   const devAuth = isDevAuthEnabled();
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-white px-4">
+    <main className="relative flex min-h-screen flex-col items-center justify-center bg-white px-4">
       <div className="w-full max-w-[360px] space-y-8">
         {/* ロゴ */}
         <div className="flex justify-center">
@@ -28,8 +28,8 @@ export default function LoginPage() {
         <LoginForm devAuth={devAuth} />
       </div>
 
-      {/* コピーライト */}
-      <p className="mt-auto pt-12 pb-6 text-center text-xs text-gray-400">
+      {/* コピーライト — absolute で底部固定し、中央コンテンツの位置に影響させない */}
+      <p className="absolute bottom-6 text-center text-xs text-gray-400">
         © {new Date().getFullYear()} mrt inc. All rights reserved.
       </p>
     </main>
