@@ -30,7 +30,7 @@
     --sf-header: 0 0% 0%; /* #000000 ヘッダー黒 */
     --sf-header-foreground: 0 0% 100%;
     --sf-header-hover: 0 0% 12%;
-    --sf-link: 165 100% 28%; /* #008c6a リンク色 */
+    --sf-link: 212 100% 35%; /* #006dcc リンク色(青) */
     --sf-success: 145 63% 35%; /* #2e844a */
     --sf-warning: 36 100% 50%; /* #ffb75d */
     --sf-row-hover: 165 60% 97%;
@@ -86,6 +86,13 @@
   }
   .sf-link:hover {
     text-decoration: underline;
+  }
+  /* テキストリンクは青に維持。ボタン(bg-primary)には影響しない */
+  a.text-primary {
+    color: hsl(var(--sf-link));
+  }
+  a.text-primary:hover {
+    color: hsl(212 100% 25%);
   }
   .sf-row-hover:hover {
     background-color: hsl(var(--sf-row-hover));
