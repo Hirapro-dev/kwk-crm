@@ -319,16 +319,15 @@ export function buildReportQuery(
   // m.id を隠しカラムとして SELECT に追加する。
   //   - 出力カラム(outputColumns)には含めないため、ヘッダー・CSV・Excel には出ない
   //   - 結果行に MEMBER_LINK_ID_ALIAS キーとして付与され、画面側がリンク生成に使う
-  // グルーピング指定がある集計レポート(1行=複数会員)はリンク先が一意に定まらないため対象外。
   const hasExplicitGroupBy = !!(definition.group_by && definition.group_by.length > 0);
   const selectsMemberName = definition.columns.some(
     (c) => c.source === MEMBER_NAME_SOURCE && !c.aggregate,
   );
   const selectsMemberId = definition.columns.some((c) => c.source === MEMBER_ID_SOURCE);
+  // GROUP BY がある場合も m.name が非集計なら m.id を注入してリンクを生成する
   const injectMemberLinkId =
     selectsMemberName &&
     !selectsMemberId &&
-    !hasExplicitGroupBy &&
     !!findColumn(reportType, MEMBER_ID_SOURCE);
   if (injectMemberLinkId) {
     selectParts.push(`${sourceSql(MEMBER_ID_SOURCE)} AS ${MEMBER_LINK_ID_ALIAS}`);
