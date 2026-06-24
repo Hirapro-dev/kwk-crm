@@ -172,8 +172,11 @@ export async function getProtectExpiringSoon(userId: string): Promise<ProtectSec
   return { rows: allRows, expiringSoonCount: 0, totalCount: allRows.length };
 }
 
-/** 過去 24 時間の全員の対応歴を返す(ダッシュボード用)。 */
-export async function getRecentActivities24h(limit = 100): Promise<ActivityListItem[]> {
+/** 過去 24 時間の自分の対応歴を返す(ダッシュボード用)。 */
+export async function getRecentActivities24h(
+  userId: string,
+  limit = 100,
+): Promise<ActivityListItem[]> {
   const supabase = await createClient();
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
@@ -187,6 +190,7 @@ export async function getRecentActivities24h(limit = 100): Promise<ActivityListI
        member:members!activities_member_id_fkey(id, name)`,
     )
     .is('deleted_at', null)
+    .eq('owner_id', userId)
     .gte('registered_datetime', since)
     .order('registered_datetime', { ascending: false, nullsFirst: false })
     .limit(limit);

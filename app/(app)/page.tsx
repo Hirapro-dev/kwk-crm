@@ -35,7 +35,7 @@ export default async function DashboardPage() {
   const [stats, protectExpiring, recent, favorites] = await Promise.all([
     getMyDashboardStats(me.id),
     getProtectExpiringSoon(me.id),
-    getRecentActivities24h(100),
+    getRecentActivities24h(me.id, 100),
     getFavoriteReportList(me.id),
   ]);
 
@@ -189,7 +189,7 @@ export default async function DashboardPage() {
         <CardHeader className="border-b py-3">
           <CardTitle className="flex items-center justify-between text-sm">
             <span>直近の対応歴</span>
-            <span className="text-xs font-normal text-muted-foreground">過去24時間 · {recent.length}件</span>
+            <span className="text-xs font-normal text-muted-foreground">自分 · 過去24時間 · {recent.length}件</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
