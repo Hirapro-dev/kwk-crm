@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getCurrentUser } from './auth';
 
-const ROLES = ['admin', 'manager', 'sales', 'viewer'] as const;
+const ROLES = ['admin', 'manager', 'sales', 'viewer', 'support'] as const;
 
 const UpdateRoleSchema = z.object({
   user_id: z.string().uuid(),
@@ -160,7 +160,7 @@ export async function inviteUser(input: {
   email: string;
   last_name: string;
   first_name?: string;
-  role?: 'admin' | 'manager' | 'sales' | 'viewer';
+  role?: 'admin' | 'manager' | 'sales' | 'viewer' | 'support';
 }): Promise<InviteResult> {
   const parsed = InviteSchema.safeParse(input);
   if (!parsed.success) {

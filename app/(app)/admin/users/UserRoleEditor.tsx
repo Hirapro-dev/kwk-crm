@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { updateUserRole } from '@/lib/domain/user_actions';
 
-const ROLES = ['admin', 'manager', 'sales', 'viewer'] as const;
+const ROLES = ['admin', 'manager', 'sales', 'viewer', 'support'] as const;
 
 /**
  * ユーザー1名のロール・有効状態を更新する小フォーム(admin限定 / 仕様書 §7.1)。
