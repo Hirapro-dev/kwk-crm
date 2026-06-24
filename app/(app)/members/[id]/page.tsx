@@ -16,7 +16,6 @@ import { ActivityFormCard } from '@/components/activities/ActivityFormCard';
 import { ActivityTimeline } from '@/components/activities/ActivityTimeline';
 import { CollapsibleSection } from '@/components/layout/CollapsibleSection';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
-import { PhoneLink } from '@/components/layout/PhoneLink';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,6 +34,7 @@ import { listInquiries } from '@/lib/domain/inquiries';
 import { getMember } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { formatDate, formatDateTime } from '@/lib/utils/date';
+import { renderHighlightFieldValue } from '@/components/members/HighlightFieldValue';
 import { MemberTabs } from './MemberTabs';
 
 interface PageProps {
@@ -48,39 +48,40 @@ export default async function MemberDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [activities, bunruiList, recentPairs, detailFields, relApps, relInqs] =
+  const [activities, bunruiList, recentPairs, detailFields, highlightFields, relApps, relInqs] =
     await Promise.all([
       listActivities({ memberId: id, pageSize: 50, page: 1 }),
       getDBunruiList(),
       getRecentBunruiPairs(200),
       // Phase 2: オブジェクト管理機能の field_definitions に基づき表示するフィールドを取得
       getVisibleFields('members', 'detail'),
+      // Phase 2.6: ハイライトパネルのフィールド設定
+      getVisibleFields('members', 'highlight'),
       // 関連タブで表示する申込・問合せ (member_id で紐付け、最大100件)
       listApplications({ memberId: id, pageSize: 100, page: 1 }),
       listInquiries({ memberId: id, pageSize: 100, page: 1 }),
     ]);
 
-  // プロテクト(担当)。将来は専用システムのユーザー名が入る想定。現状は担当者を表示。
-  const protectLabel = member.owner
-    ? (member.owner.full_name ?? member.owner.email)
-    : (member.owner_name_raw ?? 'Free');
-
-  // 弁護士対応 / 番号違い・別人 等のフラグは extra(JSONB) から判定(なければ「なし」)
-  const isExtraOn = (key: string): boolean => {
-    const v = member.extra?.[key];
-    if (v === true) return true;
-    if (typeof v === 'string') {
-      const s = v.trim();
-      return s !== '' && !/^(false|0|なし|no|×|off)$/i.test(s);
-    }
-    return false;
-  };
-  const flagValue = (on: boolean) =>
-    on ? (
-      <Badge variant="destructive">あり</Badge>
-    ) : (
-      <span className="text-muted-foreground">なし</span>
-    );
+  // ハイライトパネルの facts を動的生成
+  // highlight フィールドが未設定のときは最低限の情報をフォールバック表示
+  const highlightFacts =
+    highlightFields.length > 0
+      ? highlightFields.map((f) => ({
+          label: f.label ?? f.field_name,
+          value: renderHighlightFieldValue(f, member),
+        }))
+      : [
+          {
+            label: 'プロテクト',
+            value: (
+              <span>
+                {member.owner
+                  ? (member.owner.full_name ?? member.owner.email)
+                  : (member.owner_name_raw ?? 'Free')}
+              </span>
+            ),
+          },
+        ];
 
   return (
     <div className="space-y-3">
@@ -96,13 +97,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
         objectLabel="会員"
         recordName={member.name ?? '(名称未設定)'}
         recordSubName={`${member.id}${member.name_kana ? ` ・ ${member.name_kana}` : ''}`}
-        facts={[
-          { label: 'プロテクト', value: protectLabel },
-          { label: '電話番号', value: <PhoneLink value={member.phone1} /> },
-          { label: '架電NG', value: flagValue(member.do_not_call) },
-          { label: '弁護士対応', value: flagValue(isExtraOn('弁護士対応')) },
-          { label: '番号違い・別人', value: flagValue(isExtraOn('番号違い・別人')) },
-        ]}
+        facts={highlightFacts}
         actions={
           <>
             <Button variant="outline" size="sm">

@@ -340,3 +340,54 @@ export async function deletePlaceholder(id: number): Promise<ActionResult> {
   revalidatePath('/settings/objects');
   return { ok: true, message: '空白を削除しました' };
 }
+
+// ----------------------------------------------------------------------------
+// ハイライトパネル フィールド管理
+// ----------------------------------------------------------------------------
+
+interface HighlightItem {
+  id: number;
+  sort_order_highlight: number;
+  is_visible_highlight: boolean;
+}
+
+/**
+ * ハイライトパネルのフィールド表示状態と並び順を一括更新する。
+ * 渡した items に含まれていないフィールドは is_visible_highlight=false になる。
+ */
+export async function saveHighlightFields(
+  objectId: string,
+  visibleIds: number[],          // 表示ON の ID リスト(表示順)
+): Promise<ActionResult> {
+  const guard = await assertAdmin();
+  if (!guard.ok) return guard;
+
+  if (!objectId) return { ok: false, error: 'objectId が必須です' };
+
+  const supabase = await createClient();
+
+  // まず対象オブジェクトの全フィールドを is_visible_highlight=false にリセット
+  const { error: resetErr } = await supabase
+    .from('field_definitions')
+    .update({ is_visible_highlight: false })
+    .eq('object_id', objectId);
+  if (resetErr) return { ok: false, error: `リセット失敗: ${resetErr.message}` };
+
+  // 表示ON のフィールドを sort_order_highlight と共に更新
+  for (let i = 0; i < visibleIds.length; i++) {
+    const id = visibleIds[i] as number;
+    if (!Number.isInteger(id) || id <= 0) continue;
+    const { error } = await supabase
+      .from('field_definitions')
+      .update({
+        is_visible_highlight: true,
+        sort_order_highlight: (i + 1) * 10,
+      })
+      .eq('id', id)
+      .eq('object_id', objectId);
+    if (error) return { ok: false, error: `id=${id} 更新失敗: ${error.message}` };
+  }
+
+  revalidatePath('/settings/objects');
+  return { ok: true, message: `${visibleIds.length}件のハイライト設定を保存しました` };
+}

@@ -42,6 +42,10 @@ export interface FieldDefinition {
   section_name: string | null;
   /** 空白セル (Phase 2.5)。true なら詳細画面で空の枠として描画。一覧では非表示。 */
   is_placeholder: boolean;
+  /** ハイライトパネル(詳細ヘッダー下部)に表示するか */
+  is_visible_highlight: boolean;
+  /** ハイライトパネル内での表示順 */
+  sort_order_highlight: number;
   created_at: string;
   updated_at: string;
 }
@@ -92,13 +96,29 @@ export async function listFieldDefinitions(
 
 /**
  * 指定オブジェクトで「表示ONになっている」フィールドだけを取得。
- * mode='list' なら is_visible_list=true、'detail' なら is_visible_detail=true を抽出。
+ * mode='list'      → is_visible_list=true、sort_order_list 順
+ * mode='detail'    → is_visible_detail=true、sort_order_detail 順
+ * mode='highlight' → is_visible_highlight=true、sort_order_highlight 順
  * 動的レンダリング (Phase 2 以降) で使用。
  */
 export async function getVisibleFields(
   objectId: string,
-  mode: 'list' | 'detail',
+  mode: 'list' | 'detail' | 'highlight',
 ): Promise<FieldDefinition[]> {
+  const supabase = await createClient();
+
+  if (mode === 'highlight') {
+    const { data, error } = await supabase
+      .from('field_definitions')
+      .select('*')
+      .eq('object_id', objectId)
+      .eq('is_visible_highlight', true)
+      .order('sort_order_highlight', { ascending: true })
+      .order('field_name', { ascending: true });
+    if (error) throw new Error(`ハイライトフィールド取得に失敗: ${error.message}`);
+    return (data ?? []) as FieldDefinition[];
+  }
+
   const all = await listFieldDefinitions(objectId, mode);
   if (mode === 'list') {
     return all.filter((f) => f.is_visible_list);

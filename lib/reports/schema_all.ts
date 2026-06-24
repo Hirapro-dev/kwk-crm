@@ -83,6 +83,7 @@ const MEMBER_COLUMNS = (alias: string): AllowedColumnDef[] => [
   { source: `${alias}.customer_type`, label: '顧客種別', dataType: 'text', filterable: true, groupable: true, sortable: true },
   { source: `${alias}.owner_id`, label: '担当者ID', dataType: 'text', filterable: true, groupable: true },
   { source: `${alias}.owner_name_raw`, label: '担当(元表記)', dataType: 'text', filterable: true, groupable: true },
+  { source: `${alias}.regular_contact_id`, label: '定期連絡者ID', dataType: 'text', filterable: true, groupable: true },
   { source: `${alias}.first_contact_date`, label: '初回接触日', dataType: 'date', filterable: true, sortable: true, groupable: true },
   { source: `${alias}.registered_at`, label: '登録日時', dataType: 'datetime', filterable: true, sortable: true, groupable: true },
   { source: `${alias}.mailmag_registered_at`, label: 'メルマガ登録日時', dataType: 'datetime', filterable: true, sortable: true },
@@ -161,6 +162,13 @@ const USER_COLUMNS = (alias: string): AllowedColumnDef[] => [
   { source: `${alias}.legacy_sf_id`, label: '旧SFユーザーID', dataType: 'text', filterable: true },
 ];
 
+/** 定期連絡者 JOIN 用カラム(alias='rc'で使う) */
+const REGULAR_CONTACT_COLUMNS = (alias: string): AllowedColumnDef[] => [
+  { source: `${alias}.id`, label: '定期連絡者ID', dataType: 'text', filterable: true, groupable: true },
+  { source: `${alias}.full_name`, label: '定期連絡者氏名', dataType: 'text', filterable: true, sortable: true, groupable: true },
+  { source: `${alias}.email`, label: '定期連絡者メール', dataType: 'text', filterable: true },
+];
+
 const PROJECT_COLUMNS = (alias: string): AllowedColumnDef[] => [
   { source: `${alias}.id`, label: '案件ID', dataType: 'text', filterable: true, groupable: true, sortable: true },
   { source: `${alias}.name`, label: '案件名', dataType: 'text', filterable: true, sortable: true, groupable: true },
@@ -201,6 +209,12 @@ const JOIN_MEMBER_TO_OWNER: AllowedJoinDef = {
   table: 'users',
   type: 'left',
   on: 'owner.id = m.owner_id',
+};
+const JOIN_MEMBER_TO_REGULAR_CONTACT: AllowedJoinDef = {
+  alias: 'rc',
+  table: 'users',
+  type: 'left',
+  on: 'rc.id = m.regular_contact_id',
 };
 const JOIN_APP_TO_MEMBER: AllowedJoinDef = {
   alias: 'm',
@@ -256,8 +270,8 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseTable: 'members',
     baseAlias: 'm',
     baseWhere: ['m.deleted_at IS NULL'],
-    allowedJoins: [JOIN_MEMBER_TO_OWNER],
-    allowedColumns: [...MEMBER_COLUMNS('m'), ...USER_COLUMNS('owner')],
+    allowedJoins: [JOIN_MEMBER_TO_OWNER, JOIN_MEMBER_TO_REGULAR_CONTACT],
+    allowedColumns: [...MEMBER_COLUMNS('m'), ...USER_COLUMNS('owner'), ...REGULAR_CONTACT_COLUMNS('rc')],
   },
 
   // RT02: 会員サマリ ★最重要 — 1会員=1行(集計済)
@@ -268,6 +282,7 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseWhere: ['m.deleted_at IS NULL'],
     allowedJoins: [
       JOIN_MEMBER_TO_OWNER,
+      JOIN_MEMBER_TO_REGULAR_CONTACT,
       {
         alias: 'apps',
         table: 'applications',
@@ -284,6 +299,7 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     allowedColumns: [
       ...MEMBER_COLUMNS('m'),
       ...USER_COLUMNS('owner'),
+      ...REGULAR_CONTACT_COLUMNS('rc'),
       { source: 'apps.id', label: '申込件数', dataType: 'text', aggregatable: true },
       {
         source: 'apps.payment_amount',
@@ -312,12 +328,13 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseTable: 'applications',
     baseAlias: 'a',
     baseWhere: ['a.deleted_at IS NULL'],
-    allowedJoins: [JOIN_APP_TO_MEMBER, JOIN_APP_TO_PROJECT, JOIN_APP_TO_OWNER],
+    allowedJoins: [JOIN_APP_TO_MEMBER, JOIN_APP_TO_PROJECT, JOIN_APP_TO_OWNER, JOIN_MEMBER_TO_REGULAR_CONTACT],
     allowedColumns: [
       ...APP_COLUMNS('a'),
       ...MEMBER_COLUMNS('m'),
       ...PROJECT_COLUMNS('p'),
       ...USER_COLUMNS('owner'),
+      ...REGULAR_CONTACT_COLUMNS('rc'),
     ],
   },
 
@@ -327,11 +344,12 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseTable: 'activities',
     baseAlias: 'act',
     baseWhere: ['act.deleted_at IS NULL'],
-    allowedJoins: [JOIN_ACT_TO_MEMBER, JOIN_ACT_TO_OWNER],
+    allowedJoins: [JOIN_ACT_TO_MEMBER, JOIN_ACT_TO_OWNER, JOIN_MEMBER_TO_REGULAR_CONTACT],
     allowedColumns: [
       ...ACTIVITY_COLUMNS('act'),
       ...MEMBER_COLUMNS('m'),
       ...USER_COLUMNS('owner'),
+      ...REGULAR_CONTACT_COLUMNS('rc'),
     ],
   },
 
@@ -341,11 +359,12 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseTable: 'inquiries',
     baseAlias: 'inq',
     baseWhere: ['inq.deleted_at IS NULL'],
-    allowedJoins: [JOIN_INQ_TO_FORM, JOIN_INQ_TO_MEMBER],
+    allowedJoins: [JOIN_INQ_TO_FORM, JOIN_INQ_TO_MEMBER, JOIN_MEMBER_TO_REGULAR_CONTACT],
     allowedColumns: [
       ...INQUIRY_COLUMNS('inq'),
       ...FORM_COLUMNS('f'),
       ...MEMBER_COLUMNS('m'),
+      ...REGULAR_CONTACT_COLUMNS('rc'),
     ],
   },
 
@@ -355,12 +374,13 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseTable: 'applications',
     baseAlias: 'a',
     baseWhere: ['a.deleted_at IS NULL'],
-    allowedJoins: [JOIN_APP_TO_MEMBER, JOIN_APP_TO_PROJECT, JOIN_APP_TO_OWNER],
+    allowedJoins: [JOIN_APP_TO_MEMBER, JOIN_APP_TO_PROJECT, JOIN_APP_TO_OWNER, JOIN_MEMBER_TO_REGULAR_CONTACT],
     allowedColumns: [
       ...APP_COLUMNS('a'),
       ...MEMBER_COLUMNS('m'),
       ...PROJECT_COLUMNS('p'),
       ...USER_COLUMNS('owner'),
+      ...REGULAR_CONTACT_COLUMNS('rc'),
     ],
   },
 
@@ -370,11 +390,12 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseTable: 'activities',
     baseAlias: 'act',
     baseWhere: ['act.deleted_at IS NULL'],
-    allowedJoins: [JOIN_ACT_TO_OWNER, JOIN_ACT_TO_MEMBER],
+    allowedJoins: [JOIN_ACT_TO_OWNER, JOIN_ACT_TO_MEMBER, JOIN_MEMBER_TO_REGULAR_CONTACT],
     allowedColumns: [
       ...ACTIVITY_COLUMNS('act'),
       ...USER_COLUMNS('owner'),
       ...MEMBER_COLUMNS('m'),
+      ...REGULAR_CONTACT_COLUMNS('rc'),
     ],
   },
 
@@ -397,11 +418,12 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseTable: 'inquiries',
     baseAlias: 'inq',
     baseWhere: ['inq.deleted_at IS NULL'],
-    allowedJoins: [JOIN_INQ_TO_FORM, JOIN_INQ_TO_MEMBER],
+    allowedJoins: [JOIN_INQ_TO_FORM, JOIN_INQ_TO_MEMBER, JOIN_MEMBER_TO_REGULAR_CONTACT],
     allowedColumns: [
       ...INQUIRY_COLUMNS('inq'),
       ...FORM_COLUMNS('f'),
       ...MEMBER_COLUMNS('m'),
+      ...REGULAR_CONTACT_COLUMNS('rc'),
     ],
   },
 

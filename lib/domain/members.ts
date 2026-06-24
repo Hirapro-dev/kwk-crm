@@ -43,7 +43,8 @@ export async function listMembers(params: MemberListParams = {}): Promise<Member
     .select(
       `
         *,
-        owner:users!members_owner_id_fkey(id, full_name, email)
+        owner:users!members_owner_id_fkey(id, full_name, email),
+        regular_contact:users!members_regular_contact_id_fkey(id, full_name, email)
       `,
       { count: 'exact' },
     )
@@ -101,7 +102,8 @@ export async function getMember(id: string): Promise<MemberWithOwner | null> {
     .select(
       `
         *,
-        owner:users!members_owner_id_fkey(id, full_name, email)
+        owner:users!members_owner_id_fkey(id, full_name, email),
+        regular_contact:users!members_regular_contact_id_fkey(id, full_name, email)
       `,
     )
     .eq('id', id)

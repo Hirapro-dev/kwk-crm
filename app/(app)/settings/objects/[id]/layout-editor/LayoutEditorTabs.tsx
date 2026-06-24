@@ -4,10 +4,11 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils/cn';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import { DetailLayoutEditor } from './DetailLayoutEditor';
+import { HighlightEditor } from './HighlightEditor';
 import { ListColumnEditor } from './ListColumnEditor';
 
 /**
- * レイアウトエディタの「一覧 / 詳細」タブ切替 (Client Component)。
+ * レイアウトエディタの「詳細 / 一覧 / ハイライト」タブ切替 (Client Component)。
  */
 interface Props {
   objectId: string;
@@ -15,8 +16,9 @@ interface Props {
 }
 
 const TABS = [
-  { id: 'detail', label: '詳細レイアウト' },
-  { id: 'list', label: '一覧列' },
+  { id: 'detail',    label: '詳細レイアウト' },
+  { id: 'list',      label: '一覧列' },
+  { id: 'highlight', label: 'ハイライト' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
@@ -49,6 +51,9 @@ export function LayoutEditorTabs({ objectId, allFields }: Props) {
         <DetailLayoutEditor objectId={objectId} allFields={allFields} />
       )}
       {active === 'list' && <ListColumnEditor allFields={allFields} />}
+      {active === 'highlight' && (
+        <HighlightEditor objectId={objectId} allFields={allFields} />
+      )}
     </div>
   );
 }

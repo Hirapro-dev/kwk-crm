@@ -29,6 +29,7 @@ export interface Member {
   customer_type: string | null;
   owner_id: string | null;
   owner_name_raw: string | null;
+  regular_contact_id: string | null;
   total_amount: number | null;
   total_paid_amount: number | null;
   total_used_amount: number | null;
@@ -40,6 +41,7 @@ export interface Member {
 
 export interface MemberWithOwner extends Member {
   owner: { id: string; full_name: string | null; email: string } | null;
+  regular_contact: { id: string; full_name: string | null; email: string } | null;
 }
 
 export type ActivityStatus = '対応中' | '未購入' | '完了' | '出金' | '資金移動';
