@@ -13,7 +13,6 @@ export interface DashboardStats {
   monthActivities: number;
   protectCount: number;          // 自分が設定した有効プロテクト数
   // ---- 申込オブジェクト: acquirer_id (申込獲得者) ベース集計 ----
-  monthApplicationCount: number; // 今月の新規申込件数
   monthPaymentCount: number;     // 今月の入金件数
   monthPaymentAmount: number;    // 今月の入金額合計
 }
@@ -54,7 +53,6 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
     todayCount,
     monthCount,
     protectCount,
-    monthAppCount,
     monthPaymentRows,
   ] = await Promise.all([
     // 今日の対応件数
@@ -79,14 +77,6 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
       .eq('protect_by_user_id', userId)
       .not('protect_expires_at', 'is', null)
       .gt('protect_expires_at', now),
-    // 今月の新規申込件数(acquirer_id ベース)
-    supabase
-      .from('applications')
-      .select('id', { count: 'exact', head: true })
-      .is('deleted_at', null)
-      .eq('acquirer_id', userId)
-      .gte('application_date', monthStart.slice(0, 10))
-      .lt('application_date', monthEndIso.slice(0, 10)),
     // 今月の入金件数・入金額(acquirer_id ベース)
     supabase
       .from('applications')
@@ -107,7 +97,6 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
     todayActivities: todayCount.count ?? 0,
     monthActivities: monthCount.count ?? 0,
     protectCount: protectCount.count ?? 0,
-    monthApplicationCount: monthAppCount.count ?? 0,
     monthPaymentCount,
     monthPaymentAmount,
   };

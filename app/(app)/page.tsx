@@ -71,8 +71,7 @@ export default async function DashboardPage() {
       </section>
 
       {/* サマリカード: 2行目 — 申込(acquirer_id ベース) */}
-      <section className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="今月の申込件数" value={stats.monthApplicationCount.toLocaleString()} note="申込獲得者ベース" />
+      <section className="grid gap-4 sm:grid-cols-2">
         <StatCard label="今月の入金件数" value={stats.monthPaymentCount.toLocaleString()} note="申込獲得者ベース" />
         <StatCard
           label="今月の入金額"
