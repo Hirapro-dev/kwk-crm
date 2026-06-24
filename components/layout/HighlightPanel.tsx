@@ -58,7 +58,7 @@ export function HighlightPanel({
 
       {/* 主要フィールド帯 */}
       {facts.length > 0 && (
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2 border-t bg-secondary/30 px-4 py-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2 border-t bg-gray-50 px-4 py-3 md:grid-cols-4">
           {facts.map((f, i) => (
             <div key={i} className="flex flex-col">
               <span className="text-[11px] uppercase tracking-wide text-muted-foreground">

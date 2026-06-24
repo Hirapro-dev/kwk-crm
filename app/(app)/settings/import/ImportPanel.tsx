@@ -208,7 +208,7 @@ export function ImportPanel() {
             更新のみ（既存IDの更新だけ・新規レコードは作成しない）
           </label>
 
-          <p className="rounded bg-muted/50 p-2 text-xs text-muted-foreground">
+          <p className="rounded bg-gray-100 p-2 text-xs text-muted-foreground">
             ※ Web取込は約18MB(目安: 数万件)まで。対応歴など大量データの初期移行は
             ターミナルで移行スクリプトを実行してください:
             <code className="mx-1 rounded bg-background px-1 py-0.5">

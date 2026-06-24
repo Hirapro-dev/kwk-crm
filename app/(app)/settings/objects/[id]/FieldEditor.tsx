@@ -31,7 +31,7 @@ export function FieldEditor({ fields }: { fields: FieldDefinition[] }) {
       <div className="overflow-x-auto">
         <Table className="min-w-[900px]">
           <TableHeader>
-            <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+            <TableRow className="bg-gray-50 hover:bg-gray-50">
               <TableHead className="h-9">フィールド名</TableHead>
               <TableHead className="h-9">ラベル / CSV列名</TableHead>
               <TableHead className="h-9">型</TableHead>

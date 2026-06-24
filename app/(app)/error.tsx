@@ -42,7 +42,7 @@ export default function AppError({
 
           {/* エラー詳細(開発時の調査用) */}
           {error.message && (
-            <details className="rounded border bg-secondary/30 p-3 text-xs">
+            <details className="rounded border bg-gray-50 p-3 text-xs">
               <summary className="cursor-pointer font-medium text-foreground">
                 エラー詳細
               </summary>

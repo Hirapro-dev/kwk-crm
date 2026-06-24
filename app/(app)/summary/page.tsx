@@ -94,7 +94,7 @@ export default async function SummaryPage({ searchParams }: PageProps) {
 
         <Table>
           <TableHeader>
-            <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+            <TableRow className="bg-gray-50 hover:bg-gray-50">
               <TableHead className="h-9">ユーザー名</TableHead>
               <TableHead className="h-9 text-right">入金額</TableHead>
               <TableHead className="h-9 text-right">入金件数</TableHead>

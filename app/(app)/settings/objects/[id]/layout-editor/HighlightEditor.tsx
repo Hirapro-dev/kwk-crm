@@ -166,7 +166,7 @@ export function HighlightEditor({ objectId, allFields }: Props) {
 
           {/* プレビュー */}
           {visibleIds.length > 0 && (
-            <div className="mt-4 rounded border bg-secondary/20 p-3">
+            <div className="mt-4 rounded border bg-gray-50 p-3">
               <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 プレビュー
               </p>

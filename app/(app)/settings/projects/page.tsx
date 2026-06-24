@@ -39,7 +39,7 @@ export default async function SettingsProjectsPage() {
 
         <Table>
           <TableHeader>
-            <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+            <TableRow className="bg-gray-50 hover:bg-gray-50">
               <TableHead className="h-9 w-20">案件ID</TableHead>
               <TableHead className="h-9">案件名</TableHead>
               <TableHead className="h-9">説明</TableHead>

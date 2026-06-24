@@ -72,7 +72,7 @@ export default async function SettingsUsersPage({ searchParams }: PageProps) {
 
         <Table>
           <TableHeader>
-            <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+            <TableRow className="bg-gray-50 hover:bg-gray-50">
               <TableHead className="h-9">名前</TableHead>
               <TableHead className="h-9">メールアドレス</TableHead>
               <TableHead className="h-9">権限</TableHead>

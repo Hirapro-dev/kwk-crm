@@ -144,7 +144,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
-                          <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+                          <TableRow className="bg-gray-50 hover:bg-gray-50">
                             <TableHead className="h-9 whitespace-nowrap">申込ID</TableHead>
                             <TableHead className="h-9 whitespace-nowrap">案件</TableHead>
                             <TableHead className="h-9 whitespace-nowrap">申込日</TableHead>
@@ -197,7 +197,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
-                          <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+                          <TableRow className="bg-gray-50 hover:bg-gray-50">
                             <TableHead className="h-9 whitespace-nowrap">問合せID</TableHead>
                             <TableHead className="h-9 whitespace-nowrap">フォーム</TableHead>
                             <TableHead className="h-9 whitespace-nowrap">登録日時</TableHead>

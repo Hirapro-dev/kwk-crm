@@ -58,7 +58,7 @@ export function DynamicListTable<T extends Record<string, unknown>>({
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
-          <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+          <TableRow className="bg-gray-50 hover:bg-gray-50">
             {fields.map((f) => (
               <TableHead key={f.id} className="h-9 whitespace-nowrap">
                 {f.is_in_db ? (

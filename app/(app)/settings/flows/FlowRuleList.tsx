@@ -64,7 +64,7 @@ export function FlowRuleList({ rules }: Props) {
 
       <Table>
         <TableHeader>
-          <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+          <TableRow className="bg-gray-50 hover:bg-gray-50">
             <TableHead className="h-9 w-8 text-center">#</TableHead>
             <TableHead className="h-9">フロー名</TableHead>
             <TableHead className="h-9 w-28">トリガー</TableHead>

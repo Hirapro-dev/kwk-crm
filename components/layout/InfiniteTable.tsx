@@ -91,7 +91,7 @@ export function InfiniteTable<T>({
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+            <TableRow className="bg-gray-50 hover:bg-gray-50">
               {columns.map((c) => (
                 <TableHead key={c.header} className={c.headClassName ?? 'h-9 whitespace-nowrap'}>
                   {c.sortField ? <SortHeader field={c.sortField} label={c.header} /> : c.header}

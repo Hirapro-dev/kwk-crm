@@ -136,7 +136,7 @@ export function ListColumnEditor({ allFields }: Props) {
               items={orderedIds.map((id) => `c-${id}`)}
               strategy={horizontalListSortingStrategy}
             >
-              <div className="flex gap-1 rounded border bg-secondary/30 p-2">
+              <div className="flex gap-1 rounded border bg-gray-50 p-2">
                 {orderedIds.map((fid) => {
                   const f = fieldMap.get(fid);
                   if (!f) return null;
@@ -154,7 +154,7 @@ export function ListColumnEditor({ allFields }: Props) {
           </p>
           <table className="w-full table-auto border-collapse text-sm">
             <thead>
-              <tr className="bg-secondary/50">
+              <tr className="bg-gray-50">
                 {orderedIds.map((fid) => {
                   const f = fieldMap.get(fid);
                   if (!f) return null;

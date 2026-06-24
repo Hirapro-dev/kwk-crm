@@ -312,7 +312,7 @@ export function DetailLayoutEditor({ objectId, allFields }: Props) {
               ))}
             </ul>
           )}
-          <p className="mt-3 rounded bg-secondary/30 p-2 text-[10px] text-muted-foreground">
+          <p className="mt-3 rounded bg-gray-50 p-2 text-[10px] text-muted-foreground">
             💡 ここに表示されるのは「詳細表示OFF」のフィールドです。
             <br />
             配置するにはオブジェクト管理画面で「詳細」をONにしてください。
@@ -596,7 +596,7 @@ function SortablePlaceholderItem({
         transition,
         opacity: isDragging ? 0.5 : 1,
       }}
-      className="flex items-center gap-2 rounded border border-dashed bg-secondary/20 p-2 text-sm"
+      className="flex items-center gap-2 rounded border border-dashed bg-gray-50 p-2 text-sm"
     >
       <button
         type="button"

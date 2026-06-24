@@ -30,7 +30,7 @@ export function ActivityTimeline({ activities }: { activities: ActivityListItem[
     <div className="overflow-x-auto">
       <Table className="min-w-[820px]">
         <TableHeader>
-          <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+          <TableRow className="bg-gray-50 hover:bg-gray-50">
             <TableHead className="h-9 whitespace-nowrap">日時</TableHead>
             <TableHead className="h-9 whitespace-nowrap">対応者</TableHead>
             <TableHead className="h-9 whitespace-nowrap">接触種別</TableHead>
