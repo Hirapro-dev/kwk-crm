@@ -181,7 +181,7 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
   const [fieldQuery, setFieldQuery] = useState('');
   const [previewRows, setPreviewRows] = useState<Array<Record<string, unknown>>>([]);
   const [previewColumns, setPreviewColumns] = useState<
-    { id: string; label: string; alias: string; source: string }[]
+    { id: string; label: string; alias: string; source: string; dataType: string }[]
   >([]);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);

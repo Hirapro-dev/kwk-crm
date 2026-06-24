@@ -32,7 +32,7 @@ export interface BuiltQuery {
   sql: string;
   params: unknown[];
   /** 出力列のエイリアス順(SELECT に対応)。CSV/Excel 出力で使う */
-  columns: Array<{ id: string; label: string; alias: string; source: string }>;
+  columns: Array<{ id: string; label: string; alias: string; source: string; dataType: string }>;
 }
 
 /** 会員氏名カラムのソース・会員ID(リンク用隠しカラム)の定義 */
@@ -312,7 +312,7 @@ export function buildReportQuery(
     }
     selectParts.push(`${sql} AS ${alias}`);
     usedSources.add(col.source);
-    outputColumns.push({ id: col.id, label: col.label, alias, source: col.source });
+    outputColumns.push({ id: col.id, label: col.label, alias, source: col.source, dataType: colDef.dataType });
   }
 
   // 会員詳細ページへのリンク用に、会員氏名カラムを含む行レベルレポートでは

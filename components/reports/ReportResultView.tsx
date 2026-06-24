@@ -40,6 +40,7 @@ export interface ReportColumnView {
   label: string;
   alias: string;
   source: string;
+  dataType: string;
 }
 
 interface Props {
@@ -56,16 +57,20 @@ function displayKey(v: unknown): string {
   return v === null || v === undefined || v === '' ? '(空白)' : String(v);
 }
 
-function formatCell(v: unknown): string {
+function formatCell(v: unknown, dataType?: string): string {
   if (v === null || v === undefined) return '';
   if (typeof v === 'string') {
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) {
       const d = new Date(v);
       if (!Number.isNaN(d.getTime())) return formatDateTime(v);
     }
+    // number 型カラムは文字列で返ってくることがあるためカンマ整形
+    if (dataType === 'number' && /^-?\d+(\.\d+)?$/.test(v)) {
+      return Number(v).toLocaleString('ja-JP');
+    }
     return v;
   }
-  if (typeof v === 'number') return Number(v).toLocaleString();
+  if (typeof v === 'number') return Number(v).toLocaleString('ja-JP');
   if (typeof v === 'boolean') return v ? '✓' : '';
   return JSON.stringify(v);
 }
@@ -175,7 +180,7 @@ export function ReportResultView({
   // ----- 詳細セル1つ分(会員氏名はリンク) -----
   const renderDetailCell = (row: Record<string, unknown>, c: ReportColumnView) => {
     const memberId = row[MEMBER_LINK_ID_ALIAS];
-    const text = formatCell(row[c.alias]);
+    const text = formatCell(row[c.alias], c.dataType);
     const linkable = c.source === 'm.name' && memberId != null && text !== '';
     return (
       <TableCell key={c.alias} className="whitespace-nowrap text-xs">
