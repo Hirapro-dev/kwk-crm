@@ -47,13 +47,13 @@ const COLUMNS: InfiniteCol[] = [
 export function ApplicationsInfinite({ initialRows, total, params }: Props) {
   const renderRow = (a: ApplicationListItem) => (
     <>
-      <TableCell className="font-mono text-xs">
+      <TableCell className="whitespace-nowrap font-mono text-xs">
         <Link href={`/applications/${a.id}`} className="text-primary hover:underline">
           {a.id}
         </Link>
       </TableCell>
-      <TableCell className="text-xs">{formatDate(a.application_date)}</TableCell>
-      <TableCell className="text-sm">
+      <TableCell className="whitespace-nowrap text-xs">{formatDate(a.application_date)}</TableCell>
+      <TableCell className="whitespace-nowrap text-sm">
         {a.member ? (
           <Link href={`/members/${a.member.id}`} className="text-primary hover:underline">
             {a.member.name}
@@ -62,15 +62,15 @@ export function ApplicationsInfinite({ initialRows, total, params }: Props) {
           '-'
         )}
       </TableCell>
-      <TableCell className="text-sm">{a.project ? a.project.name : '-'}</TableCell>
-      <TableCell>
+      <TableCell className="whitespace-nowrap text-sm">{a.project ? a.project.name : '-'}</TableCell>
+      <TableCell className="whitespace-nowrap">
         {a.status ? <Badge variant={STATUS_VARIANT[a.status]}>{a.status}</Badge> : '-'}
       </TableCell>
-      <TableCell className="text-xs">{a.flow_type ?? '-'}</TableCell>
-      <TableCell className="text-right tabular-nums text-sm">
+      <TableCell className="whitespace-nowrap text-xs">{a.flow_type ?? '-'}</TableCell>
+      <TableCell className="whitespace-nowrap text-right tabular-nums text-sm">
         {a.payment_amount !== null ? `¥${Number(a.payment_amount).toLocaleString()}` : '-'}
       </TableCell>
-      <TableCell className="text-sm">{a.owner?.full_name ?? '-'}</TableCell>
+      <TableCell className="whitespace-nowrap text-sm">{a.owner?.full_name ?? '-'}</TableCell>
     </>
   );
 

@@ -34,27 +34,27 @@ const COLUMNS: InfiniteCol[] = [
 export function InquiriesInfinite({ initialRows, total, params }: Props) {
   const renderRow = (r: InquiryListItem) => (
     <>
-      <TableCell className="font-mono text-xs">
+      <TableCell className="whitespace-nowrap font-mono text-xs">
         <Link href={`/inquiries/${r.id}`} className="text-primary hover:underline">
           {r.id}
         </Link>
       </TableCell>
-      <TableCell className="text-xs">{formatDate(r.registered_at)}</TableCell>
+      <TableCell className="whitespace-nowrap text-xs">{formatDate(r.registered_at)}</TableCell>
       <TableCell className="text-xs">
         {r.form ? (
           <>
             {r.form.category && (
-              <Badge variant="outline" className="mr-1">
+              <Badge variant="outline" className="mr-1 whitespace-nowrap">
                 {r.form.category}
               </Badge>
             )}
-            {r.form.name}
+            <span className="whitespace-nowrap">{r.form.name}</span>
           </>
         ) : (
           '-'
         )}
       </TableCell>
-      <TableCell>
+      <TableCell className="whitespace-nowrap">
         {r.name ? (
           r.member ? (
             <Link href={`/members/${r.member.id}`} className="text-primary hover:underline">
@@ -67,8 +67,8 @@ export function InquiriesInfinite({ initialRows, total, params }: Props) {
           '-'
         )}
       </TableCell>
-      <TableCell className="text-xs">{r.email ?? '-'}</TableCell>
-      <TableCell className="text-xs">
+      <TableCell className="whitespace-nowrap text-xs">{r.email ?? '-'}</TableCell>
+      <TableCell className="whitespace-nowrap text-xs">
         <PhoneLink value={r.phone} />
       </TableCell>
     </>

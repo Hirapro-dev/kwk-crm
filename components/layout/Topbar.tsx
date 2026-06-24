@@ -36,23 +36,29 @@ export async function Topbar() {
         </Link>
       </div>
 
-      {/* 中央: 検索 (固定幅、ml-4 で左にだけ余白) */}
+      {/* 中央: 検索 (PC のみ表示) */}
       <div className="ml-4 hidden w-80 md:block">
         <HeaderSearch />
       </div>
 
-      {/* 右: アイコン群 (ml-auto で右端固定) */}
+      {/* 右: アイコン群 */}
       <div className="ml-auto flex items-center gap-1">
-        <HeaderIconButton aria-label="ヘルプ">
-          <HelpCircle className="h-4 w-4" />
-        </HeaderIconButton>
-        {/* 設定: プルダウン (Client Component) */}
-        <SettingsMenu isAdmin={isAdmin} />
-        <HeaderIconButton aria-label="通知">
-          <Bell className="h-4 w-4" />
-        </HeaderIconButton>
-        {/* ユーザーアバター */}
-        <div className="ml-2 flex items-center gap-2">
+        {/* PC のみ: ヘルプ・設定・通知 */}
+        <div className="hidden md:flex md:items-center md:gap-1">
+          <HeaderIconButton aria-label="ヘルプ">
+            <HelpCircle className="h-4 w-4" />
+          </HeaderIconButton>
+          <SettingsMenu isAdmin={isAdmin} />
+          <HeaderIconButton aria-label="通知">
+            <Bell className="h-4 w-4" />
+          </HeaderIconButton>
+        </div>
+        {/* モバイル: 設定のみ */}
+        <div className="flex md:hidden">
+          <SettingsMenu isAdmin={isAdmin} />
+        </div>
+        {/* ユーザーアバター (常時表示) */}
+        <div className="ml-1 flex items-center gap-2">
           <div
             className="grid h-7 w-7 place-items-center rounded-full bg-white/20 text-xs font-semibold"
             aria-hidden="true"

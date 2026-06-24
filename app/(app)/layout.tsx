@@ -9,6 +9,7 @@
  * 仕様書 §8.1 のページ一覧に従いナビゲーションを構成する。
  */
 
+import { BottomNav } from '@/components/layout/BottomNav';
 import { TabsNav } from '@/components/layout/TabsNav';
 import { Topbar } from '@/components/layout/Topbar';
 import { getVisibleNavTabs } from '@/lib/domain/nav_items';
@@ -21,12 +22,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Topbar />
-      <TabsNav appName="対応歴管理" tabs={navTabs} />
+      {/* PC: 横タブナビ / モバイル: 非表示 */}
+      <div className="hidden md:block">
+        <TabsNav appName="対応歴管理" tabs={navTabs} />
+      </div>
       {/*
         背景: lightning_blue_background.png を上部に表示、背景色 #f0fffd
+        モバイルではボトムナビ分 (pb-16) のパディングを追加
       */}
       <main
-        className="relative flex-1 overflow-y-auto px-4 py-4"
+        className="relative flex-1 overflow-y-auto px-4 py-4 pb-20 md:pb-4"
         style={{
           backgroundColor: '#f0fffd',
           backgroundImage: 'url(/lightning_blue_background.png)',
@@ -36,6 +41,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       >
         {children}
       </main>
+      {/* モバイル専用ボトムナビ */}
+      <BottomNav tabs={navTabs} />
     </div>
   );
 }
