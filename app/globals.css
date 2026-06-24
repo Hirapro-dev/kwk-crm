@@ -27,9 +27,9 @@
     --radius: 0.25rem;
 
     /* 専用拡張変数 */
-    --sf-header: 165 60% 16%; /* #0f4a38 ヘッダー濃グリーン */
+    --sf-header: 0 0% 0%; /* #000000 ヘッダー黒 */
     --sf-header-foreground: 0 0% 100%;
-    --sf-header-hover: 165 60% 22%;
+    --sf-header-hover: 0 0% 12%;
     --sf-link: 165 100% 28%; /* #008c6a リンク色 */
     --sf-success: 145 63% 35%; /* #2e844a */
     --sf-warning: 36 100% 50%; /* #ffb75d */
