@@ -1,19 +1,13 @@
 'use client';
 
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { devLogin } from '@/lib/domain/dev_auth_actions';
 import { createClient } from '@/lib/supabase/client';
 
-/**
- * ログインフォーム
- *
- * - devAuth=true のとき: Server Action devLogin() でダミー認証
- * - 通常: Supabase auth.signInWithPassword
- *
- * 仕様書 §12.1: React Hook Form + Zod は将来導入。本フォームは最小実装。
- */
+const ACCENT = '#00C896';
+
 export function LoginForm({ devAuth = false }: { devAuth?: boolean }) {
   const router = useRouter();
   const [identifier, setIdentifier] = useState(devAuth ? 'admin' : '');
@@ -39,7 +33,6 @@ export function LoginForm({ devAuth = false }: { devAuth?: boolean }) {
       return;
     }
 
-    // 通常モード
     startTransition(async () => {
       const supabase = createClient();
       const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -61,61 +54,70 @@ export function LoginForm({ devAuth = false }: { devAuth?: boolean }) {
 
   return (
     <form className="space-y-4" onSubmit={onSubmit}>
-      <div className="space-y-2">
-        <label htmlFor="identifier" className="text-sm font-medium">
-          {devAuth ? 'ユーザー名' : 'メールアドレス'}
-        </label>
+      {/* メールアドレス */}
+      <div className="relative">
+        <Mail
+          className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+          aria-hidden="true"
+        />
         <input
           id="identifier"
           type={devAuth ? 'text' : 'email'}
           required
+          placeholder={devAuth ? 'ユーザー名' : 'メールアドレス'}
           autoComplete={devAuth ? 'username' : 'email'}
           value={identifier}
           onChange={(e) => setIdentifier(e.target.value)}
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="h-11 w-full rounded-md border border-gray-200 pl-10 pr-4 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-[#00C896] focus:ring-1 focus:ring-[#00C896]"
         />
       </div>
-      <div className="space-y-2">
-        <label htmlFor="password" className="text-sm font-medium">
-          パスワード
-        </label>
-        <div className="relative">
-          <input
-            id="password"
-            type={showPassword ? 'text' : 'password'}
-            required
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? 'パスワードを隠す' : 'パスワードを表示'}
-            aria-pressed={showPassword}
-            tabIndex={-1}
-            className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring rounded-r-md"
-          >
-            {showPassword ? (
-              <EyeOff className="h-4 w-4" aria-hidden="true" />
-            ) : (
-              <Eye className="h-4 w-4" aria-hidden="true" />
-            )}
-          </button>
-        </div>
+
+      {/* パスワード */}
+      <div className="relative">
+        <Lock
+          className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+          aria-hidden="true"
+        />
+        <input
+          id="password"
+          type={showPassword ? 'text' : 'password'}
+          required
+          placeholder="パスワード"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="h-11 w-full rounded-md border border-gray-200 pl-10 pr-10 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-[#00C896] focus:ring-1 focus:ring-[#00C896]"
+        />
+        <button
+          type="button"
+          onClick={() => setShowPassword((v) => !v)}
+          aria-label={showPassword ? 'パスワードを隠す' : 'パスワードを表示'}
+          tabIndex={-1}
+          className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600 focus:outline-none"
+        >
+          {showPassword ? (
+            <EyeOff className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <Eye className="h-4 w-4" aria-hidden="true" />
+          )}
+        </button>
       </div>
+
+      {/* エラー */}
       {error && (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="text-center text-sm text-red-500" role="alert">
           {error}
         </p>
       )}
+
+      {/* ログインボタン */}
       <button
         type="submit"
         disabled={pending}
-        className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+        className="mt-2 h-11 w-full rounded-md text-sm font-bold tracking-widest text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+        style={{ backgroundColor: ACCENT }}
       >
-        {pending ? 'ログイン中...' : 'ログイン'}
+        {pending ? 'ログイン中...' : 'LOGIN'}
       </button>
     </form>
   );

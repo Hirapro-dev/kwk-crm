@@ -1,39 +1,33 @@
-/**
- * ログイン画面
- * 仕様書 §7.3: Supabase Auth (email/password)
- *
- * DEV_AUTH_BYPASS=1 のとき: 開発用バイパスログインを表示(admin/admin など固定)
- */
-
+import Image from 'next/image';
 import { isDevAuthEnabled } from '@/lib/dev_auth';
 import { LoginForm } from './LoginForm';
 
 export default function LoginPage() {
   const devAuth = isDevAuthEnabled();
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
-      <div className="w-full max-w-sm space-y-6 rounded-lg border bg-card p-8 shadow-sm">
-        <header className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">ひらプロCRM</h1>
-          {devAuth ? (
-            <>
-              <p className="text-sm text-muted-foreground">開発バイパスモード</p>
-              <p className="text-xs text-amber-600">
-                ⚠ 本番では絶対に DEV_AUTH_BYPASS を有効にしないこと
-              </p>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">メールアドレスでログイン</p>
+    <main className="flex min-h-screen items-center justify-center bg-white px-4">
+      <div className="w-full max-w-[360px]">
+        {/* ロゴ */}
+        <div className="mb-10 flex justify-center">
+          <Image
+            src="/logo.png"
+            alt="ロゴ"
+            width={180}
+            height={64}
+            className="object-contain"
+            priority
+          />
+        </div>
+
+        {/* カード */}
+        <div className="rounded-2xl border border-gray-100 bg-white px-8 py-8 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
+          {devAuth && (
+            <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-center text-xs text-amber-700">
+              ⚠ 開発バイパスモード（admin / admin）
+            </p>
           )}
-        </header>
-        <LoginForm devAuth={devAuth} />
-        {devAuth && (
-          <p className="rounded-md bg-amber-50 p-3 text-xs text-amber-900">
-            テストアカウント: <strong>admin</strong> / <strong>admin</strong>
-            <br />
-            UI 動作確認用です。データ表示は Supabase 接続後に有効になります。
-          </p>
-        )}
+          <LoginForm devAuth={devAuth} />
+        </div>
       </div>
     </main>
   );
