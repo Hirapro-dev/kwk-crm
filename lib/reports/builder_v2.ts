@@ -338,10 +338,22 @@ export function buildReportQuery(
   // GROUP BY
   const groupByCols: string[] = [];
   if (definition.group_by && definition.group_by.length > 0) {
+    // 明示的 GROUP BY フィールドを追加
+    const explicitGroupSources = new Set(definition.group_by.map((g) => g.field));
     for (const g of definition.group_by.sort((a, b) => a.level - b.level)) {
       validateColumn(reportType, g.field, extraColumns);
       groupByCols.push(sourceSql(g.field));
       usedSources.add(g.field);
+    }
+    // Postgres 必須要件: 非集計の SELECT カラムも GROUP BY に追加する
+    for (const c of definition.columns) {
+      if (!c.aggregate && !explicitGroupSources.has(c.source)) {
+        groupByCols.push(sourceSql(c.source));
+      }
+    }
+    // 隠しカラム m.id も GROUP BY に含める
+    if (injectMemberLinkId && !explicitGroupSources.has(MEMBER_ID_SOURCE)) {
+      groupByCols.push(sourceSql(MEMBER_ID_SOURCE));
     }
   } else {
     // 集計列があれば、非集計列を全て GROUP BY に入れる(Postgres の必須要件)
