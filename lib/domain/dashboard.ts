@@ -11,7 +11,14 @@ import type { ActivityListItem } from './types';
 export interface DashboardStats {
   todayActivities: number;
   monthActivities: number;
-  monthMembers: number; // 自分担当の会員数(参考)
+  protectCount: number; // 自分が設定した有効プロテクト数
+}
+
+export interface ProtectExpiringMember {
+  id: string;
+  name: string | null;
+  protect_expires_at: string;
+  protect_by_user: { id: string; full_name: string | null } | null;
 }
 
 function todayStartIso(): string {
@@ -31,8 +38,9 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
   const supabase = await createClient();
   const today = todayStartIso();
   const monthStart = monthStartIso();
+  const now = new Date().toISOString();
 
-  const [todayCount, monthCount, members] = await Promise.all([
+  const [todayCount, monthCount, protectCount] = await Promise.all([
     supabase
       .from('activities')
       .select('id', { count: 'exact', head: true })
@@ -49,16 +57,67 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
       .from('members')
       .select('id', { count: 'exact', head: true })
       .is('deleted_at', null)
-      .eq('owner_id', userId),
+      .eq('protect_by_user_id', userId)
+      .not('protect_expires_at', 'is', null)
+      .gt('protect_expires_at', now),
   ]);
 
   return {
     todayActivities: todayCount.count ?? 0,
     monthActivities: monthCount.count ?? 0,
-    monthMembers: members.count ?? 0,
+    protectCount: protectCount.count ?? 0,
   };
 }
 
+/** 自分がプロテクト設定した会員で、3日以内に解除期限が来るものを返す。 */
+export async function getProtectExpiringSoon(
+  userId: string,
+): Promise<ProtectExpiringMember[]> {
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('members')
+    .select(
+      `id, name, protect_expires_at,
+       protect_by_user:users!members_protect_by_user_id_fkey(id, full_name)`,
+    )
+    .is('deleted_at', null)
+    .eq('protect_by_user_id', userId)
+    .gt('protect_expires_at', now)
+    .lte('protect_expires_at', in3Days)
+    .order('protect_expires_at', { ascending: true })
+    .limit(50);
+
+  if (error) return [];
+  return (data ?? []) as unknown as ProtectExpiringMember[];
+}
+
+/** 過去 24 時間の全員の対応歴を返す(ダッシュボード用)。 */
+export async function getRecentActivities24h(limit = 100): Promise<ActivityListItem[]> {
+  const supabase = await createClient();
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('activities')
+    .select(
+      `id, legacy_sf_id, owner_id, member_id, created_by_id,
+       description, d_bunrui, m_bunrui, s_bunrui,
+       registered_date, registered_datetime, created_at, updated_at,
+       owner:users!activities_owner_id_fkey(id, full_name),
+       member:members!activities_member_id_fkey(id, name)`,
+    )
+    .is('deleted_at', null)
+    .gte('registered_datetime', since)
+    .order('registered_datetime', { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) return [];
+  return (data ?? []) as unknown as ActivityListItem[];
+}
+
+/** @deprecated 後方互換。page.tsx から直接は使わず getRecentActivities24h を使うこと。 */
 export async function getMyRecentActivities(
   userId: string,
   limit = 10,
@@ -67,13 +126,11 @@ export async function getMyRecentActivities(
   const { data, error } = await supabase
     .from('activities')
     .select(
-      `
-        id, legacy_sf_id, owner_id, member_id, created_by_id,
-        description, d_bunrui, m_bunrui, s_bunrui,
-        registered_date, registered_datetime, created_at, updated_at,
-        owner:users!activities_owner_id_fkey(id, full_name),
-        member:members!activities_member_id_fkey(id, name)
-      `,
+      `id, legacy_sf_id, owner_id, member_id, created_by_id,
+       description, d_bunrui, m_bunrui, s_bunrui,
+       registered_date, registered_datetime, created_at, updated_at,
+       owner:users!activities_owner_id_fkey(id, full_name),
+       member:members!activities_member_id_fkey(id, name)`,
     )
     .is('deleted_at', null)
     .eq('owner_id', userId)

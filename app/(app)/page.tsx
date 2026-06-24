@@ -2,10 +2,10 @@
  * ダッシュボード(仕様書 §8.1, §9.15)
  *
  * Phase 7 完成版:
- *   - 今日: 自分の対応件数
- *   - 今月: 自分の対応件数、担当会員数
- *   - 最新対応歴 10件
- *   - お気に入りレポート最大3個(Phase 6 連携)
+ *   - 今日/今月の対応件数、プロテクト数
+ *   - お気に入りレポート(クリックでレポートへ遷移)
+ *   - プロテクト会員(3日以内解除予定)
+ *   - 直近対応歴(過去24時間・全員)
  */
 
 import Link from 'next/link';
@@ -14,15 +14,29 @@ import { ReportWidget } from '@/components/dashboard/ReportWidget';
 import { PanelHeader } from '@/components/layout/PanelHeader';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { getCurrentUser } from '@/lib/domain/auth';
-import { getMyDashboardStats, getMyRecentActivities } from '@/lib/domain/dashboard';
+import {
+  getMyDashboardStats,
+  getProtectExpiringSoon,
+  getRecentActivities24h,
+} from '@/lib/domain/dashboard';
 import { getFavoriteReportWidgets } from '@/lib/domain/dashboard_widgets';
+import { formatDateTime } from '@/lib/utils/date';
 
 export default async function DashboardPage() {
   const me = await getCurrentUser();
-  const [stats, recent, widgets] = await Promise.all([
+  const [stats, protectExpiring, recent, widgets] = await Promise.all([
     getMyDashboardStats(me.id),
-    getMyRecentActivities(me.id, 10),
+    getProtectExpiringSoon(me.id),
+    getRecentActivities24h(100),
     getFavoriteReportWidgets(me.id),
   ]);
 
@@ -50,12 +64,14 @@ export default async function DashboardPage() {
         />
       </Card>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* サマリカード */}
+      <section className="grid gap-4 sm:grid-cols-3">
         <StatCard label="今日の対応件数" value={stats.todayActivities.toLocaleString()} />
         <StatCard label="今月の対応件数" value={stats.monthActivities.toLocaleString()} />
-        <StatCard label="担当会員数" value={stats.monthMembers.toLocaleString()} />
+        <StatCard label="プロテクト数" value={stats.protectCount.toLocaleString()} />
       </section>
 
+      {/* お気に入りレポート */}
       {widgets.length > 0 && (
         <section>
           <h2 className="mb-2 text-base font-semibold">お気に入りレポート</h2>
@@ -66,26 +82,78 @@ export default async function DashboardPage() {
           </div>
         </section>
       )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>最新対応歴 10件(自分担当)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ActivityTimeline
-              activities={recent}
-              currentUserId={me.id}
-              currentUserRole={me.role}
-            />
-        </CardContent>
-      </Card>
-
       {widgets.length === 0 && (
         <p className="text-xs text-muted-foreground">
-          ヒント: <Link href="/reports" className="text-primary hover:underline">レポート画面</Link>
+          ヒント:{' '}
+          <Link href="/reports" className="text-primary hover:underline">
+            レポート画面
+          </Link>
           {' '}でレポート名横の★をタップすると、このダッシュボードにウィジェットが表示されます(最大3個)。
         </p>
       )}
+
+      {/* プロテクト会員(3日以内解除) */}
+      <Card>
+        <CardHeader className="border-b py-3">
+          <CardTitle className="flex items-center justify-between text-sm">
+            <span>プロテクト会員</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              3日以内に解除予定 · {protectExpiring.length}件
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {protectExpiring.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground">3日以内に解除されるプロテクトはありません</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50 hover:bg-gray-50">
+                  <TableHead className="h-9 whitespace-nowrap">解除日時</TableHead>
+                  <TableHead className="h-9 whitespace-nowrap">会員ID</TableHead>
+                  <TableHead className="h-9">会員名</TableHead>
+                  <TableHead className="h-9 whitespace-nowrap">担当者</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {protectExpiring.map((m) => (
+                  <TableRow key={m.id} className="sf-row-hover">
+                    <TableCell className="whitespace-nowrap py-2 text-xs font-medium text-destructive">
+                      {formatDateTime(m.protect_expires_at)}
+                    </TableCell>
+                    <TableCell className="py-2 font-mono text-xs">
+                      <Link href={`/members/${m.id}`} className="text-primary hover:underline">
+                        {m.id}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="py-2 text-sm">{m.name ?? '-'}</TableCell>
+                    <TableCell className="py-2 text-sm">
+                      {m.protect_by_user?.full_name ?? '-'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 直近対応歴(過去24時間) */}
+      <Card>
+        <CardHeader className="border-b py-3">
+          <CardTitle className="flex items-center justify-between text-sm">
+            <span>直近の対応歴</span>
+            <span className="text-xs font-normal text-muted-foreground">過去24時間 · {recent.length}件</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <ActivityTimeline
+            activities={recent}
+            currentUserId={me.id}
+            currentUserRole={me.role}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }
