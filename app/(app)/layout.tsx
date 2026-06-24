@@ -28,7 +28,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           - その下のレイヤーは指定色 (#e1fffc) でベタ塗り
           - 画像とベタ塗りが地続きに見えるよう、background を 2 レイヤー重ねる
       */}
-      <main className="relative flex-1 overflow-y-auto bg-white px-4 py-4">
+      <main
+        className="relative flex-1 overflow-y-auto px-4 py-4"
+        style={{
+          backgroundColor: '#ffffff',
+          backgroundImage: 'url(/lightning_blue_background.png)',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'top center',
+          backgroundSize: '100% 280px',
+        }}
+      >
         {children}
       </main>
     </div>
