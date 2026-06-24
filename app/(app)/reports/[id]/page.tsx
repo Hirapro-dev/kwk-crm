@@ -97,11 +97,11 @@ export default async function ReportRunPage({ params }: PageProps) {
     <div className="space-y-3">
       {/* パンくず + 実行日時(右上) */}
       <div className="flex items-center justify-between gap-2">
-        <Link href="/reports" className="sf-back-link text-xs text-white">
+        <Link href="/reports" className="sf-back-link text-xs">
           ← レポート一覧へ
         </Link>
         {res.ok && (
-          <p className="text-xs text-white">
+          <p className="text-xs text-black">
             実行: {formatDateTime(new Date().toISOString())}
             {res.truncated && (
               <Badge variant="destructive" className="ml-2">
