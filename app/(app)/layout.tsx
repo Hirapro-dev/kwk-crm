@@ -25,13 +25,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/*
         Salesforce Lightning 風 背景:
           - 上部 約280px に lightning_blue_background.png を no-repeat で表示
-          - その下のレイヤーは指定色 (#b0c4df) でベタ塗り
+          - その下のレイヤーは指定色 (#e1fffc) でベタ塗り
           - 画像とベタ塗りが地続きに見えるよう、background を 2 レイヤー重ねる
       */}
       <main
         className="relative flex-1 overflow-y-auto px-4 py-4"
         style={{
-          backgroundColor: '#b0c4df',
+          backgroundColor: '#e1fffc',
           backgroundImage: 'url(/lightning_blue_background.png)',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'top center',

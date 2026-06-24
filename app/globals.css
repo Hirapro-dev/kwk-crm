@@ -106,7 +106,7 @@
 
   /*
    * 各詳細ページ上部の「← 一覧へ戻る」リンク用。
-   * デフォルトの text-muted-foreground だと水色背景 (#b0c4df) に対して
+   * デフォルトの text-muted-foreground だと水色背景 (#e1fffc) に対して
    * 視認性が悪いため、濃い文字色 (#111) + hover でアクセントオレンジ (#ffaa00) に。
    */
   .sf-back-link {
