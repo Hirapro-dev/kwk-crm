@@ -52,31 +52,21 @@ export interface SalesSummaryResult {
 }
 
 /**
- * sales ユーザー別の入金集計を取得する。
+ * ユーザー別の入金集計を取得する。
  *
  * 集計方法:
- *   1. sales ユーザー全件取得 (表示順を保証 + 実績ゼロでも行表示するため)
- *   2. applications を SELECT (deleted_at IS NULL, payment_amount > 0, 期間/案件で絞り込み)
- *   3. acquirer_id ごとに JS 側で SUM / COUNT
- *   4. users 全件に集計をマージ (集計に該当なしは 0)
+ *   1. applications を取得 (deleted_at IS NULL, payment_amount > 0, 期間/案件で絞り込み)
+ *   2. acquirer_id ごとに JS 側で SUM / COUNT
+ *   3. 集計に登場した acquirer_id を逆引きしてユーザー名を取得
+ *      ※ role は問わず。旧実装の role='sales' 限定は acquirer_id の実態と合わなかったため廃止
+ *   4. 入金額降順にソートして返す
  */
 export async function getSalesSummary(
   filter: SalesSummaryFilter,
 ): Promise<SalesSummaryResult> {
   const supabase = await createClient();
 
-  // 1) sales ユーザー全件
-  const { data: users, error: uErr } = await supabase
-    .from('users')
-    .select('id, full_name, email')
-    .eq('role', 'sales')
-    .eq('is_active', true)
-    .is('deleted_at', null)
-    .order('full_name', { ascending: true, nullsFirst: false });
-  if (uErr) throw new Error(`sales ユーザー取得に失敗: ${uErr.message}`);
-
-  // 2) applications 集計データ取得
-  //    acquirer_id / payment_amount のみ取得し、JS 側で集計
+  // 1) 期間・案件フィルタ付きで applications 取得
   let q = supabase
     .from('applications')
     .select('acquirer_id, payment_amount')
@@ -91,35 +81,52 @@ export async function getSalesSummary(
   const { data: apps, error: aErr } = await q;
   if (aErr) throw new Error(`申込集計に失敗: ${aErr.message}`);
 
-  // 3) acquirer_id ごとに集計
-  const summary = new Map<string, { sum: number; count: number }>();
+  // 2) acquirer_id ごとに集計
+  const summaryMap = new Map<string, { sum: number; count: number }>();
   let grandTotalAmount = 0;
   let grandTotalCount = 0;
   for (const row of apps ?? []) {
     if (!row.acquirer_id) continue;
     const amt = Number(row.payment_amount ?? 0);
     if (!Number.isFinite(amt) || amt <= 0) continue;
-    const cur = summary.get(row.acquirer_id) ?? { sum: 0, count: 0 };
+    const cur = summaryMap.get(row.acquirer_id) ?? { sum: 0, count: 0 };
     cur.sum += amt;
     cur.count += 1;
-    summary.set(row.acquirer_id, cur);
+    summaryMap.set(row.acquirer_id, cur);
     grandTotalAmount += amt;
     grandTotalCount += 1;
   }
 
-  // 4) users 全件にマージ
-  const rows: SalesSummaryRow[] = (
-    users ?? []
-  ).map((u: { id: string; full_name: string | null; email: string }) => {
-    const s = summary.get(u.id) ?? { sum: 0, count: 0 };
-    return {
-      user_id: u.id,
-      user_name: u.full_name ?? u.email,
-      email: u.email,
-      total_payment_amount: s.sum,
-      payment_count: s.count,
-    };
-  });
+  // 3) 集計に登場した acquirer_id のユーザー情報を取得 (role 不問)
+  const acquirerIds = Array.from(summaryMap.keys());
+  const userMap = new Map<string, { id: string; full_name: string | null; email: string }>();
+
+  if (acquirerIds.length > 0) {
+    const { data: users, error: uErr } = await supabase
+      .from('users')
+      .select('id, full_name, email')
+      .is('deleted_at', null)
+      .in('id', acquirerIds);
+    if (uErr) throw new Error(`ユーザー取得に失敗: ${uErr.message}`);
+    for (const u of users ?? []) {
+      userMap.set(u.id, u as { id: string; full_name: string | null; email: string });
+    }
+  }
+
+  // 4) rows 組み立て: 入金額降順ソート
+  const rows: SalesSummaryRow[] = acquirerIds
+    .map((uid) => {
+      const u = userMap.get(uid);
+      const s = summaryMap.get(uid) ?? { sum: 0, count: 0 };
+      return {
+        user_id: uid,
+        user_name: u ? (u.full_name ?? u.email) : '(不明)',
+        email: u?.email ?? '',
+        total_payment_amount: s.sum,
+        payment_count: s.count,
+      };
+    })
+    .sort((a, b) => b.total_payment_amount - a.total_payment_amount);
 
   return { rows, grandTotalAmount, grandTotalCount };
 }
