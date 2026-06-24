@@ -33,7 +33,7 @@ import {
 } from '@/lib/reports/summary';
 import type { ReportChartConfig, ReportDisplayConfig } from '@/lib/reports/types';
 import { cn } from '@/lib/utils/cn';
-import { formatDateTime } from '@/lib/utils/date';
+import { formatDate, formatDateTime } from '@/lib/utils/date';
 
 export interface ReportColumnView {
   id: string;
@@ -62,7 +62,13 @@ function formatCell(v: unknown, dataType?: string): string {
   if (typeof v === 'string') {
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) {
       const d = new Date(v);
-      if (!Number.isNaN(d.getTime())) return formatDateTime(v);
+      if (!Number.isNaN(d.getTime())) {
+        // UTC 00:00:00 (= JST 09:00) は日付のみ表示(時刻情報なしと判断)
+        if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0) {
+          return formatDate(v);
+        }
+        return formatDateTime(v);
+      }
     }
     // number 型カラムは文字列で返ってくることがあるためカンマ整形
     if (dataType === 'number' && /^-?\d+(\.\d+)?$/.test(v)) {
