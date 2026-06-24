@@ -38,7 +38,9 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthRoute = request.nextUrl.pathname.startsWith('/login');
+  const isAuthRoute =
+    request.nextUrl.pathname.startsWith('/login') ||
+    request.nextUrl.pathname.startsWith('/reset-password');
 
   // 未ログインでアプリ画面にアクセス → /login へ
   if (!user && !isAuthRoute) {
