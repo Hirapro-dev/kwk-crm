@@ -37,6 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           backgroundImage: 'url(/lightning_blue_background.png)',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'top center',
+          backgroundSize: '100% auto',
         }}
       >
         {children}
