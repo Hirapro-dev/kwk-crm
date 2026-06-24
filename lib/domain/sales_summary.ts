@@ -32,6 +32,8 @@ export interface SalesSummaryRow {
   total_payment_amount: number;
   /** 期間内 / 案件絞り込み後の入金件数 */
   payment_count: number;
+  /** ユーザーが有効かどうか */
+  is_active: boolean;
 }
 
 export interface SalesSummaryFilter {
@@ -41,6 +43,8 @@ export interface SalesSummaryFilter {
   paymentTo: string | null;
   /** 絞り込み対象の案件ID。null=全案件 */
   projectId: number | null;
+  /** ユーザーの有効/無効フィルター。'all'=全員(デフォルト) */
+  activeFilter: 'all' | 'active' | 'inactive';
 }
 
 export interface SalesSummaryResult {
@@ -99,21 +103,21 @@ export async function getSalesSummary(
 
   // 3) 集計に登場した acquirer_id のユーザー情報を取得 (role 不問)
   const acquirerIds = Array.from(summaryMap.keys());
-  const userMap = new Map<string, { id: string; full_name: string | null; email: string }>();
+  const userMap = new Map<string, { id: string; full_name: string | null; email: string; is_active: boolean }>();
 
   if (acquirerIds.length > 0) {
     const { data: users, error: uErr } = await supabase
       .from('users')
-      .select('id, full_name, email')
+      .select('id, full_name, email, is_active')
       .is('deleted_at', null)
       .in('id', acquirerIds);
     if (uErr) throw new Error(`ユーザー取得に失敗: ${uErr.message}`);
     for (const u of users ?? []) {
-      userMap.set(u.id, u as { id: string; full_name: string | null; email: string });
+      userMap.set(u.id, u as { id: string; full_name: string | null; email: string; is_active: boolean });
     }
   }
 
-  // 4) rows 組み立て: 入金額降順ソート
+  // 4) rows 組み立て: 入金額降順ソート + activeFilter 適用
   const rows: SalesSummaryRow[] = acquirerIds
     .map((uid) => {
       const u = userMap.get(uid);
@@ -124,7 +128,13 @@ export async function getSalesSummary(
         email: u?.email ?? '',
         total_payment_amount: s.sum,
         payment_count: s.count,
+        is_active: u?.is_active ?? true,
       };
+    })
+    .filter((r) => {
+      if (filter.activeFilter === 'active') return r.is_active;
+      if (filter.activeFilter === 'inactive') return !r.is_active;
+      return true;
     })
     .sort((a, b) => b.total_payment_amount - a.total_payment_amount);
 

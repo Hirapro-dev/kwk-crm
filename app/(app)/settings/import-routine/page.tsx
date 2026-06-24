@@ -6,14 +6,16 @@
  */
 
 import { getImportSources } from '@/lib/domain/import_sources';
+import { getProtectImportSource } from '@/lib/domain/protect_import_actions';
 import { isDriveConfigured } from '@/lib/google/drive';
 import { DriveImportPanel } from './DriveImportPanel';
+import { ProtectImportPanel } from './ProtectImportPanel';
 
 // 大量行(会員 約2.4万件)の取込に備え、実行時間上限を確保(Vercel 最大300s)
 export const maxDuration = 300;
 
 export default async function ImportRoutinePage() {
-  const sources = await getImportSources();
+  const [sources, protectSource] = await Promise.all([getImportSources(), getProtectImportSource()]);
   const configured = isDriveConfigured();
 
   return (
@@ -26,6 +28,11 @@ export default async function ImportRoutinePage() {
         </p>
       </div>
       <DriveImportPanel sources={sources} configured={configured} />
+
+      <div>
+        <h2 className="mb-2 text-sm font-bold text-muted-foreground">プロテクト設定取込</h2>
+        <ProtectImportPanel source={protectSource} configured={configured} />
+      </div>
     </div>
   );
 }

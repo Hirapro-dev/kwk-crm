@@ -29,23 +29,30 @@ interface PageProps {
     from?: string;
     to?: string;
     project?: string;
+    active?: string;
   }>;
 }
 
 export default async function SummaryPage({ searchParams }: PageProps) {
   const sp = await searchParams;
 
-  const preset = normalizePreset(sp.preset);
+  // preset 未指定のときのデフォルトは「今月」
+  const preset = sp.preset ? normalizePreset(sp.preset) : 'this_month';
   const range = resolveDateRange(preset, sp.from ?? null, sp.to ?? null);
   const projectIdRaw = sp.project && sp.project !== 'all' ? sp.project : null;
   const projectId =
     projectIdRaw && /^\d+$/.test(projectIdRaw) ? Number.parseInt(projectIdRaw, 10) : null;
+
+  const rawActive = sp.active ?? 'all';
+  const activeFilter: 'all' | 'active' | 'inactive' =
+    rawActive === 'active' || rawActive === 'inactive' ? rawActive : 'all';
 
   const [summary, projects] = await Promise.all([
     getSalesSummary({
       paymentFrom: range.from,
       paymentTo: range.to,
       projectId,
+      activeFilter,
     }),
     listProjectsForFilter(),
   ]);
@@ -80,6 +87,7 @@ export default async function SummaryPage({ searchParams }: PageProps) {
               initialFrom={sp.from ?? ''}
               initialTo={sp.to ?? ''}
               initialProject={projectId ? String(projectId) : 'all'}
+              initialActive={activeFilter}
             />
           </Suspense>
         </PanelFilterBar>

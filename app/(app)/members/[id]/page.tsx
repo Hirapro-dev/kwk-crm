@@ -76,12 +76,17 @@ export default async function MemberDetailPage({ params }: PageProps) {
       : [
           {
             label: 'プロテクト',
-            value: (
+            value: member.protect_by_user_id ? (
               <span>
-                {member.owner
-                  ? (member.owner.full_name ?? member.owner.email)
-                  : (member.owner_name_raw ?? 'Free')}
+                {member.protect_by_user?.full_name ?? '-'}
+                {member.protect_expires_at && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {member.protect_expires_at >= '2099-01-01' ? '(固定)' : `〜${formatDate(member.protect_expires_at)}`}
+                  </span>
+                )}
               </span>
+            ) : (
+              <span className="text-muted-foreground">なし</span>
             ),
           },
         ];

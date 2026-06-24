@@ -22,6 +22,7 @@ interface Props {
   initialFrom: string;
   initialTo: string;
   initialProject: string;
+  initialActive: 'all' | 'active' | 'inactive';
 }
 
 const PRESET_BUTTONS: DatePresetKey[] = [
@@ -48,6 +49,7 @@ export function SummaryFilterBar({
   initialFrom,
   initialTo,
   initialProject,
+  initialActive,
 }: Props) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -80,6 +82,8 @@ export function SummaryFilterBar({
   const onToChange = (v: string) => updateQuery({ preset: 'custom', to: v });
   const onProjectChange = (v: string) =>
     updateQuery({ project: v === 'all' ? null : v });
+  const onActiveChange = (v: 'all' | 'active' | 'inactive') =>
+    updateQuery({ active: v === 'all' ? null : v });
 
   return (
     <div className="space-y-2 rounded border bg-card p-3 shadow-sm">
@@ -144,6 +148,33 @@ export function SummaryFilterBar({
             </option>
           ))}
         </Select>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          ユーザー
+        </span>
+        {(
+          [
+            { key: 'all', label: '全員' },
+            { key: 'active', label: '有効のみ' },
+            { key: 'inactive', label: '非有効のみ' },
+          ] as const
+        ).map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onActiveChange(key)}
+            className={cn(
+              'rounded border px-3 py-1 text-xs transition-colors',
+              initialActive === key
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-input bg-card text-foreground hover:bg-accent',
+            )}
+          >
+            {label}
+          </button>
+        ))}
       </div>
     </div>
   );

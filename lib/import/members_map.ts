@@ -155,7 +155,8 @@ export function convertMemberRow(
     data.do_not_call = doNotCall;
   }
 
-  // 永久担当 → owner_name_raw(原文) + owner_id(名前解決)
+  // 永久担当 → owner_name_raw(原文保持) + owner_id(名前解決)
+  // ※ プロテクトは protect_by_user_id / protect_expires_at で別管理。CSVの永久担当とは無関係。
   if (headers.has('永久担当')) {
     const ownerRaw = nz(raw['永久担当']);
     data.owner_name_raw = ownerRaw;

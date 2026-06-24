@@ -103,7 +103,8 @@ export async function getMember(id: string): Promise<MemberWithOwner | null> {
       `
         *,
         owner:users!members_owner_id_fkey(id, full_name, email),
-        regular_contact:users!members_regular_contact_id_fkey(id, full_name, email)
+        regular_contact:users!members_regular_contact_id_fkey(id, full_name, email),
+        protect_by_user:users!members_protect_by_user_id_fkey(id, full_name)
       `,
     )
     .eq('id', id)
