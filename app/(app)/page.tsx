@@ -92,19 +92,21 @@ export default async function DashboardPage() {
         </p>
       )}
 
-      {/* プロテクト会員(3日以内解除) */}
+      {/* プロテクト会員 */}
       <Card>
         <CardHeader className="border-b py-3">
           <CardTitle className="flex items-center justify-between text-sm">
             <span>プロテクト会員</span>
             <span className="text-xs font-normal text-muted-foreground">
-              3日以内に解除予定 · {protectExpiring.length}件
+              {protectExpiring.expiringSoonCount > 0
+                ? `3日以内に解除予定 · ${protectExpiring.expiringSoonCount}件`
+                : `全プロテクト · ${protectExpiring.totalCount}件${protectExpiring.totalCount > 20 ? '（上位20件）' : ''}`}
             </span>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {protectExpiring.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground">3日以内に解除されるプロテクトはありません</p>
+          {protectExpiring.rows.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground">現在プロテクト中の会員はいません</p>
           ) : (
             <Table>
               <TableHeader>
@@ -116,22 +118,25 @@ export default async function DashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {protectExpiring.map((m) => (
-                  <TableRow key={m.id} className="sf-row-hover">
-                    <TableCell className="whitespace-nowrap py-2 text-xs font-medium text-destructive">
-                      {formatDateTime(m.protect_expires_at)}
-                    </TableCell>
-                    <TableCell className="py-2 font-mono text-xs">
-                      <Link href={`/members/${m.id}`} className="text-primary hover:underline">
-                        {m.id}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="py-2 text-sm">{m.name ?? '-'}</TableCell>
-                    <TableCell className="py-2 text-sm">
-                      {m.protect_by_user?.full_name ?? '-'}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {protectExpiring.rows.map((m) => {
+                  const isSoon = protectExpiring.expiringSoonCount > 0;
+                  return (
+                    <TableRow key={m.id} className="sf-row-hover">
+                      <TableCell className={`whitespace-nowrap py-2 text-xs font-medium ${isSoon ? 'text-destructive' : ''}`}>
+                        {formatDateTime(m.protect_expires_at)}
+                      </TableCell>
+                      <TableCell className="py-2 font-mono text-xs">
+                        <Link href={`/members/${m.id}`} className="text-primary hover:underline">
+                          {m.id}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="py-2 text-sm">{m.name ?? '-'}</TableCell>
+                      <TableCell className="py-2 text-sm">
+                        {m.protect_by_user?.full_name ?? '-'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

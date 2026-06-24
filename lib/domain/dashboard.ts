@@ -69,20 +69,32 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
   };
 }
 
-/** 自分がプロテクト設定した会員で、3日以内に解除期限が来るものを返す。 */
-export async function getProtectExpiringSoon(
-  userId: string,
-): Promise<ProtectExpiringMember[]> {
+export interface ProtectSectionData {
+  /** 表示する行(3日以内があればそれのみ、なければ全件を最大20件) */
+  rows: ProtectExpiringMember[];
+  /** 3日以内解除の件数(ハイライト判定に使用) */
+  expiringSoonCount: number;
+  /** 全有効プロテクト件数 */
+  totalCount: number;
+}
+
+/**
+ * ダッシュボードのプロテクト会員セクション用データを返す。
+ * - 3日以内に解除される会員がいる → それを全件返す
+ * - いない場合 → 有効プロテクト全件を解除日時昇順で最大20件返す
+ */
+export async function getProtectExpiringSoon(userId: string): Promise<ProtectSectionData> {
   const supabase = await createClient();
   const now = new Date().toISOString();
   const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data, error } = await supabase
+  const SELECT = `id, name, protect_expires_at,
+     protect_by_user:users!members_protect_by_user_id_fkey(id, full_name)`;
+
+  // 3日以内に解除されるものを取得
+  const { data: soonData, error: soonErr } = await supabase
     .from('members')
-    .select(
-      `id, name, protect_expires_at,
-       protect_by_user:users!members_protect_by_user_id_fkey(id, full_name)`,
-    )
+    .select(SELECT)
     .is('deleted_at', null)
     .eq('protect_by_user_id', userId)
     .gt('protect_expires_at', now)
@@ -90,8 +102,41 @@ export async function getProtectExpiringSoon(
     .order('protect_expires_at', { ascending: true })
     .limit(50);
 
-  if (error) return [];
-  return (data ?? []) as unknown as ProtectExpiringMember[];
+  if (soonErr) return { rows: [], expiringSoonCount: 0, totalCount: 0 };
+
+  const soonRows = (soonData ?? []) as unknown as ProtectExpiringMember[];
+
+  if (soonRows.length > 0) {
+    // 全件カウントも取得
+    const { count: total } = await supabase
+      .from('members')
+      .select('id', { count: 'exact', head: true })
+      .is('deleted_at', null)
+      .eq('protect_by_user_id', userId)
+      .not('protect_expires_at', 'is', null)
+      .gt('protect_expires_at', now);
+
+    return {
+      rows: soonRows,
+      expiringSoonCount: soonRows.length,
+      totalCount: total ?? soonRows.length,
+    };
+  }
+
+  // 該当なし → 全有効プロテクトを最大20件返す
+  const { data: allData, error: allErr } = await supabase
+    .from('members')
+    .select(SELECT)
+    .is('deleted_at', null)
+    .eq('protect_by_user_id', userId)
+    .not('protect_expires_at', 'is', null)
+    .gt('protect_expires_at', now)
+    .order('protect_expires_at', { ascending: true })
+    .limit(20);
+
+  if (allErr) return { rows: [], expiringSoonCount: 0, totalCount: 0 };
+  const allRows = (allData ?? []) as unknown as ProtectExpiringMember[];
+  return { rows: allRows, expiringSoonCount: 0, totalCount: allRows.length };
 }
 
 /** 過去 24 時間の全員の対応歴を返す(ダッシュボード用)。 */
