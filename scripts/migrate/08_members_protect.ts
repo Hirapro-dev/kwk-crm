@@ -1,127 +1,201 @@
 /**
- * 移行スクリプト 08: 会員プロテクト(protect__c)→ owner_name_raw 更新
- *
- * 入力: 顧客プロテクト.csv
- *   ヘッダー: OwnerId, protect__c, Name, Id, Member_ID__c
- *
- * 処理:
- *   - protect__c の値でグループ化し、同値の ID を IN句で一括 UPDATE
- *   - protect__c = "会社プロテクト" の行は owner_id = NULL も設定
+ * プロテクトCSV取込スクリプト
+ * 顧客情報プロテクト.csv → members.protect_by_user_id / protect_expires_at
  *
  * 使い方:
- *   npx tsx scripts/migrate/08_members_protect.ts --file "/path/to/顧客プロテクト.csv" --dry-run
- *   npx tsx scripts/migrate/08_members_protect.ts --file "/path/to/顧客プロテクト.csv"
+ *   pnpm migrate:protect [--dry-run] [--csv /path/to/file.csv]
  */
 
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { parseArgs } from './lib/args';
-import { streamCsv } from './lib/csv_stream';
+import fs from 'node:fs';
 import { createMigrateClient } from './lib/db';
-import { logger } from './lib/logger';
 
-const SCRIPT_NAME = '08_members_protect';
-const CHUNK_SIZE = 500; // IN句のID数上限
+const FIXED_PROTECT_EXPIRES  = '2099-01-01T15:00:00.000Z';
+const FIXED_PROTECT_VALUES   = new Set(['会社プロテクト']);
+const FIXED_PROTECT_NAMES    = new Set(['守田 和之', '守田 和幸', '植田 雄輝']);
+const FIXED_ACQUIRE_KEYWORDS = ['既存顧客からの紹介', 'リスト外'];
+// free/ex sales の場合に設定するユーザーID(hirapro777@gmail.com)
+const FREE_USER_ID = 'd6ab8478-da1e-491c-b76c-c58147c3b056';
 
-async function main(): Promise<void> {
-  const args = parseArgs();
+const args    = process.argv.slice(2);
+const dryRun  = args.includes('--dry-run');
+const csvIdx  = args.indexOf('--csv');
+const csvPath = csvIdx >= 0 && args[csvIdx + 1]
+  ? args[csvIdx + 1]!
+  : '/Users/takaya/Desktop/csv/顧客情報プロテクト.csv';
 
-  if (!args.file) {
-    logger.error('--file オプションでCSVパスを指定してください');
+function parseCsv(text: string): Record<string, string>[] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  const headers = (lines[0] ?? '').split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
+  return lines.slice(1).map((line) => {
+    const cols = line.split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = cols[i] ?? ''; });
+    return row;
+  });
+}
+
+async function fetchNormalExpiresAt(supabase: ReturnType<typeof createMigrateClient>): Promise<string | null> {
+  const { data } = await supabase
+    .from('flow_rules')
+    .select('duration_value, duration_type')
+    .eq('is_active', true);
+  const rule = (data ?? []).find(
+    (r: { duration_type: string; duration_value: number }) =>
+      r.duration_type === 'days_at_time' && r.duration_value > 0,
+  ) as { duration_value: number } | undefined;
+  if (!rule) return null;
+  const d = new Date();
+  d.setDate(d.getDate() + rule.duration_value);
+  d.setHours(15, 0, 0, 0);
+  return d.toISOString();
+}
+
+async function main() {
+  const supabase = createMigrateClient();
+
+  console.log(`\n[protect import] ${dryRun ? '★ DRY-RUN ★' : '本番実行'}`);
+  console.log(`CSV: ${csvPath}\n`);
+
+  if (!fs.existsSync(csvPath)) {
+    console.error(`CSV ファイルが見つかりません: ${csvPath}`);
     process.exit(1);
   }
 
-  const csvPath = resolve(process.cwd(), args.file);
-  logger.info(`移行開始: ${SCRIPT_NAME}`, { csv: csvPath, dryRun: args.dryRun });
+  const { data: allUsers, error: userErr } = await supabase
+    .from('users').select('id, full_name, legacy_sf_id, is_active').is('deleted_at', null);
+  if (userErr) { console.error('users 取得失敗:', userErr.message); process.exit(1); }
 
-  if (!existsSync(csvPath)) {
-    logger.error(`CSVが見つかりません: ${csvPath}`);
-    process.exit(1);
+  const userBySfId = new Map<string, { id: string; full_name: string | null; is_active: boolean }>();
+  for (const u of allUsers ?? []) {
+    if (u.legacy_sf_id) userBySfId.set(u.legacy_sf_id, u);
   }
+  console.log(`ユーザーキャッシュ: ${userBySfId.size} 件`);
 
-  // --- 1. CSV を全件読み込み、protect値でグループ化 ---
-  const grouped = new Map<string, string[]>(); // protect__c → member_id[]
-  let skipped = 0;
+  const normalExpiresAt = await fetchNormalExpiresAt(supabase);
+  console.log(`通常プロテクト期限: ${normalExpiresAt ?? '(フロールールなし)'}`);
 
-  await streamCsv(
-    csvPath,
-    async (row) => {
-      const memberId = row['Member_ID__c']?.trim() ?? '';
-      const protect = row['protect__c']?.trim() ?? '';
+  const { data: memberInfoRows } = await supabase
+    .from('members').select('id, info_acquired_points').is('deleted_at', null);
+  const infoMap = new Map<string, string | null>();
+  for (const m of memberInfoRows ?? []) infoMap.set(m.id, m.info_acquired_points ?? null);
+  console.log(`会員情報キャッシュ: ${infoMap.size} 件\n`);
 
-      if (!memberId || !memberId.startsWith('K-')) {
-        skipped++;
-        return;
-      }
+  const rows = parseCsv(fs.readFileSync(csvPath, 'utf-8'));
+  console.log(`CSV 行数: ${rows.length} 行\n`);
 
-      const list = grouped.get(protect) ?? [];
-      list.push(memberId);
-      grouped.set(protect, list);
-    },
-    { trimValues: true },
-  );
+  let freeCount = 0, fixedCount = 0, normalCount = 0, errorCount = 0, updated = 0;
+  const errList: string[] = [];
+  // expiresAt=null は free登録(NULL)
+  const updates: { memberId: string; userId: string | null; expiresAt: string | null; isFixed: boolean }[] = [];
 
-  const totalParsed = [...grouped.values()].reduce((s, v) => s + v.length, 0);
-  logger.info(
-    `CSV読込完了: ${totalParsed.toLocaleString()} 件, distinct protect値: ${grouped.size}, skipped: ${skipped}`,
-  );
+  for (const row of rows) {
+    const memberId   = (row['Member_ID__c'] ?? '').trim();
+    const ownerSfId  = (row['OwnerId']      ?? '').trim();
+    const protectVal = (row['protect__c']   ?? '').trim();
 
-  if (args.dryRun) {
-    for (const [protect, ids] of grouped) {
-      logger.info(`[dry-run] "${protect}": ${ids.length.toLocaleString()} 件`);
+    if (!memberId) { errorCount++; continue; }
+
+    const lv = protectVal.toLowerCase();
+    // free / ex sales → freeユーザー(hirapro777@gmail.com)で登録、期限なし
+    if (!protectVal || lv === 'free' || lv === 'ex sales') {
+      updates.push({ memberId, userId: FREE_USER_ID, expiresAt: null, isFixed: false });
+      freeCount++;
+      continue;
     }
-    logger.info('dry-run 完了。DBは変更されていません。');
+
+    const isFixedByVal = FIXED_PROTECT_VALUES.has(protectVal);
+    const user         = ownerSfId ? (userBySfId.get(ownerSfId) ?? null) : null;
+    let isFixed = isFixedByVal;
+
+    if (!isFixed && user) {
+      if (!user.is_active) isFixed = true;
+      else if (user.full_name && FIXED_PROTECT_NAMES.has(user.full_name)) isFixed = true;
+    }
+    if (!isFixed && user) {
+      const info = infoMap.get(memberId) ?? '';
+      for (const kw of FIXED_ACQUIRE_KEYWORDS) {
+        if (info.includes(kw)) { isFixed = true; break; }
+      }
+    }
+
+    const userId = user?.id ?? null;
+    if (!isFixed && !userId) {
+      freeCount++;
+      errList.push(`${memberId}: ユーザー未発見(OwnerId=${ownerSfId})→free登録`);
+      updates.push({ memberId, userId: FREE_USER_ID, expiresAt: null, isFixed: false });
+      continue;
+    }
+
+    const expiresAt = isFixed ? FIXED_PROTECT_EXPIRES : normalExpiresAt;
+    if (!expiresAt) { freeCount++; errList.push(`${memberId}: フロールールなし→free登録`); updates.push({ memberId, userId: FREE_USER_ID, expiresAt: null, isFixed: false }); continue; }
+
+    updates.push({ memberId, userId, expiresAt, isFixed });
+    if (isFixed) fixedCount++; else normalCount++;
+  }
+
+  console.log('集計:');
+  console.log(`  free登録 (free/ex sales):        ${freeCount}`);
+  console.log(`  固定プロテクト対象:              ${fixedCount}`);
+  console.log(`  通常プロテクト対象:              ${normalCount}`);
+  console.log(`  エラー行:                        ${errorCount}`);
+  console.log(`  DB更新予定:                      ${updates.length}\n`);
+
+  if (dryRun) {
+    console.log('DRY-RUN: DB更新はスキップ。--dry-run を外すと本番実行します。\n');
+    console.log('更新サンプル(最大10件):');
+    for (const u of updates.slice(0, 10)) {
+      console.log(`  ${u.memberId} → userId=${u.userId ?? 'null(固定)'} expires=${u.expiresAt} fixed=${u.isFixed}`);
+    }
+    if (errList.length) {
+      console.log(`\n未発見ユーザー等 (${errList.length}件、最大10件表示):`);
+      errList.slice(0, 10).forEach((e) => console.log(' ', e));
+    }
     return;
   }
 
-  // --- 2. protect値ごとに IN句で一括 UPDATE ---
-  const supabase = createMigrateClient();
-  const startedAt = Date.now();
-  let totalUpdated = 0;
-  let totalFailed = 0;
+  // ユーザーID+期限でグループ化してバルク更新（1件ずつではなくIN句で一括）
+  console.log('DB 書き込み開始 (バルク更新)...');
+  const groupMap = new Map<string, string[]>();
+  for (const u of updates) {
+    const key = `${u.userId ?? 'null'}|${u.expiresAt ?? 'null'}`;
+    if (!groupMap.has(key)) groupMap.set(key, []);
+    groupMap.get(key)!.push(u.memberId);
+  }
+  console.log(`  更新グループ数: ${groupMap.size}`);
 
-  for (const [protect, ids] of grouped) {
-    const isCompanyProtect = protect === '会社プロテクト';
-
-    // CHUNK_SIZE 件ずつに分割してリクエスト
-    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-      const chunk = ids.slice(i, i + CHUNK_SIZE);
-
-      const updatePayload = isCompanyProtect
-        ? { owner_name_raw: protect, owner_id: null }
-        : { owner_name_raw: protect };
-
+  const ID_CHUNK = 500; // IN句は500件ずつ
+  for (const [key, ids] of groupMap) {
+    const [userId, expiresAt] = key.split('|');
+    const payload = {
+      protect_by_user_id: userId === 'null' ? null : userId,
+      protect_expires_at: expiresAt === 'null' ? null : expiresAt,
+      updated_at: new Date().toISOString(),
+    };
+    for (let i = 0; i < ids.length; i += ID_CHUNK) {
+      const chunk = ids.slice(i, i + ID_CHUNK);
       const { error, count } = await supabase
         .from('members')
-        .update(updatePayload)
+        .update(payload)
         .in('id', chunk)
-        .select('id', { count: 'exact', head: true });
-
+        .is('deleted_at', null);
       if (error) {
-        logger.warn(`更新失敗 protect="${protect}" chunk[${i}..${i + chunk.length}]: ${error.message}`);
-        totalFailed += chunk.length;
+        errList.push(`グループ${key} chunk${i}: ${error.message}`);
+        errorCount += chunk.length;
       } else {
-        totalUpdated += count ?? chunk.length;
+        updated += count ?? chunk.length;
       }
     }
-
-    logger.info(`"${protect}": ${ids.length.toLocaleString()} 件 完了`);
+    process.stdout.write(`\r  ${updated}/${updates.length} 件完了...`);
   }
 
-  const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
-  logger.info(
-    `処理完了: updated=${totalUpdated.toLocaleString()}, failed=${totalFailed}, 経過=${elapsed}秒`,
-  );
-
-  // 確認
-  const { count } = await supabase
-    .from('members')
-    .select('id', { count: 'exact', head: true })
-    .not('owner_name_raw', 'is', null);
-  logger.info(`DB確認: owner_name_raw(プロテクト)設定済み会員数: ${count?.toLocaleString() ?? 0}`);
+  console.log(`\n\n完了:`);
+  console.log(`  更新成功: ${updated} 件 (固定: ${fixedCount}, 通常: ${normalCount})`);
+  console.log(`  エラー:   ${errorCount} 件`);
+  if (errList.length) {
+    console.log('\nエラー詳細(最大20件):');
+    errList.slice(0, 20).forEach((e) => console.log(' ', e));
+  }
 }
 
-main().catch((e) => {
-  logger.error('予期せぬエラー', { error: e instanceof Error ? e.message : String(e) });
-  process.exit(1);
-});
+main().catch((e) => { console.error(e); process.exit(1); });

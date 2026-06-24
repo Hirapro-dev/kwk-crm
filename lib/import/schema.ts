@@ -141,11 +141,11 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
     table: 'activities',
     label: '対応歴',
     idField: 'legacy_sf_id',
-    note: '会員ID(K-)で会員に紐付け、担当は担当者名で解決します。接触種別は選択肢以外の文字列もそのまま取込可、接触内容は空欄でもOK。ID列が無くても取込可能で、同一内容の行は重複しません(再取込しても増えません)。「対応歴ID」列があればそれで突合します。',
+    note: '会員ID(K-)で会員に紐付け、対応者は担当者名で解決します。接触種別は選択肢以外の文字列もそのまま取込可、接触内容は空欄でもOK。ID列が無くても取込可能で、同一内容の行は重複しません(再取込しても増えません)。「対応歴ID」列があればそれで突合します。',
     fields: [
       { field: 'legacy_sf_id', label: '対応歴ID', type: 'text' },
       { field: 'member_id', label: '会員ID', type: 'text' },
-      { field: 'owner_name', label: '担当', type: 'text' },
+      { field: 'owner_name', label: '対応者', type: 'text' },
       { field: 'd_bunrui', label: '接触種別', type: 'text' },
       { field: 'm_bunrui', label: '接触内容', type: 'text' },
       { field: 's_bunrui', label: '状態', type: 'text' },

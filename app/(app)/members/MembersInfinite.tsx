@@ -40,6 +40,21 @@ export function MembersInfinite({ initialRows, fields, total, params }: Props) {
           </TableCell>
         );
       }
+      if (f.field_name === 'protect_by_user_id') {
+        const protectUser = (m as MemberWithOwner).protect_by_user;
+        const name = protectUser?.full_name ?? null;
+        return (
+          <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">
+            {protectUser ? (
+              <Link href={`/settings/users/${protectUser.id}`} className="sf-link">
+                {name ?? protectUser.id}
+              </Link>
+            ) : (
+              <span className="text-muted-foreground">-</span>
+            )}
+          </TableCell>
+        );
+      }
       const raw = getFieldValue(rec, f.field_name, f.is_in_db);
       const formatted = formatFieldValue(raw, f.data_type);
       const isPhone = f.field_name === 'phone1' || f.field_name === 'phone';

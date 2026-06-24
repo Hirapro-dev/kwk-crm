@@ -44,7 +44,8 @@ export async function listMembers(params: MemberListParams = {}): Promise<Member
       `
         *,
         owner:users!members_owner_id_fkey(id, full_name, email),
-        regular_contact:users!members_regular_contact_id_fkey(id, full_name, email)
+        regular_contact:users!members_regular_contact_id_fkey(id, full_name, email),
+        protect_by_user:users!members_protect_by_user_id_fkey(id, full_name)
       `,
       { count: 'exact' },
     )

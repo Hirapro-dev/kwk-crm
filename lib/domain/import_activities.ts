@@ -185,6 +185,7 @@ export async function previewActivitiesCsv(
       [
         '会員ID',
         'WhoId',
+        '対応者',
         '担当',
         'OwnerId',
         '大分類',

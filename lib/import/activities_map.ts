@@ -37,7 +37,7 @@ export const ACTIVITY_MEMBER_HEADERS = ['会員ID', 'WhoId', 'member_id'];
 const ALIASES: Record<string, string[]> = {
   legacy_sf_id: ['対応歴ID', 'Id', 'legacy_sf_id'],
   member_id: ACTIVITY_MEMBER_HEADERS,
-  owner_name: ['担当', '担当者', 'OwnerId', 'owner'],
+  owner_name: ['対応者', '担当', '担当者', 'OwnerId', 'owner'],
   created_by_name: ['作成者', 'CreatedById'],
   // 接触種別/接触内容/状態(現行の表示名)に加え、旧名(大/中/小分類)とSF列も許容。
   // 値は自由文字列で取込む(選択肢以外でもそのまま保存)。
