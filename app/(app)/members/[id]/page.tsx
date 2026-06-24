@@ -137,6 +137,22 @@ export default async function MemberDetailPage({ params }: PageProps) {
               <DynamicDetailFields
                 record={member as unknown as Record<string, unknown>}
                 fields={detailFields}
+                fieldOverrides={{
+                  protect_by_user_id: member.protect_by_user_id ? (
+                    <span>
+                      {member.protect_by_user?.full_name ?? '-'}
+                      {member.protect_expires_at && (
+                        <span className="ml-1.5 text-xs text-muted-foreground">
+                          {member.protect_expires_at >= '2099-01-01'
+                            ? '(固定)'
+                            : `〜${formatDate(member.protect_expires_at)}`}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">なし</span>
+                  ),
+                }}
               />
             </CollapsibleSection>
           }

@@ -18,7 +18,26 @@ export function renderHighlightFieldValue(
 
   // --- 特定フィールドの専用レンダリング ---
 
-  // プロテクト (担当): owner → owner.full_name、なければ owner_name_raw
+  // プロテクト: protect_by_user_id → ユーザー名 + 期限
+  if (field_name === 'protect_by_user_id') {
+    if (!member.protect_by_user_id) {
+      return <span className="text-muted-foreground">なし</span>;
+    }
+    const name = member.protect_by_user?.full_name ?? '-';
+    const expiry = member.protect_expires_at
+      ? member.protect_expires_at >= '2099-01-01'
+        ? '(固定)'
+        : `〜${formatDate(member.protect_expires_at)}`
+      : '';
+    return (
+      <span>
+        {name}
+        {expiry && <span className="ml-1.5 text-xs text-muted-foreground">{expiry}</span>}
+      </span>
+    );
+  }
+
+  // 永久担当: owner_name_raw のみ表示
   if (field_name === 'owner_name_raw' || field_name === 'owner_id') {
     const label = member.owner
       ? (member.owner.full_name ?? member.owner.email)
