@@ -125,11 +125,16 @@ export default async function DashboardPage() {
         <CardHeader className="border-b py-3">
           <CardTitle className="flex items-center justify-between text-sm">
             <span>プロテクト会員</span>
-            <span className="text-xs font-normal text-muted-foreground">
-              {protectExpiring.expiringSoonCount > 0
-                ? `3日以内に解除予定 · ${protectExpiring.expiringSoonCount}件`
-                : `全プロテクト · ${protectExpiring.totalCount}件${protectExpiring.totalCount > 20 ? '（上位20件）' : ''}`}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-normal text-muted-foreground">
+                {protectExpiring.expiringSoonCount > 0
+                  ? `3日以内に解除予定 · ${protectExpiring.expiringSoonCount}件`
+                  : `全プロテクト · ${protectExpiring.totalCount}件${protectExpiring.totalCount > 20 ? '（上位20件）' : ''}`}
+              </span>
+              <Link href="/members/protects" className="text-xs font-normal text-primary hover:underline">
+                全て表示 →
+              </Link>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
