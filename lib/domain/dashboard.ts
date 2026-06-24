@@ -11,7 +11,11 @@ import type { ActivityListItem } from './types';
 export interface DashboardStats {
   todayActivities: number;
   monthActivities: number;
-  protectCount: number; // 自分が設定した有効プロテクト数
+  protectCount: number;          // 自分が設定した有効プロテクト数
+  // ---- 申込オブジェクト: acquirer_id (申込獲得者) ベース集計 ----
+  monthApplicationCount: number; // 今月の新規申込件数
+  monthPaymentCount: number;     // 今月の入金件数
+  monthPaymentAmount: number;    // 今月の入金額合計
 }
 
 export interface ProtectExpiringMember {
@@ -40,19 +44,34 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
   const monthStart = monthStartIso();
   const now = new Date().toISOString();
 
-  const [todayCount, monthCount, protectCount] = await Promise.all([
+  const monthEnd = new Date();
+  monthEnd.setMonth(monthEnd.getMonth() + 1);
+  monthEnd.setDate(1);
+  monthEnd.setHours(0, 0, 0, 0);
+  const monthEndIso = monthEnd.toISOString();
+
+  const [
+    todayCount,
+    monthCount,
+    protectCount,
+    monthAppCount,
+    monthPaymentRows,
+  ] = await Promise.all([
+    // 今日の対応件数
     supabase
       .from('activities')
       .select('id', { count: 'exact', head: true })
       .is('deleted_at', null)
       .eq('owner_id', userId)
       .gte('registered_datetime', today),
+    // 今月の対応件数
     supabase
       .from('activities')
       .select('id', { count: 'exact', head: true })
       .is('deleted_at', null)
       .eq('owner_id', userId)
       .gte('registered_datetime', monthStart),
+    // 有効プロテクト数
     supabase
       .from('members')
       .select('id', { count: 'exact', head: true })
@@ -60,12 +79,37 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
       .eq('protect_by_user_id', userId)
       .not('protect_expires_at', 'is', null)
       .gt('protect_expires_at', now),
+    // 今月の新規申込件数(acquirer_id ベース)
+    supabase
+      .from('applications')
+      .select('id', { count: 'exact', head: true })
+      .is('deleted_at', null)
+      .eq('acquirer_id', userId)
+      .gte('application_date', monthStart.slice(0, 10))
+      .lt('application_date', monthEndIso.slice(0, 10)),
+    // 今月の入金件数・入金額(acquirer_id ベース)
+    supabase
+      .from('applications')
+      .select('payment_amount')
+      .is('deleted_at', null)
+      .eq('acquirer_id', userId)
+      .not('payment_amount', 'is', null)
+      .gt('payment_amount', 0)
+      .gte('payment_date', monthStart.slice(0, 10))
+      .lt('payment_date', monthEndIso.slice(0, 10)),
   ]);
+
+  const paymentRows = (monthPaymentRows.data ?? []) as { payment_amount: number | null }[];
+  const monthPaymentCount = paymentRows.length;
+  const monthPaymentAmount = paymentRows.reduce((sum, r) => sum + (r.payment_amount ?? 0), 0);
 
   return {
     todayActivities: todayCount.count ?? 0,
     monthActivities: monthCount.count ?? 0,
     protectCount: protectCount.count ?? 0,
+    monthApplicationCount: monthAppCount.count ?? 0,
+    monthPaymentCount,
+    monthPaymentAmount,
   };
 }
 
