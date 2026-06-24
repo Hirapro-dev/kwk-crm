@@ -5,9 +5,10 @@
  *
  * オブジェクトごとに Drive ファイルを設定・保存し、
  * 「プレビュー」(ドライラン) → 「取込実行」(upsert) を行う。
+ * まとめて取り込みボタンで有効オブジェクトを順次処理。
  */
 
-import { CloudDownload, Loader2, Play, Save } from 'lucide-react';
+import { CheckCircle2, CloudDownload, Loader2, Play, PlayCircle, Save, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
@@ -28,7 +29,186 @@ interface Props {
   configured: boolean;
 }
 
+/* ─────────────────────────────────────────────
+   バルクインポートの1ステップの状態
+───────────────────────────────────────────── */
+interface BulkStep {
+  object: string;
+  label: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  result?: CommitResult;
+  elapsedMs?: number;
+}
+
+function formatMs(ms: number): string {
+  if (ms < 60_000) return `${Math.round(ms / 1000)}秒`;
+  return `${Math.floor(ms / 60_000)}分${Math.round((ms % 60_000) / 1000)}秒`;
+}
+
+/* ─────────────────────────────────────────────
+   まとめて取り込みセクション
+───────────────────────────────────────────── */
+function BulkImportSection({
+  sources,
+  configured,
+  onAllDone,
+}: {
+  sources: ImportSource[];
+  configured: boolean;
+  onAllDone: () => void;
+}) {
+  const targets = sources.filter((s) => s.enabled && s.drive_file_id);
+  const [steps, setSteps] = useState<BulkStep[]>([]);
+  const [running, setRunning] = useState(false);
+  const [finished, setFinished] = useState(false);
+
+  const doneCount = steps.filter((s) => s.status === 'done' || s.status === 'error').length;
+  const totalCount = steps.length;
+  const progress = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+
+  // 残り時間の推定
+  const doneSteps = steps.filter((s) => s.elapsedMs !== undefined);
+  const avgMs = doneSteps.length > 0
+    ? doneSteps.reduce((sum, s) => sum + (s.elapsedMs ?? 0), 0) / doneSteps.length
+    : null;
+  const remainingSteps = totalCount - doneCount;
+  const estimatedRemainMs = avgMs !== null ? avgMs * remainingSteps : null;
+
+  const onStart = async () => {
+    if (targets.length === 0) return;
+    setFinished(false);
+    setRunning(true);
+    const initial: BulkStep[] = targets.map((s) => ({
+      object: s.object,
+      label: IMPORT_OBJECTS[s.object]?.label ?? s.object,
+      status: 'pending',
+    }));
+    setSteps(initial);
+
+    const updated = [...initial];
+    for (let i = 0; i < targets.length; i++) {
+      const src = targets[i];
+      if (!src) continue;
+      const cur = updated[i];
+      if (!cur) continue;
+      updated[i] = { ...cur, status: 'running' };
+      setSteps([...updated]);
+      const startedAt = Date.now();
+      try {
+        const res = await runDriveImport(src.object);
+        const elapsedMs = Date.now() - startedAt;
+        updated[i] = {
+          ...cur,
+          status: res?.ok ? 'done' : 'error',
+          result: res ?? { ok: false, error: '取込に失敗しました' },
+          elapsedMs,
+        };
+      } catch (e) {
+        updated[i] = {
+          ...cur,
+          status: 'error',
+          result: { ok: false, error: e instanceof Error ? e.message : '取込エラー' },
+          elapsedMs: Date.now() - startedAt,
+        };
+      }
+      setSteps([...updated]);
+    }
+    setRunning(false);
+    setFinished(true);
+    onAllDone();
+  };
+
+  return (
+    <Card className="border-primary/30 bg-primary/5">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold">まとめて取り込み</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              「有効」チェック済みのオブジェクト（{targets.length}件）を順番に取り込みます
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onClick={onStart}
+            disabled={running || !configured || targets.length === 0}
+            className="shrink-0 gap-1.5"
+          >
+            {running ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <PlayCircle className="h-3.5 w-3.5" />
+            )}
+            {running ? '取込中...' : 'まとめて取り込み'}
+          </Button>
+        </div>
+
+        {/* プログレスバー */}
+        {(running || finished) && totalCount > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{doneCount} / {totalCount} 完了</span>
+              <span>
+                {running && estimatedRemainMs !== null
+                  ? `残り約 ${formatMs(estimatedRemainMs)}`
+                  : finished
+                  ? '完了'
+                  : ''}
+              </span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-500"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+
+            {/* ステップ一覧 */}
+            <ul className="space-y-1 pt-1">
+              {steps.map((step) => (
+                <li key={step.object} className="flex items-start gap-2 text-xs">
+                  {step.status === 'pending' && (
+                    <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border border-muted-foreground/40" />
+                  )}
+                  {step.status === 'running' && (
+                    <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+                  )}
+                  {step.status === 'done' && (
+                    <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600" />
+                  )}
+                  {step.status === 'error' && (
+                    <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                  )}
+                  <span className={
+                    step.status === 'running' ? 'font-medium' :
+                    step.status === 'done' ? 'text-green-700' :
+                    step.status === 'error' ? 'text-destructive' :
+                    'text-muted-foreground'
+                  }>
+                    {step.label}
+                    {step.status === 'running' && ' を取込中...'}
+                    {step.status === 'done' && step.result?.ok && (
+                      <span className="ml-1 text-muted-foreground">
+                        {step.result.upserted?.toLocaleString()}件
+                        {step.elapsedMs ? ` (${formatMs(step.elapsedMs)})` : ''}
+                      </span>
+                    )}
+                    {step.status === 'error' && (
+                      <span className="ml-1">— {step.result?.error}</span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function DriveImportPanel({ sources, configured }: Props) {
+  const router = useRouter();
   return (
     <div className="space-y-4">
       {!configured && (
@@ -45,6 +225,13 @@ export function DriveImportPanel({ sources, configured }: Props) {
           </CardContent>
         </Card>
       )}
+
+      {/* まとめて取り込みセクション */}
+      <BulkImportSection
+        sources={sources}
+        configured={configured}
+        onAllDone={() => router.refresh()}
+      />
 
       {sources.map((s) => (
         <DriveSourceCard key={s.object} source={s} configured={configured} />
