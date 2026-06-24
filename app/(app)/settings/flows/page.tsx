@@ -5,14 +5,35 @@
  * Salesforce Flow 相当の機能。
  */
 
+import Link from 'next/link';
 import { GitBranch } from 'lucide-react';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { PanelHeader } from '@/components/layout/PanelHeader';
+import { getAllActiveProtects } from '@/lib/domain/dashboard';
 import { listFlowRules } from '@/lib/domain/flow_rules';
+import { formatDateTime } from '@/lib/utils/date';
 import { FlowRuleList } from './FlowRuleList';
 
+function daysUntil(isoStr: string): number {
+  return Math.ceil((new Date(isoStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
 export default async function SettingsFlowsPage() {
-  const rules = await listFlowRules();
+  const [rules, activeProtects] = await Promise.all([
+    listFlowRules(),
+    getAllActiveProtects(),
+  ]);
+
+  const expiringSoon = activeProtects.filter((m) => daysUntil(m.protect_expires_at) <= 3);
+  const expiringSoonIds = new Set(expiringSoon.map((m) => m.id));
 
   return (
     <div className="space-y-3">
@@ -49,6 +70,60 @@ export default async function SettingsFlowsPage() {
         <div className="p-4 space-y-3">
           <FlowRuleList rules={rules} />
         </div>
+      </Card>
+
+      {/* 現在プロテクト中の会員 */}
+      <Card className="overflow-hidden p-0 shadow-sm">
+        <PanelHeader
+          iconLabel="PRT"
+          iconColor="#f59e0b"
+          viewName="現在プロテクト中の会員"
+          totalCount={activeProtects.length}
+        />
+        <CardContent className="p-0">
+          {activeProtects.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground">現在プロテクト中の会員はいません</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table className="min-w-[640px]">
+                <TableHeader>
+                  <TableRow className="bg-gray-50 hover:bg-gray-50">
+                    <TableHead className="h-9 whitespace-nowrap">解除日時</TableHead>
+                    <TableHead className="h-9 whitespace-nowrap">残り</TableHead>
+                    <TableHead className="h-9 whitespace-nowrap">会員ID</TableHead>
+                    <TableHead className="h-9">会員名</TableHead>
+                    <TableHead className="h-9 whitespace-nowrap">プロテクト担当</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activeProtects.map((m) => {
+                    const days = daysUntil(m.protect_expires_at);
+                    const isSoon = expiringSoonIds.has(m.id);
+                    return (
+                      <TableRow key={m.id} className="sf-row-hover">
+                        <TableCell className={`whitespace-nowrap py-2 text-xs font-medium ${isSoon ? 'text-destructive' : ''}`}>
+                          {formatDateTime(m.protect_expires_at)}
+                        </TableCell>
+                        <TableCell className={`whitespace-nowrap py-2 text-xs ${isSoon ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}>
+                          {days <= 0 ? '期限切れ' : `${days}日後`}
+                        </TableCell>
+                        <TableCell className="py-2 font-mono text-xs">
+                          <Link href={`/members/${m.id}`} className="text-primary hover:underline">
+                            {m.id}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="py-2 text-sm">{m.name ?? '-'}</TableCell>
+                        <TableCell className="py-2 text-sm">
+                          {m.protect_by_user?.full_name ?? '-'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
       </Card>
     </div>
   );

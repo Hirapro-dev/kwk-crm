@@ -117,6 +117,27 @@ export async function getRecentActivities24h(limit = 100): Promise<ActivityListI
   return (data ?? []) as unknown as ActivityListItem[];
 }
 
+/** 現在有効なプロテクト全件を解除期限昇順で返す(フロー設定ページ用)。 */
+export async function getAllActiveProtects(): Promise<ProtectExpiringMember[]> {
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('members')
+    .select(
+      `id, name, protect_expires_at,
+       protect_by_user:users!members_protect_by_user_id_fkey(id, full_name)`,
+    )
+    .is('deleted_at', null)
+    .not('protect_expires_at', 'is', null)
+    .gt('protect_expires_at', now)
+    .order('protect_expires_at', { ascending: true })
+    .limit(200);
+
+  if (error) return [];
+  return (data ?? []) as unknown as ProtectExpiringMember[];
+}
+
 /** @deprecated 後方互換。page.tsx から直接は使わず getRecentActivities24h を使うこと。 */
 export async function getMyRecentActivities(
   userId: string,
