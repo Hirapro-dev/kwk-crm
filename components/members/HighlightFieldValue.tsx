@@ -1,10 +1,11 @@
-import Link from 'next/link';
-import type { ReactNode } from 'react';
 import { PhoneLink } from '@/components/layout/PhoneLink';
 import { Badge } from '@/components/ui/badge';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import type { MemberWithOwner } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils/date';
+import { formatFieldValue, getFieldValue } from '@/lib/utils/format_field';
+import Link from 'next/link';
+import type { ReactNode } from 'react';
 
 /**
  * ハイライトパネルでフィールド値を描画するヘルパー。
@@ -62,9 +63,11 @@ export function renderHighlightFieldValue(
 
   // --- data_type によるジェネリックレンダリング ---
 
+  // DB物理カラム / extra(CSV列名) いずれも getFieldValue で取得する
+  const raw = getRaw(member, field);
+
   // boolean: あり / なし バッジ
   if (data_type === 'boolean') {
-    const raw = getRaw(member, field_name);
     const on = raw === true || raw === 'true' || raw === '1';
     return on ? (
       <Badge variant="destructive">あり</Badge>
@@ -75,26 +78,28 @@ export function renderHighlightFieldValue(
 
   // date / datetime
   if (data_type === 'date' || data_type === 'datetime') {
-    const raw = getRaw(member, field_name);
     if (!raw) return <span className="text-muted-foreground">-</span>;
     return <span>{formatDate(String(raw))}</span>;
   }
 
-  // text / number / enum / その他
-  const raw = getRaw(member, field_name);
+  // text / number / enum / その他 (number はカンマ整形)
   if (raw === null || raw === undefined || raw === '') {
     return <span className="text-muted-foreground">-</span>;
   }
-  return <span>{String(raw)}</span>;
+  return <span>{formatFieldValue(raw, data_type, field.label ?? field_name)}</span>;
 }
 
-/** member から field_name に対応する値を取り出す。extra.key にも対応。 */
-function getRaw(member: MemberWithOwner, fieldName: string): unknown {
-  // extra.XXX 形式のフィールド (is_in_db=false 想定)
-  if (fieldName.startsWith('extra.')) {
-    const key = fieldName.slice('extra.'.length);
+/**
+ * member から field に対応する値を取り出す。
+ * DB物理カラム(is_in_db=true) / extra(CSV列名, is_in_db=false) 両対応。
+ * 旧 extra.XXX 形式も後方互換で解決する。
+ */
+function getRaw(member: MemberWithOwner, field: FieldDefinition): unknown {
+  const record = member as unknown as Record<string, unknown>;
+  // 旧 extra.XXX 形式 (後方互換)
+  if (field.field_name.startsWith('extra.')) {
+    const key = field.field_name.slice('extra.'.length);
     return member.extra?.[key] ?? null;
   }
-  // 通常カラム
-  return (member as unknown as Record<string, unknown>)[fieldName] ?? null;
+  return getFieldValue(record, field.field_name, field.is_in_db, field.csv_column_name) ?? null;
 }
