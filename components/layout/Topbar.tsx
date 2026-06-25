@@ -1,36 +1,29 @@
 import { Bell, HelpCircle } from 'lucide-react';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/domain/auth';
+import { AppLauncherButton } from './AppLauncherButton';
 import { HeaderSearch } from './HeaderSearch';
 import { SettingsMenu } from './SettingsMenu';
+import type { TabItem } from './TabsNav';
 
 /**
  * Salesforce Lightning 風 濃紺ヘッダーバー。
  *
  * 構成:
- *  - 左: アプリランチャー(9ドット) + アプリ名
+ *  - 左: アプリランチャー(9ドット・全メニュー) + アプリ名
  *  - 中央: 全体検索ボックス
  *  - 右: ヘルプ / 設定(プルダウン) / 通知 / ユーザーアバター
- *
- * 設定アイコンは SettingsMenu (Client) を使ってプルダウン化。
- * ログアウトは SettingsMenu 内のメニュー項目に統合した。
  */
-export async function Topbar() {
+export async function Topbar({ tabs }: { tabs: TabItem[] }) {
   const me = await getCurrentUser();
   const userInitial = (me.full_name ?? me.email).charAt(0).toUpperCase();
   const isAdmin = me.role === 'admin';
 
   return (
     <header className="sf-header flex h-12 items-center gap-3 px-4">
-      {/* 左: アプリランチャー + アプリ名 */}
+      {/* 左: アプリランチャー(クライアント) + アプリ名 */}
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          aria-label="アプリランチャー"
-          className="grid h-8 w-8 place-items-center rounded hover:bg-white/10"
-        >
-          <AppLauncherIcon />
-        </button>
+        <AppLauncherButton tabs={tabs} />
         <Link href="/" className="text-sm font-semibold tracking-tight">
           ひらプロCRM
         </Link>
@@ -89,19 +82,3 @@ function HeaderIconButton({
   );
 }
 
-/** 9ドット = アプリランチャーアイコン (SF Waffle Menu) */
-function AppLauncherIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="h-4 w-4 fill-current" aria-hidden="true">
-      <circle cx="3" cy="3" r="1.3" />
-      <circle cx="8" cy="3" r="1.3" />
-      <circle cx="13" cy="3" r="1.3" />
-      <circle cx="3" cy="8" r="1.3" />
-      <circle cx="8" cy="8" r="1.3" />
-      <circle cx="13" cy="8" r="1.3" />
-      <circle cx="3" cy="13" r="1.3" />
-      <circle cx="8" cy="13" r="1.3" />
-      <circle cx="13" cy="13" r="1.3" />
-    </svg>
-  );
-}

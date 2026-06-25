@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <Topbar />
+      <Topbar tabs={navTabs} />
       {/* PC: 横タブナビ / モバイル: 非表示 */}
       <div className="hidden md:block">
         <TabsNav appName="対応歴管理" tabs={navTabs} />
@@ -43,7 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {children}
       </main>
       {/* モバイル専用ボトムナビ */}
-      <BottomNav tabs={navTabs} />
+      <BottomNav />
     </div>
   );
 }
