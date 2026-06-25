@@ -128,7 +128,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
         左: 詳細/関連タブカード, 右: 対応歴カード (独立) を横並び 1:1。
         lg 未満は縦並び。
       */}
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-3 lg:grid-cols-2">
         {/* 左カラム: 詳細/関連 タブ */}
         <MemberTabs
           detailsContent={

@@ -26,7 +26,7 @@ export function MemberTabs({ detailsContent, relatedContent }: Props) {
   const [active, setActive] = useState<TabId>('details');
 
   return (
-    <div className="rounded border bg-card shadow-sm">
+    <div className="w-full min-w-0 overflow-hidden rounded border bg-card shadow-sm">
       <div className="flex items-stretch border-b">
         {TABS.map((tab) => (
           <button

@@ -153,7 +153,7 @@ export function DynamicDetailFields({
         );
         // 名前付きセクションは見出しクリックで開閉。無名(その他)は常に表示。
         return group.name ? (
-          <CollapsibleFieldGroup key={gi} title={group.name}>
+          <CollapsibleFieldGroup key={gi} title={group.name} defaultOpen={gi === 0}>
             {body}
           </CollapsibleFieldGroup>
         ) : (
