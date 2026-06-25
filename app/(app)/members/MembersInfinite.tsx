@@ -27,6 +27,37 @@ export function MembersInfinite({ initialRows, fields, total, params }: Props) {
     const rec = m as unknown as Record<string, unknown>;
     const id = String(rec.id ?? '');
     return fields.map((f, i) => {
+      // --- フィールド名による特定処理（位置より優先） ---
+
+      // 氏名: 詳細リンク付き
+      if (f.field_name === 'name') {
+        const name = rec.name as string | null | undefined;
+        return (
+          <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">
+            <Link href={`/members/${id}`} className={i === 0 ? 'sf-link font-medium' : 'sf-link'}>
+              {name ?? '-'}
+            </Link>
+          </TableCell>
+        );
+      }
+
+      // プロテクト: ユーザー名 + ユーザー詳細リンク
+      if (f.field_name === 'protect_by_user_id') {
+        const protectUser = m.protect_by_user;
+        return (
+          <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">
+            {protectUser ? (
+              <Link href={`/settings/users/${protectUser.id}`} className="sf-link">
+                {protectUser.full_name ?? '-'}
+              </Link>
+            ) : (
+              <span className="text-muted-foreground">-</span>
+            )}
+          </TableCell>
+        );
+      }
+
+      // --- 1列目: 詳細リンク付き（フィールド値 or 会員ID） ---
       if (i === 0) {
         const raw = f.is_in_db
           ? rec[f.field_name]
@@ -40,30 +71,8 @@ export function MembersInfinite({ initialRows, fields, total, params }: Props) {
           </TableCell>
         );
       }
-      if (f.field_name === 'name') {
-        const name = rec.name as string | null | undefined;
-        return (
-          <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">
-            <Link href={`/members/${id}`} className="sf-link">
-              {name ?? '-'}
-            </Link>
-          </TableCell>
-        );
-      }
-      if (f.field_name === 'protect_by_user_id') {
-        const protectUser = (m as MemberWithOwner).protect_by_user;
-        return (
-          <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">
-            {protectUser ? (
-              <Link href={`/settings/users/${protectUser.id}`} className="sf-link">
-                {protectUser.full_name ?? '-'}
-              </Link>
-            ) : (
-              <span className="text-muted-foreground">-</span>
-            )}
-          </TableCell>
-        );
-      }
+
+      // --- 汎用レンダリング ---
       const raw = getFieldValue(rec, f.field_name, f.is_in_db);
       const formatted = formatFieldValue(raw, f.data_type);
       const isPhone = f.field_name === 'phone1' || f.field_name === 'phone';

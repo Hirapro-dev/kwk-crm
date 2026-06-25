@@ -47,17 +47,20 @@ export default async function MembersPage({ searchParams }: PageProps) {
           viewName="顧客情報一覧"
           totalCount={result.total}
           actions={
-            <>
-              <Button variant="outline" size="sm">
-                インポート
-              </Button>
-              <Button variant="outline" size="sm">
-                リスト編集
-              </Button>
+            /* デスクトップ: ヘッダー右に全ボタン */
+            <div className="hidden sm:flex items-center gap-2">
+              <Button variant="outline" size="sm">インポート</Button>
+              <Button variant="outline" size="sm">リスト編集</Button>
               <Button size="sm">新規</Button>
-            </>
+            </div>
           }
         />
+        {/* モバイル: ボタンをヘッダー下段に表示 */}
+        <div className="flex gap-2 border-t px-4 py-2 sm:hidden">
+          <Button variant="outline" size="sm">インポート</Button>
+          <Button variant="outline" size="sm">リスト編集</Button>
+          <Button size="sm">新規</Button>
+        </div>
 
         <PanelFilterBar>
           <Suspense>
