@@ -48,7 +48,8 @@ export default async function ReportsPage({ searchParams }: PageProps) {
           viewName="レポート"
           totalCount={reports.length}
           actions={
-            <>
+            /* デスクトップ: ヘッダー右に全ボタン並べる */
+            <div className="hidden sm:flex items-center gap-2">
               <Link href="/reports">
                 <Button variant={favoritesOnly ? 'outline' : 'default'} size="sm">
                   すべて
@@ -62,10 +63,30 @@ export default async function ReportsPage({ searchParams }: PageProps) {
               <Link href="/reports/new">
                 <Button size="sm">+ 新規レポート</Button>
               </Link>
-            </>
+            </div>
           }
         />
+        {/* モバイル: フィルターボタンをヘッダー下段に表示 */}
+        <div className="flex gap-2 border-t px-4 py-2 sm:hidden">
+          <Link href="/reports">
+            <Button variant={favoritesOnly ? 'outline' : 'default'} size="sm">
+              すべて
+            </Button>
+          </Link>
+          <Link href="/reports?favorites=1">
+            <Button variant={favoritesOnly ? 'default' : 'outline'} size="sm">
+              ★ お気に入り
+            </Button>
+          </Link>
+        </div>
       </Card>
+
+      {/* モバイル: 新規レポートボタンをカード間に表示 */}
+      <div className="sm:hidden">
+        <Link href="/reports/new">
+          <Button size="sm" className="w-full">+ 新規レポート</Button>
+        </Link>
+      </div>
 
       {standard.length > 0 && !favoritesOnly && (
         <ReportTable title="標準レポート" rows={standard} currentUserId={me.id} />
