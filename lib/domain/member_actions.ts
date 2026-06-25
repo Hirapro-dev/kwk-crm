@@ -16,6 +16,8 @@ export interface UpdateMemberInput {
   address?: string;
   customer_type?: string;
   do_not_call?: boolean;
+  /** 定期連絡者の users.id。空文字/null で解除。 */
+  regular_contact_id?: string | null;
   /** プロテクト者(担当)の users.id。空文字/null で解除。admin のみ変更可。 */
   protect_by_user_id?: string | null;
   /** プロテクト期限 (YYYY-MM-DD または ISO)。空文字/null で無期限解除。admin のみ変更可。 */

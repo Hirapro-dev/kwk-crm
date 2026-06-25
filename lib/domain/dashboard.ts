@@ -20,6 +20,7 @@ export interface DashboardStats {
 export interface ProtectExpiringMember {
   id: string;
   name: string | null;
+  address: string | null;
   protect_expires_at: string;
   protect_by_user: { id: string; full_name: string | null } | null;
 }
@@ -116,7 +117,7 @@ export async function getProtectExpiringSoon(userId: string): Promise<ProtectSec
   const now = new Date().toISOString();
   const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
-  const SELECT = `id, name, protect_expires_at,
+  const SELECT = `id, name, address, protect_expires_at,
      protect_by_user:users!members_protect_by_user_id_fkey(id, full_name)`;
 
   // 3日以内に解除されるものを取得
@@ -206,7 +207,7 @@ export async function getAllActiveProtects(userId?: string): Promise<ProtectExpi
   let query = supabase
     .from('members')
     .select(
-      `id, name, protect_expires_at,
+      `id, name, address, protect_expires_at,
        protect_by_user:users!members_protect_by_user_id_fkey(id, full_name)`,
     )
     .is('deleted_at', null)

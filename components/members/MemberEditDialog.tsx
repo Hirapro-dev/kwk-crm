@@ -1,5 +1,6 @@
 'use client';
 
+import { UserCombobox } from '@/components/members/UserCombobox';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,7 +26,7 @@ interface Props {
   member: MemberWithOwner;
   /** 現在のログインユーザーのロール。'admin' のときのみプロテクト編集UIを表示 */
   currentUserRole?: string;
-  /** プロテクト者の候補一覧 (admin のみ使用) */
+  /** プロテクト者・定期連絡者の候補一覧 (ユーザー全員) */
   protectUsers?: ProtectUserOption[];
 }
 
@@ -58,6 +59,11 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
     do_not_call: member.do_not_call ?? false,
   });
 
+  // 定期連絡者 (ユーザー検索コンボボックス)
+  const [regularContactId, setRegularContactId] = useState<string | null>(
+    member.regular_contact_id ?? null,
+  );
+
   // プロテクト編集用 state (admin のみ)
   const [protectUserId, setProtectUserId] = useState(member.protect_by_user_id ?? '');
   const [protectDate, setProtectDate] = useState(
@@ -85,7 +91,12 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
               : null,
           }
         : {};
-      const result = await updateMember({ id: member.id, ...form, ...protectPayload });
+      const result = await updateMember({
+        id: member.id,
+        ...form,
+        regular_contact_id: regularContactId,
+        ...protectPayload,
+      });
       if (result.error) {
         setError(result.error);
         return;
@@ -146,6 +157,15 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
               <Label htmlFor="do_not_call">架電NG</Label>
             </div>
 
+            <Field label="定期連絡者">
+              <UserCombobox
+                users={protectUsers}
+                value={regularContactId}
+                onChange={setRegularContactId}
+                placeholder="名前で検索（空欄で全員表示）"
+              />
+            </Field>
+
             {/* プロテクト編集 (admin のみ) */}
             {isAdmin && (
               <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50/50 p-3">
@@ -164,7 +184,7 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
                     ))}
                   </select>
                 </Field>
-                <Field label="プロテクト日程">
+                <Field label="プロテクト終了日">
                   <Input
                     type="date"
                     value={protectDate}

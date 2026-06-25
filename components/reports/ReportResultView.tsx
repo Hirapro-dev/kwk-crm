@@ -12,8 +12,7 @@
  * 集計はすべて取得済みの結果行に対して行う(追加 SQL なし)。
  */
 
-import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { ReportChart } from '@/components/reports/ReportChart';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -23,17 +22,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ReportChart } from '@/components/reports/ReportChart';
 import { MEMBER_LINK_ID_ALIAS } from '@/lib/reports/builder_v2';
 import { computeChartData } from '@/lib/reports/chart_data';
-import {
-  SUMMARY_AGG_LABEL,
-  aggregateColumn,
-  formatSummaryValue,
-} from '@/lib/reports/summary';
+import { SUMMARY_AGG_LABEL, aggregateColumn, formatSummaryValue } from '@/lib/reports/summary';
 import type { ReportChartConfig, ReportDisplayConfig } from '@/lib/reports/types';
 import { cn } from '@/lib/utils/cn';
 import { formatDate, formatDateTime } from '@/lib/utils/date';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 
 export interface ReportColumnView {
   id: string;
@@ -95,6 +91,18 @@ export function ReportResultView({
   const [showSubtotal, setShowSubtotal] = useState(false);
   const [showGrandTotal, setShowGrandTotal] = useState(true);
 
+  // グラフの高さ (ログインユーザーが任意調整・ブラウザに保存)
+  const CHART_HEIGHT_KEY = 'report_chart_height';
+  const [chartHeight, setChartHeight] = useState(320);
+  useEffect(() => {
+    const saved = Number(window.localStorage.getItem(CHART_HEIGHT_KEY));
+    if (Number.isFinite(saved) && saved >= 200) setChartHeight(saved);
+  }, []);
+  const updateChartHeight = (h: number) => {
+    setChartHeight(h);
+    window.localStorage.setItem(CHART_HEIGHT_KEY, String(h));
+  };
+
   const colById = useMemo(() => {
     const m = new Map<string, ReportColumnView>();
     for (const c of columns) m.set(c.id, c);
@@ -124,12 +132,8 @@ export function ReportResultView({
   const hasSummary = aggByColId.size > 0;
 
   // ----- 表示グルーピング -----
-  const groupCol = display?.groupByColumnId
-    ? colById.get(display.groupByColumnId)
-    : undefined;
-  const groupColIndex = groupCol
-    ? columns.findIndex((c) => c.id === groupCol.id)
-    : -1;
+  const groupCol = display?.groupByColumnId ? colById.get(display.groupByColumnId) : undefined;
+  const groupColIndex = groupCol ? columns.findIndex((c) => c.id === groupCol.id) : -1;
 
   const groups = useMemo(() => {
     if (!groupCol) return null;
@@ -156,11 +160,7 @@ export function ReportResultView({
     labelColIndex: number,
   ) => (
     <TableRow
-      className={
-        variant === 'grandtotal'
-          ? 'bg-slate-100 font-bold'
-          : 'bg-slate-50 font-medium'
-      }
+      className={variant === 'grandtotal' ? 'bg-slate-100 font-bold' : 'bg-slate-50 font-medium'}
     >
       {columns.map((c, i) => {
         const agg = aggByColId.get(c.id);
@@ -215,9 +215,7 @@ export function ReportResultView({
     >
       {g.key}
       {showCounts && (
-        <span className="ml-1 font-normal text-muted-foreground">
-          ({g.rows.length}件)
-        </span>
+        <span className="ml-1 font-normal text-muted-foreground">({g.rows.length}件)</span>
       )}
     </TableCell>
   );
@@ -231,9 +229,7 @@ export function ReportResultView({
       >
         {groupCol?.label}: {g.key}
         {showCounts && (
-          <span className="ml-2 font-normal text-muted-foreground">
-            {g.rows.length}件
-          </span>
+          <span className="ml-2 font-normal text-muted-foreground">{g.rows.length}件</span>
         )}
       </TableCell>
     </TableRow>
@@ -269,21 +265,38 @@ export function ReportResultView({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle className="text-base">グラフ</CardTitle>
-            {selected && (
-              <button
-                type="button"
-                onClick={() => setSelected(null)}
-                className="rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
-              >
-                絞り込み解除「{selected}」✕
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {/* グラフ高さ調整 (ログインユーザーが任意調整) */}
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                高さ
+                <input
+                  type="range"
+                  min={200}
+                  max={800}
+                  step={20}
+                  value={chartHeight}
+                  onChange={(e) => updateChartHeight(Number(e.target.value))}
+                  className="w-24 sm:w-32"
+                />
+                <span className="w-10 tabular-nums">{chartHeight}px</span>
+              </label>
+              {selected && (
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  className="rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+                >
+                  絞り込み解除「{selected}」✕
+                </button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <ReportChart
               type={chart.type}
               chartData={chartData}
               title={chart.title}
+              height={chartHeight}
               onCategoryClick={
                 chartCatAlias
                   ? (name) => setSelected((cur) => (cur === name ? null : name))
@@ -373,10 +386,7 @@ export function ReportResultView({
                                 }
                                 const agg = aggByColId.get(c.id);
                                 return (
-                                  <TableCell
-                                    key={c.alias}
-                                    className="whitespace-nowrap text-xs"
-                                  >
+                                  <TableCell key={c.alias} className="whitespace-nowrap text-xs">
                                     {agg
                                       ? `${SUMMARY_AGG_LABEL[agg]}: ${formatSummaryValue(
                                           aggregateColumn(grp.rows, c.alias, agg),
@@ -393,12 +403,7 @@ export function ReportResultView({
                     })}
                     {/* 総計 */}
                     {showGrandTotal &&
-                      renderSummaryRow(
-                        filteredRows,
-                        '総計',
-                        'grandtotal',
-                        labelColIndex,
-                      )}
+                      renderSummaryRow(filteredRows, '総計', 'grandtotal', labelColIndex)}
                   </>
                 ) : (
                   // フラット表示
@@ -426,11 +431,7 @@ export function ReportResultView({
                 onChange={setShowSubtotal}
                 disabled={!showDetail || !hasSummary}
               />
-              <ToggleSwitch
-                label="総計"
-                checked={showGrandTotal}
-                onChange={setShowGrandTotal}
-              />
+              <ToggleSwitch label="総計" checked={showGrandTotal} onChange={setShowGrandTotal} />
             </div>
           )}
         </CardContent>
@@ -460,18 +461,9 @@ function GroupBlock({
   showDetail: boolean;
   showSubtotal: boolean;
   renderCells: (row: Record<string, unknown>) => React.ReactNode;
-  renderDetailCell: (
-    row: Record<string, unknown>,
-    c: ReportColumnView,
-  ) => React.ReactNode;
-  renderSummaryRow: (
-    rows: Array<Record<string, unknown>>,
-    label: string,
-  ) => React.ReactNode;
-  groupMergedCell: (
-    g: { key: string; rows: unknown[] },
-    key: string,
-  ) => React.ReactNode;
+  renderDetailCell: (row: Record<string, unknown>, c: ReportColumnView) => React.ReactNode;
+  renderSummaryRow: (rows: Array<Record<string, unknown>>, label: string) => React.ReactNode;
+  groupMergedCell: (g: { key: string; rows: unknown[] }, key: string) => React.ReactNode;
   groupHeaderRow: (g: { key: string; rows: unknown[] }) => React.ReactNode;
   collapsedRow: (g: { key: string; rows: Array<Record<string, unknown>> }) => React.ReactNode;
 }) {
@@ -498,10 +490,7 @@ function GroupBlock({
   return (
     <>
       {group.rows.map((row, i) => (
-        <TableRow
-          key={i}
-          className={i === 0 ? 'border-t-2 border-slate-300' : undefined}
-        >
+        <TableRow key={i} className={i === 0 ? 'border-t-2 border-slate-300' : undefined}>
           {columns.map((c, ci) => {
             if (ci === groupColIndex) {
               // 結合列: 先頭行のみ rowspan セル、以降は省略(rowspanでカバー)

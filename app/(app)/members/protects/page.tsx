@@ -106,44 +106,55 @@ export default async function ProtectsPage() {
                 <span className="text-xs text-muted-foreground">{rows.length}件</span>
               </div>
 
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="h-8 text-xs">解除日時</TableHead>
-                    <TableHead className="h-8 text-xs">残り日数</TableHead>
-                    <TableHead className="h-8 text-xs">会員ID</TableHead>
-                    <TableHead className="h-8 text-xs">会員名</TableHead>
-                    <TableHead className="h-8 text-xs">担当者</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((m) => {
-                    const { label, color } = remainInfo(m.protect_expires_at);
-                    const isUrgent = key !== -1 && key <= 3;
-                    return (
-                      <TableRow key={m.id} className="sf-row-hover">
-                        <TableCell
-                          className={`whitespace-nowrap py-2 text-xs font-medium ${isUrgent ? 'text-destructive' : ''}`}
-                        >
-                          {formatDateTime(m.protect_expires_at)}
-                        </TableCell>
-                        <TableCell className={`whitespace-nowrap py-2 text-xs ${color}`}>
-                          {label}
-                        </TableCell>
-                        <TableCell className="py-2 font-mono text-xs">
-                          <Link href={`/members/${m.id}`} className="text-primary hover:underline">
-                            {m.id}
-                          </Link>
-                        </TableCell>
-                        <TableCell className="py-2 text-sm">{m.name ?? '-'}</TableCell>
-                        <TableCell className="py-2 text-sm">
-                          {m.protect_by_user?.full_name ?? '-'}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="h-8 whitespace-nowrap text-xs">解除日時</TableHead>
+                      <TableHead className="h-8 whitespace-nowrap text-xs">残り日数</TableHead>
+                      <TableHead className="h-8 whitespace-nowrap text-xs">会員ID</TableHead>
+                      <TableHead className="h-8 whitespace-nowrap text-xs">会員名</TableHead>
+                      <TableHead className="h-8 whitespace-nowrap text-xs">住所</TableHead>
+                      <TableHead className="h-8 whitespace-nowrap text-xs">担当者</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((m) => {
+                      const { label, color } = remainInfo(m.protect_expires_at);
+                      const isUrgent = key !== -1 && key <= 3;
+                      return (
+                        <TableRow key={m.id} className="sf-row-hover">
+                          <TableCell
+                            className={`whitespace-nowrap py-2 text-xs font-medium ${isUrgent ? 'text-destructive' : ''}`}
+                          >
+                            {formatDateTime(m.protect_expires_at)}
+                          </TableCell>
+                          <TableCell className={`whitespace-nowrap py-2 text-xs ${color}`}>
+                            {label}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap py-2 font-mono text-xs">
+                            <Link
+                              href={`/members/${m.id}`}
+                              className="text-primary hover:underline"
+                            >
+                              {m.id}
+                            </Link>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap py-2 text-sm">
+                            {m.name ?? '-'}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap py-2 text-sm">
+                            {m.address ?? '-'}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap py-2 text-sm">
+                            {m.protect_by_user?.full_name ?? '-'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </Card>
           );
         })

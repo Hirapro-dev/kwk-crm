@@ -144,53 +144,61 @@ export default async function DashboardPage() {
           {protectExpiring.rows.length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">現在プロテクト中の会員はいません</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 hover:bg-gray-50">
-                  <TableHead className="h-9 whitespace-nowrap">解除日時</TableHead>
-                  <TableHead className="h-9 whitespace-nowrap">残り日数</TableHead>
-                  <TableHead className="h-9 whitespace-nowrap">会員ID</TableHead>
-                  <TableHead className="h-9">会員名</TableHead>
-                  <TableHead className="h-9 whitespace-nowrap">担当者</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {protectExpiring.rows.map((m) => {
-                  const isSoon = protectExpiring.expiringSoonCount > 0;
-                  const diffMs = new Date(m.protect_expires_at).getTime() - Date.now();
-                  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-                  const remainLabel =
-                    diffDays <= 0 ? '期限切れ' : diffDays === 1 ? '残り1日' : `残り${diffDays}日`;
-                  const remainColor =
-                    diffDays <= 1
-                      ? 'text-destructive font-semibold'
-                      : diffDays <= 3
-                        ? 'text-orange-500 font-medium'
-                        : 'text-muted-foreground';
-                  return (
-                    <TableRow key={m.id} className="sf-row-hover">
-                      <TableCell
-                        className={`whitespace-nowrap py-2 text-xs font-medium ${isSoon ? 'text-destructive' : ''}`}
-                      >
-                        {formatDateTime(m.protect_expires_at)}
-                      </TableCell>
-                      <TableCell className={`whitespace-nowrap py-2 text-xs ${remainColor}`}>
-                        {remainLabel}
-                      </TableCell>
-                      <TableCell className="py-2 font-mono text-xs">
-                        <Link href={`/members/${m.id}`} className="text-primary hover:underline">
-                          {m.id}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="py-2 text-sm">{m.name ?? '-'}</TableCell>
-                      <TableCell className="py-2 text-sm">
-                        {m.protect_by_user?.full_name ?? '-'}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50 hover:bg-gray-50">
+                    <TableHead className="h-9 whitespace-nowrap">解除日時</TableHead>
+                    <TableHead className="h-9 whitespace-nowrap">残り日数</TableHead>
+                    <TableHead className="h-9 whitespace-nowrap">会員ID</TableHead>
+                    <TableHead className="h-9 whitespace-nowrap">会員名</TableHead>
+                    <TableHead className="h-9 whitespace-nowrap">住所</TableHead>
+                    <TableHead className="h-9 whitespace-nowrap">担当者</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {protectExpiring.rows.map((m) => {
+                    const isSoon = protectExpiring.expiringSoonCount > 0;
+                    const diffMs = new Date(m.protect_expires_at).getTime() - Date.now();
+                    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+                    const remainLabel =
+                      diffDays <= 0 ? '期限切れ' : diffDays === 1 ? '残り1日' : `残り${diffDays}日`;
+                    const remainColor =
+                      diffDays <= 1
+                        ? 'text-destructive font-semibold'
+                        : diffDays <= 3
+                          ? 'text-orange-500 font-medium'
+                          : 'text-muted-foreground';
+                    return (
+                      <TableRow key={m.id} className="sf-row-hover">
+                        <TableCell
+                          className={`whitespace-nowrap py-2 text-xs font-medium ${isSoon ? 'text-destructive' : ''}`}
+                        >
+                          {formatDateTime(m.protect_expires_at)}
+                        </TableCell>
+                        <TableCell className={`whitespace-nowrap py-2 text-xs ${remainColor}`}>
+                          {remainLabel}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap py-2 font-mono text-xs">
+                          <Link href={`/members/${m.id}`} className="text-primary hover:underline">
+                            {m.id}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap py-2 text-sm">
+                          {m.name ?? '-'}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap py-2 text-sm">
+                          {m.address ?? '-'}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap py-2 text-sm">
+                          {m.protect_by_user?.full_name ?? '-'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
