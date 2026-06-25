@@ -11,10 +11,10 @@ import type { ActivityListItem } from './types';
 export interface DashboardStats {
   todayActivities: number;
   monthActivities: number;
-  protectCount: number;          // 自分が設定した有効プロテクト数
+  protectCount: number; // 自分が設定した有効プロテクト数
   // ---- 申込オブジェクト: acquirer_id (申込獲得者) ベース集計 ----
-  monthPaymentCount: number;     // 今月の入金件数
-  monthPaymentAmount: number;    // 今月の入金額合計
+  monthPaymentCount: number; // 今月の入金件数
+  monthPaymentAmount: number; // 今月の入金額合計
 }
 
 export interface ProtectExpiringMember {
@@ -49,12 +49,7 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
   monthEnd.setHours(0, 0, 0, 0);
   const monthEndIso = monthEnd.toISOString();
 
-  const [
-    todayCount,
-    monthCount,
-    protectCount,
-    monthPaymentRows,
-  ] = await Promise.all([
+  const [todayCount, monthCount, protectCount, monthPaymentRows] = await Promise.all([
     // 今日の対応件数
     supabase
       .from('activities')
@@ -199,12 +194,16 @@ export async function getRecentActivities24h(
   return (data ?? []) as unknown as ActivityListItem[];
 }
 
-/** 現在有効なプロテクト全件を解除期限昇順で返す(フロー設定ページ用)。 */
-export async function getAllActiveProtects(): Promise<ProtectExpiringMember[]> {
+/**
+ * 現在有効なプロテクトを解除期限昇順で返す。
+ * @param userId 指定時はそのユーザーが設定したプロテクトのみ(プロテクト一覧ページ用)。
+ *               未指定なら全件(フロー設定ページ用)。
+ */
+export async function getAllActiveProtects(userId?: string): Promise<ProtectExpiringMember[]> {
   const supabase = await createClient();
   const now = new Date().toISOString();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('members')
     .select(
       `id, name, protect_expires_at,
@@ -212,12 +211,42 @@ export async function getAllActiveProtects(): Promise<ProtectExpiringMember[]> {
     )
     .is('deleted_at', null)
     .not('protect_expires_at', 'is', null)
-    .gt('protect_expires_at', now)
-    .order('protect_expires_at', { ascending: true })
-    .limit(200);
+    .gt('protect_expires_at', now);
+
+  if (userId) query = query.eq('protect_by_user_id', userId);
+
+  const { data, error } = await query.order('protect_expires_at', { ascending: true }).limit(200);
 
   if (error) return [];
   return (data ?? []) as unknown as ProtectExpiringMember[];
+}
+
+/** 過去 N 日間の自分の対応歴を返す(対応歴一覧ページ用、日付グルーピング表示)。 */
+export async function getRecentActivitiesNDays(
+  userId: string,
+  days = 7,
+  limit = 500,
+): Promise<ActivityListItem[]> {
+  const supabase = await createClient();
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('activities')
+    .select(
+      `id, legacy_sf_id, owner_id, member_id, created_by_id,
+       description, d_bunrui, m_bunrui, s_bunrui,
+       registered_date, registered_datetime, created_at, updated_at,
+       owner:users!activities_owner_id_fkey(id, full_name),
+       member:members!activities_member_id_fkey(id, name)`,
+    )
+    .is('deleted_at', null)
+    .eq('owner_id', userId)
+    .gte('registered_datetime', since)
+    .order('registered_datetime', { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) return [];
+  return (data ?? []) as unknown as ActivityListItem[];
 }
 
 /** @deprecated 後方互換。page.tsx から直接は使わず getRecentActivities24h を使うこと。 */

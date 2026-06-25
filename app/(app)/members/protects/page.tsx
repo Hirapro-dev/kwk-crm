@@ -3,7 +3,6 @@
  * 有効なプロテクト全件を「残り日数」ごとにグルーピング表示する。
  */
 
-import Link from 'next/link';
 import { PanelHeader } from '@/components/layout/PanelHeader';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,8 +14,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getAllActiveProtects, type ProtectExpiringMember } from '@/lib/domain/dashboard';
+import { getCurrentUser } from '@/lib/domain/auth';
+import { type ProtectExpiringMember, getAllActiveProtects } from '@/lib/domain/dashboard';
 import { formatDateTime } from '@/lib/utils/date';
+import Link from 'next/link';
 
 export const metadata = { title: 'プロテクト会員一覧' };
 
@@ -52,7 +53,9 @@ function groupBadgeVariant(key: number): 'destructive' | 'outline' {
 }
 
 export default async function ProtectsPage() {
-  const members = await getAllActiveProtects();
+  // ログインユーザーが設定したプロテクトのみ表示
+  const me = await getCurrentUser();
+  const members = await getAllActiveProtects(me.id);
 
   // 残り日数でグルーピング
   const groups = new Map<number, ProtectExpiringMember[]>();
@@ -75,12 +78,9 @@ export default async function ProtectsPage() {
         <PanelHeader
           iconLabel="MEM"
           iconColor="#1589ee"
-          viewName="プロテクト会員一覧"
+          viewName="自分のプロテクト会員一覧"
           actions={
-            <Link
-              href="/members"
-              className="text-xs text-muted-foreground hover:underline"
-            >
+            <Link href="/members" className="text-xs text-muted-foreground hover:underline">
               ← 会員一覧へ
             </Link>
           }

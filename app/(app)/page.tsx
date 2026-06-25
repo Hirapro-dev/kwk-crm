@@ -8,7 +8,6 @@
  *   - 直近対応歴(過去24時間・全員)
  */
 
-import Link from 'next/link';
 import { ActivityTimeline } from '@/components/activities/ActivityTimeline';
 import { PanelHeader } from '@/components/layout/PanelHeader';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +28,7 @@ import {
 } from '@/lib/domain/dashboard';
 import { getFavoriteReportList } from '@/lib/domain/dashboard_widgets';
 import { formatDateTime } from '@/lib/utils/date';
+import Link from 'next/link';
 
 export default async function DashboardPage() {
   const me = await getCurrentUser();
@@ -48,8 +48,7 @@ export default async function DashboardPage() {
           viewName="ダッシュボード"
           actions={
             <span className="text-xs text-muted-foreground">
-              {me.full_name ?? me.email} ·{' '}
-              <Badge variant="outline">{me.role}</Badge>
+              {me.full_name ?? me.email} · <Badge variant="outline">{me.role}</Badge>
             </span>
           }
         />
@@ -64,7 +63,11 @@ export default async function DashboardPage() {
 
       {/* サマリカード: 2行目 — 申込(acquirer_id ベース) */}
       <section className="grid gap-4 sm:grid-cols-2">
-        <StatCard label="今月の入金件数" value={stats.monthPaymentCount.toLocaleString()} note="申込獲得者ベース" />
+        <StatCard
+          label="今月の入金件数"
+          value={stats.monthPaymentCount.toLocaleString()}
+          note="申込獲得者ベース"
+        />
         <StatCard
           label="今月の入金額"
           value={`¥${stats.monthPaymentAmount.toLocaleString('ja-JP')}`}
@@ -103,7 +106,9 @@ export default async function DashboardPage() {
                     className="flex items-center justify-between px-4 py-2.5 hover:bg-accent/50 transition-colors"
                   >
                     <span className="text-sm font-medium">★ {r.name}</span>
-                    <Badge variant="outline" className="text-xs">{r.report_type}</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {r.report_type}
+                    </Badge>
                   </Link>
                 </li>
               ))}
@@ -123,7 +128,10 @@ export default async function DashboardPage() {
                   ? `3日以内に解除予定 · ${protectExpiring.expiringSoonCount}件`
                   : `全プロテクト · ${protectExpiring.totalCount}件${protectExpiring.totalCount > 20 ? '（上位20件）' : ''}`}
               </span>
-              <Link href="/members/protects" className="text-xs font-normal text-primary hover:underline">
+              <Link
+                href="/members/protects"
+                className="text-xs font-normal text-primary hover:underline"
+              >
                 全て表示 →
               </Link>
             </div>
@@ -148,11 +156,19 @@ export default async function DashboardPage() {
                   const isSoon = protectExpiring.expiringSoonCount > 0;
                   const diffMs = new Date(m.protect_expires_at).getTime() - Date.now();
                   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-                  const remainLabel = diffDays <= 0 ? '期限切れ' : diffDays === 1 ? '残り1日' : `残り${diffDays}日`;
-                  const remainColor = diffDays <= 1 ? 'text-destructive font-semibold' : diffDays <= 3 ? 'text-orange-500 font-medium' : 'text-muted-foreground';
+                  const remainLabel =
+                    diffDays <= 0 ? '期限切れ' : diffDays === 1 ? '残り1日' : `残り${diffDays}日`;
+                  const remainColor =
+                    diffDays <= 1
+                      ? 'text-destructive font-semibold'
+                      : diffDays <= 3
+                        ? 'text-orange-500 font-medium'
+                        : 'text-muted-foreground';
                   return (
                     <TableRow key={m.id} className="sf-row-hover">
-                      <TableCell className={`whitespace-nowrap py-2 text-xs font-medium ${isSoon ? 'text-destructive' : ''}`}>
+                      <TableCell
+                        className={`whitespace-nowrap py-2 text-xs font-medium ${isSoon ? 'text-destructive' : ''}`}
+                      >
                         {formatDateTime(m.protect_expires_at)}
                       </TableCell>
                       <TableCell className={`whitespace-nowrap py-2 text-xs ${remainColor}`}>
@@ -181,15 +197,21 @@ export default async function DashboardPage() {
         <CardHeader className="border-b py-3">
           <CardTitle className="flex items-center justify-between text-sm">
             <span>直近の対応歴</span>
-            <span className="text-xs font-normal text-muted-foreground">自分 · 過去24時間 · {recent.length}件</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-normal text-muted-foreground">
+                自分 · 過去24時間 · {recent.length}件
+              </span>
+              <Link
+                href="/activities/recent"
+                className="text-xs font-normal text-primary hover:underline"
+              >
+                一覧を表示 →
+              </Link>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <ActivityTimeline
-            activities={recent}
-            currentUserId={me.id}
-            currentUserRole={me.role}
-          />
+          <ActivityTimeline activities={recent} currentUserId={me.id} currentUserRole={me.role} />
         </CardContent>
       </Card>
     </div>
