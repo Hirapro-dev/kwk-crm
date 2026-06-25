@@ -35,6 +35,7 @@ import { listInquiries } from '@/lib/domain/inquiries';
 import { getMember } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { formatDate, formatDateTime } from '@/lib/utils/date';
+import { NewActivityTrigger } from '@/components/activities/NewActivityTrigger';
 import { renderHighlightFieldValue } from '@/components/members/HighlightFieldValue';
 import { MemberTabs } from './MemberTabs';
 
@@ -120,6 +121,9 @@ export default async function MemberDetailPage({ params }: PageProps) {
           </>
         }
       />
+
+      {/* ハイライトとタブの間: 対応歴作成ショートカット */}
+      <NewActivityTrigger />
 
       {/*
         左: 詳細/関連タブカード, 右: 対応歴カード (独立) を横並び 1:1。
@@ -260,7 +264,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
         />
 
         {/* 右カラム: 対応歴カード (タブの外、独立) */}
-        <Card>
+        <Card id="activity-form-section">
           <CardHeader className="border-b py-3">
             <CardTitle className="flex items-center justify-between text-sm">
               <span>対応歴</span>

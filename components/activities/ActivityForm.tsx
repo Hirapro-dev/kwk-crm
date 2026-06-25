@@ -75,6 +75,19 @@ export function ActivityForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 外部ボタン(NewActivityTrigger)からフォームを開くカスタムイベントを受け取る
+  useEffect(() => {
+    const handler = () => {
+      setOpen(true);
+      // フォームが画面外にある場合はスクロールして見せる
+      window.setTimeout(() => {
+        document.getElementById('activity-form-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    };
+    window.addEventListener('open-activity-form', handler);
+    return () => window.removeEventListener('open-activity-form', handler);
+  }, []);
+
   // チェック状態(通電と不在は排他)
   const [connected, setConnected] = useState(false);
   const [absent, setAbsent] = useState(false);
