@@ -13,7 +13,7 @@ export function NewActivityTrigger() {
   };
 
   return (
-    <Button size="sm" onClick={handleClick} className="w-full sm:w-auto">
+    <Button onClick={handleClick} className="w-full py-5 sm:w-auto sm:py-2 text-base sm:text-sm">
       + 新規対応歴作成
     </Button>
   );

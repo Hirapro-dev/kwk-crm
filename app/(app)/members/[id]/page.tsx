@@ -36,6 +36,7 @@ import { getMember } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { formatDate, formatDateTime } from '@/lib/utils/date';
 import { NewActivityTrigger } from '@/components/activities/NewActivityTrigger';
+import { MemberEditDialog } from '@/components/members/MemberEditDialog';
 import { renderHighlightFieldValue } from '@/components/members/HighlightFieldValue';
 import { MemberTabs } from './MemberTabs';
 
@@ -112,9 +113,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
             <Button variant="outline" size="sm">
               フォロー
             </Button>
-            <Button variant="outline" size="sm">
-              編集
-            </Button>
+            <MemberEditDialog member={member} />
             <Button variant="outline" size="sm">
               削除
             </Button>
