@@ -55,9 +55,9 @@ export default async function SummaryPage({ searchParams }: PageProps) {
   const [me, favorites] = await Promise.all([getCurrentUser(), listSummaryFavorites()]);
 
   return (
-    <div className="space-y-3">
-      {/* タブナビ + お気に入りボタン */}
-      <div className="flex items-center justify-between gap-2 border-b">
+    <Card className="overflow-hidden p-0 shadow-sm">
+      {/* 上部: サマリタブ + お気に入りボタン */}
+      <div className="flex items-center justify-between gap-2 border-b bg-gray-50/60 px-4 pt-2">
         <div className="flex gap-1">
           {TABS.map((t) => {
             const params = new URLSearchParams();
@@ -91,7 +91,7 @@ export default async function SummaryPage({ searchParams }: PageProps) {
       ) : (
         <PaymentTab sp={sp} />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -118,8 +118,29 @@ async function PaymentTab({ sp }: { sp: SP }) {
   ]);
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-2">
+    <>
+      <PanelHeader
+        iconLabel="SUM"
+        iconColor="#00C896"
+        viewName="ユーザー別 入金サマリ"
+        totalCount={summary.rows.length}
+      />
+
+      <PanelFilterBar>
+        <Suspense>
+          <SummaryFilterBar
+            projects={projects}
+            initialPreset={preset}
+            initialFrom={sp.from ?? ''}
+            initialTo={sp.to ?? ''}
+            initialProject={projectId ? String(projectId) : 'all'}
+            initialActive={activeFilter}
+          />
+        </Suspense>
+      </PanelFilterBar>
+
+      {/* 集計カード */}
+      <div className="grid gap-3 border-b p-4 md:grid-cols-2">
         <SummaryCard label="入金額 合計" value={`¥${summary.grandTotalAmount.toLocaleString()}`} />
         <SummaryCard
           label="入金件数 合計"
@@ -127,68 +148,44 @@ async function PaymentTab({ sp }: { sp: SP }) {
         />
       </div>
 
-      <Card className="overflow-hidden p-0 shadow-sm">
-        <PanelHeader
-          iconLabel="SUM"
-          iconColor="#00C896"
-          viewName="ユーザー別 入金サマリ"
-          totalCount={summary.rows.length}
-        />
-
-        <PanelFilterBar>
-          <Suspense>
-            <SummaryFilterBar
-              projects={projects}
-              initialPreset={preset}
-              initialFrom={sp.from ?? ''}
-              initialTo={sp.to ?? ''}
-              initialProject={projectId ? String(projectId) : 'all'}
-              initialActive={activeFilter}
-            />
-          </Suspense>
-        </PanelFilterBar>
-
-        <div className="border-b px-4 py-3">
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-            担当者別 入金額 (グラフ)
-          </div>
-          <SalesBarChart rows={summary.rows} />
+      <div className="border-b px-4 py-3">
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          担当者別 入金額 (グラフ)
         </div>
+        <SalesBarChart rows={summary.rows} />
+      </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50 hover:bg-gray-50">
-              <TableHead className="h-9">ユーザー名</TableHead>
-              <TableHead className="h-9 text-right">入金額</TableHead>
-              <TableHead className="h-9 text-right">入金件数</TableHead>
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-gray-50 hover:bg-gray-50">
+            <TableHead className="h-9">ユーザー名</TableHead>
+            <TableHead className="h-9 text-right">入金額</TableHead>
+            <TableHead className="h-9 text-right">入金件数</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {summary.rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
+                sales ロールのユーザーが登録されていません
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {summary.rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
-                  sales ロールのユーザーが登録されていません
+          ) : (
+            summary.rows.map((r) => (
+              <TableRow key={r.user_id} className="sf-row-hover">
+                <TableCell className="py-2 font-medium">{r.user_name}</TableCell>
+                <TableCell className="py-2 text-right tabular-nums">
+                  {r.total_payment_amount > 0 ? `¥${r.total_payment_amount.toLocaleString()}` : '-'}
+                </TableCell>
+                <TableCell className="py-2 text-right tabular-nums">
+                  {r.payment_count > 0 ? `${r.payment_count.toLocaleString()}` : '-'}
                 </TableCell>
               </TableRow>
-            ) : (
-              summary.rows.map((r) => (
-                <TableRow key={r.user_id} className="sf-row-hover">
-                  <TableCell className="py-2 font-medium">{r.user_name}</TableCell>
-                  <TableCell className="py-2 text-right tabular-nums">
-                    {r.total_payment_amount > 0
-                      ? `¥${r.total_payment_amount.toLocaleString()}`
-                      : '-'}
-                  </TableCell>
-                  <TableCell className="py-2 text-right tabular-nums">
-                    {r.payment_count > 0 ? `${r.payment_count.toLocaleString()}` : '-'}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-    </div>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </>
   );
 }
 
@@ -221,8 +218,33 @@ async function CustomerTab({ sp }: { sp: SP }) {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-2">
+    <>
+      <PanelHeader
+        iconLabel="NEW"
+        iconColor="#00C896"
+        viewName="新規顧客取得サマリ"
+        totalCount={result.buckets.length}
+      />
+
+      <PanelFilterBar>
+        <Suspense>
+          <CustomerSummaryFilterBar
+            preset={preset}
+            from={sp.cfrom ?? ''}
+            to={sp.cto ?? ''}
+            granularity={granularity}
+            phoneAcquired={filters.phoneAcquired}
+            emailOnly={filters.emailOnly}
+            unpaid={filters.unpaid}
+            pointOptions={pointOptions}
+            selectedPoints={selectedPoints}
+            axis={axis}
+          />
+        </Suspense>
+      </PanelFilterBar>
+
+      {/* 集計カード */}
+      <div className="grid gap-3 border-b p-4 md:grid-cols-2">
         <SummaryCard
           label="新規個人情報取得数 合計"
           value={`${result.total.toLocaleString()} 件`}
@@ -230,113 +252,87 @@ async function CustomerTab({ sp }: { sp: SP }) {
         <SummaryCard label="表示粒度" value={GRANULARITY_LABELS[granularity]} />
       </div>
 
-      <Card className="overflow-hidden p-0 shadow-sm">
-        <PanelHeader
-          iconLabel="NEW"
-          iconColor="#00C896"
-          viewName="新規顧客取得サマリ"
-          totalCount={result.buckets.length}
-        />
-
-        <PanelFilterBar>
-          <Suspense>
-            <CustomerSummaryFilterBar
-              preset={preset}
-              from={sp.cfrom ?? ''}
-              to={sp.cto ?? ''}
-              granularity={granularity}
-              phoneAcquired={filters.phoneAcquired}
-              emailOnly={filters.emailOnly}
-              unpaid={filters.unpaid}
-              pointOptions={pointOptions}
-              selectedPoints={selectedPoints}
-              axis={axis}
-            />
-          </Suspense>
-        </PanelFilterBar>
-
-        <div className="border-b px-4 py-3">
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-            新規取得数 ({GRANULARITY_LABELS[granularity]})
-          </div>
-          {result.buckets.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              該当する新規取得データがありません
-            </p>
-          ) : (
-            <ReportChart type="bar_vertical" chartData={chartData} height={320} />
-          )}
+      <div className="border-b px-4 py-3">
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          新規取得数 ({GRANULARITY_LABELS[granularity]})
         </div>
-
-        {/* 一覧: 軸切替(個人情報取得ポイント軸 / 会員氏名軸) */}
-        {axis === 'member' ? (
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50 hover:bg-gray-50">
-                <TableHead className="h-9">取得日</TableHead>
-                <TableHead className="h-9">会員氏名</TableHead>
-                <TableHead className="h-9">個人情報取得ポイント</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {result.members.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
-                    該当データがありません
-                  </TableCell>
-                </TableRow>
-              ) : (
-                result.members.map((m) => (
-                  <TableRow key={m.id} className="sf-row-hover">
-                    <TableCell className="whitespace-nowrap py-2 text-xs">
-                      {m.info_acquired_date}
-                    </TableCell>
-                    <TableCell className="py-2">
-                      <Link href={`/members/${m.id}`} className="sf-link font-medium">
-                        {m.name ?? m.id}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="py-2 text-sm">{m.info_acquired_points ?? '-'}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50 hover:bg-gray-50">
-                <TableHead className="h-9">個人情報取得ポイント</TableHead>
-                <TableHead className="h-9 text-right">新規取得数</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {result.pointBreakdown.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={2} className="text-center text-sm text-muted-foreground">
-                    該当データがありません
-                  </TableCell>
-                </TableRow>
-              ) : (
-                result.pointBreakdown.map((p) => (
-                  <TableRow key={p.point} className="sf-row-hover">
-                    <TableCell className="py-2 font-medium">{p.point}</TableCell>
-                    <TableCell className="py-2 text-right tabular-nums">
-                      {p.count.toLocaleString()}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        )}
-        {axis === 'member' && result.membersTruncated && (
-          <p className="px-4 py-2 text-xs text-muted-foreground">
-            ※ 会員氏名軸は最大1,000件まで表示します。期間や条件で絞り込んでください。
+        {result.buckets.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            該当する新規取得データがありません
           </p>
+        ) : (
+          <ReportChart type="bar_vertical" chartData={chartData} height={320} />
         )}
-      </Card>
-    </div>
+      </div>
+
+      {/* 一覧: 軸切替(個人情報取得ポイント軸 / 会員氏名軸) */}
+      {axis === 'member' ? (
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-gray-50 hover:bg-gray-50">
+              <TableHead className="h-9">取得日</TableHead>
+              <TableHead className="h-9">会員氏名</TableHead>
+              <TableHead className="h-9">個人情報取得ポイント</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {result.members.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
+                  該当データがありません
+                </TableCell>
+              </TableRow>
+            ) : (
+              result.members.map((m) => (
+                <TableRow key={m.id} className="sf-row-hover">
+                  <TableCell className="whitespace-nowrap py-2 text-xs">
+                    {m.info_acquired_date}
+                  </TableCell>
+                  <TableCell className="py-2">
+                    <Link href={`/members/${m.id}`} className="sf-link font-medium">
+                      {m.name ?? m.id}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="py-2 text-sm">{m.info_acquired_points ?? '-'}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-gray-50 hover:bg-gray-50">
+              <TableHead className="h-9">個人情報取得ポイント</TableHead>
+              <TableHead className="h-9 text-right">新規取得数</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {result.pointBreakdown.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={2} className="text-center text-sm text-muted-foreground">
+                  該当データがありません
+                </TableCell>
+              </TableRow>
+            ) : (
+              result.pointBreakdown.map((p) => (
+                <TableRow key={p.point} className="sf-row-hover">
+                  <TableCell className="py-2 font-medium">{p.point}</TableCell>
+                  <TableCell className="py-2 text-right tabular-nums">
+                    {p.count.toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      )}
+      {axis === 'member' && result.membersTruncated && (
+        <p className="px-4 py-2 text-xs text-muted-foreground">
+          ※ 会員氏名軸は最大1,000件まで表示します。期間や条件で絞り込んでください。
+        </p>
+      )}
+    </>
   );
 }
 
@@ -380,88 +376,87 @@ async function FormTab({ sp }: { sp: SP }) {
   const noForm = selectedForms.length === 0;
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-3">
+    <>
+      <PanelHeader
+        iconLabel="FRM"
+        iconColor="#00C896"
+        viewName="フォーム集計サマリ"
+        totalCount={buckets.length}
+        actions={<SaveFavoriteButton summaryType="forms" disabled={noForm} />}
+      />
+
+      <PanelFilterBar>
+        <Suspense>
+          <FormSummaryFilterBar
+            preset={preset}
+            from={sp.ffrom ?? ''}
+            to={sp.fto ?? ''}
+            granularity={granularity}
+            formOptions={formOptions}
+            selectedForms={selectedForms}
+            mode={mode}
+            phoneAcquired={formFilters.phoneAcquired}
+            emailOnly={formFilters.emailOnly}
+            unpaid={formFilters.unpaid}
+          />
+        </Suspense>
+      </PanelFilterBar>
+
+      {/* 集計カード */}
+      <div className="grid gap-3 border-b p-4 md:grid-cols-3">
         <SummaryCard label={`${valueLabel} 合計`} value={`${total.toLocaleString()} 件`} />
         <SummaryCard label="選択フォーム数" value={`${selectedForms.length} 件`} />
         <SummaryCard label="表示粒度" value={GRANULARITY_LABELS[granularity]} />
       </div>
 
-      <Card className="overflow-hidden p-0 shadow-sm">
-        <PanelHeader
-          iconLabel="FRM"
-          iconColor="#00C896"
-          viewName="フォーム集計サマリ"
-          totalCount={buckets.length}
-          actions={<SaveFavoriteButton summaryType="forms" disabled={noForm} />}
-        />
-
-        <PanelFilterBar>
-          <Suspense>
-            <FormSummaryFilterBar
-              preset={preset}
-              from={sp.ffrom ?? ''}
-              to={sp.fto ?? ''}
-              granularity={granularity}
-              formOptions={formOptions}
-              selectedForms={selectedForms}
-              mode={mode}
-              phoneAcquired={formFilters.phoneAcquired}
-              emailOnly={formFilters.emailOnly}
-              unpaid={formFilters.unpaid}
-            />
-          </Suspense>
-        </PanelFilterBar>
-
-        {noForm ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">
-            集計するフォームを選択してください（複数選択可）
-          </p>
-        ) : (
-          <>
-            <div className="border-b px-4 py-3">
-              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                {valueLabel} ({GRANULARITY_LABELS[granularity]})
-              </div>
-              {buckets.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  該当するデータがありません
-                </p>
-              ) : (
-                <ReportChart type="bar_vertical" chartData={chartData} height={320} />
-              )}
+      {noForm ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">
+          集計するフォームを選択してください（複数選択可）
+        </p>
+      ) : (
+        <>
+          <div className="border-b px-4 py-3">
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              {valueLabel} ({GRANULARITY_LABELS[granularity]})
             </div>
+            {buckets.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                該当するデータがありません
+              </p>
+            ) : (
+              <ReportChart type="bar_vertical" chartData={chartData} height={320} />
+            )}
+          </div>
 
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 hover:bg-gray-50">
-                  <TableHead className="h-9">期間</TableHead>
-                  <TableHead className="h-9 text-right">{valueLabel}</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50 hover:bg-gray-50">
+                <TableHead className="h-9">期間</TableHead>
+                <TableHead className="h-9 text-right">{valueLabel}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {buckets.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={2} className="text-center text-sm text-muted-foreground">
+                    該当データがありません
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {buckets.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={2} className="text-center text-sm text-muted-foreground">
-                      該当データがありません
+              ) : (
+                buckets.map((b) => (
+                  <TableRow key={b.key} className="sf-row-hover">
+                    <TableCell className="py-2 font-medium">{b.label}</TableCell>
+                    <TableCell className="py-2 text-right tabular-nums">
+                      {b.count.toLocaleString()}
                     </TableCell>
                   </TableRow>
-                ) : (
-                  buckets.map((b) => (
-                    <TableRow key={b.key} className="sf-row-hover">
-                      <TableCell className="py-2 font-medium">{b.label}</TableCell>
-                      <TableCell className="py-2 text-right tabular-nums">
-                        {b.count.toLocaleString()}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </>
-        )}
-      </Card>
-    </div>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </>
+      )}
+    </>
   );
 }
 
