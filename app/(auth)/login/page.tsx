@@ -1,5 +1,5 @@
-import Image from 'next/image';
 import { isDevAuthEnabled } from '@/lib/dev_auth';
+import Image from 'next/image';
 import { LoginForm } from './LoginForm';
 
 export default function LoginPage() {
@@ -7,16 +7,21 @@ export default function LoginPage() {
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center bg-white px-4">
       <div className="w-full max-w-[360px] space-y-8">
-        {/* ロゴ */}
-        <div className="flex justify-center">
+        {/* ロゴ — スマホは120px幅、sm以上は180px幅 */}
+        <div className="flex flex-col items-center gap-3">
           <Image
             src="/logo.png"
             alt="ロゴ"
             width={180}
             height={64}
-            className="object-contain"
+            className="h-auto w-[120px] object-contain sm:w-[180px]"
             priority
           />
+          {/* ロゴ下のタイトル — 中央寄せ・黒 */}
+          <div className="text-center text-black">
+            <p className="text-lg font-bold">ひらプロCRM</p>
+            <p className="text-sm">ログイン</p>
+          </div>
         </div>
 
         {/* フォーム */}
