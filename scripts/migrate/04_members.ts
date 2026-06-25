@@ -79,15 +79,31 @@ export function normalizeMemberId(raw: string | null | undefined): string | null
 }
 
 /**
- * 案件別利用額・出金額の列を一つの JSONB に集約
+ * DB物理カラムにマッピングされる CSV 列名セット。
+ * これ以外の全列を extra に直接格納する(CSV列名 = extra のキー)。
+ * sync_csv_fields.ts の TARGETS[members].mapping と同期させること。
  */
-function extractLegacyBreakdown(row: Record<string, string>): Record<string, string> {
+const MAPPED_MEMBER_COLS = new Set([
+  '会員ID', '永久担当', '実質名義人', '会員氏名', '会員かな',
+  'Eメール1', 'Eメール2', 'Eメール3', '電話番号1',
+  '住所(フル）', ' 住所(フル）',
+  '顧客種別', '総合計額', '総合計実入金額', '総利用額合計',
+  '広告ID', '広告媒体名', '個人情報取得ポイント', '顧客情報取得日',
+  'メルマガ登録日時', '登録日', '初回接触日', '生年月日', '性別',
+  '紹介者氏名', 'ｱﾌｨﾘID', 'アフィリ名',
+]);
+
+/**
+ * DB物理カラム以外の全列を extra に直接格納する。
+ * キー = CSV 列名のまま (表示名 = field_name = csv_column_name で統一)
+ */
+function extractExtraFields(row: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(row)) {
-    if (!v) continue;
-    if (k.includes('利用額') || k.includes('出金額') || k.includes('購入金額')) {
-      out[k] = v;
-    }
+    const trimmed = k.trim();
+    if (!v.trim()) continue;
+    if (MAPPED_MEMBER_COLS.has(trimmed) || MAPPED_MEMBER_COLS.has(k)) continue;
+    out[trimmed] = v.trim();
   }
   return out;
 }
@@ -113,15 +129,9 @@ function transformRow(row: Record<string, string>): MemberRow | ErrorRecord {
 
   const ownerNameRaw = nz(row['永久担当']);
 
-  const legacyBreakdown = extractLegacyBreakdown(row);
-
-  const extra: Record<string, unknown> = {};
-  if (Object.keys(legacyBreakdown).length > 0) extra.legacy_breakdown = legacyBreakdown;
-  if (phoneResult.originalIfFlagged) extra.original_phone1 = phoneResult.originalIfFlagged;
-  // 「メルマガ登録~会員登録」「総合計実入金額」など参考にしたい値も extra に
-  for (const key of ['メルマガ登録~会員登録', '総合計実入金額']) {
-    if (row[key]) extra[key] = row[key];
-  }
+  // DB物理カラム以外の全列を extra に直接格納 (CSV列名 = extraのキー)
+  const extra: Record<string, unknown> = extractExtraFields(row);
+  if (phoneResult.originalIfFlagged) extra._original_phone1 = phoneResult.originalIfFlagged;
 
   return {
     id,

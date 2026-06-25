@@ -263,31 +263,30 @@ async function main(): Promise<void> {
           });
         }
       } else {
-        // マッピングなし → extra 連番で新規登録
+        // マッピングなし → CSV列名 = field_name で登録 (表示名・field_name・csv_column_nameを統一)
         const alreadyExists = existingMap.has(trimmed);
         if (alreadyExists) {
           skipped++;
           continue;
         }
-        const fieldName = `extra_${String(extraCounter).padStart(3, '0')}`;
-        extraCounter++;
-        maxSort += 10;
-        if (existingFieldNames.has(fieldName)) {
-          // 万一の衝突回避
+        if (existingFieldNames.has(trimmed)) {
+          // 同名列が既に登録済み (別 CSV から同名ヘッダーが来た場合)
+          skipped++;
           continue;
         }
-        existingFieldNames.add(fieldName);
+        existingFieldNames.add(trimmed);
+        maxSort += 10;
         toInsert.push({
           object_id: target.objectId,
-          field_name: fieldName,
-          label: trimmed,
+          field_name: trimmed,         // CSV列名をそのまま field_name に使用
+          label: trimmed,              // 表示名 = CSV列名
           data_type: inferDataType(trimmed),
           is_visible_list: false,
           is_visible_detail: true,
           is_system: false,
-          is_custom: false, // Phase 1.5 で自動追加されたものは custom 扱いではなく非システム
+          is_custom: false,
           is_in_db: false,
-          csv_column_name: trimmed,
+          csv_column_name: trimmed,    // field_name = csv_column_name で統一
           sort_order_list: maxSort,
           sort_order_detail: maxSort,
         });
