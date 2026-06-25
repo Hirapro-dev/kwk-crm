@@ -91,16 +91,32 @@ export function ReportResultView({
   const [showSubtotal, setShowSubtotal] = useState(false);
   const [showGrandTotal, setShowGrandTotal] = useState(true);
 
-  // グラフの高さ (ログインユーザーが任意調整・ブラウザに保存)
+  // グラフの高さ (カード右下のハンドルをドラッグして調整・ブラウザに保存)
   const CHART_HEIGHT_KEY = 'report_chart_height';
+  const CHART_MIN_H = 200;
+  const CHART_MAX_H = 900;
   const [chartHeight, setChartHeight] = useState(320);
   useEffect(() => {
     const saved = Number(window.localStorage.getItem(CHART_HEIGHT_KEY));
-    if (Number.isFinite(saved) && saved >= 200) setChartHeight(saved);
+    if (Number.isFinite(saved) && saved >= CHART_MIN_H) setChartHeight(saved);
   }, []);
-  const updateChartHeight = (h: number) => {
-    setChartHeight(h);
-    window.localStorage.setItem(CHART_HEIGHT_KEY, String(h));
+  // 右下ハンドルのドラッグで高さを伸縮する
+  const onChartResizeStart = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = chartHeight;
+    let latest = startH;
+    const onMove = (ev: PointerEvent) => {
+      latest = Math.min(CHART_MAX_H, Math.max(CHART_MIN_H, startH + (ev.clientY - startY)));
+      setChartHeight(latest);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.localStorage.setItem(CHART_HEIGHT_KEY, String(latest));
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
   };
 
   const colById = useMemo(() => {
@@ -265,45 +281,49 @@ export function ReportResultView({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle className="text-base">グラフ</CardTitle>
-            <div className="flex items-center gap-3">
-              {/* グラフ高さ調整 (ログインユーザーが任意調整) */}
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                高さ
-                <input
-                  type="range"
-                  min={200}
-                  max={800}
-                  step={20}
-                  value={chartHeight}
-                  onChange={(e) => updateChartHeight(Number(e.target.value))}
-                  className="w-24 sm:w-32"
-                />
-                <span className="w-10 tabular-nums">{chartHeight}px</span>
-              </label>
-              {selected && (
-                <button
-                  type="button"
-                  onClick={() => setSelected(null)}
-                  className="rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
-                >
-                  絞り込み解除「{selected}」✕
-                </button>
-              )}
-            </div>
+            {selected && (
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+              >
+                絞り込み解除「{selected}」✕
+              </button>
+            )}
           </CardHeader>
           <CardContent>
-            <ReportChart
-              type={chart.type}
-              chartData={chartData}
-              title={chart.title}
-              height={chartHeight}
-              onCategoryClick={
-                chartCatAlias
-                  ? (name) => setSelected((cur) => (cur === name ? null : name))
-                  : undefined
-              }
-              activeCategory={selected}
-            />
+            {/* 右下のハンドルをドラッグして高さを調整(ブラウザに保存) */}
+            <div className="relative">
+              <ReportChart
+                type={chart.type}
+                chartData={chartData}
+                title={chart.title}
+                height={chartHeight}
+                onCategoryClick={
+                  chartCatAlias
+                    ? (name) => setSelected((cur) => (cur === name ? null : name))
+                    : undefined
+                }
+                activeCategory={selected}
+              />
+              {/* リサイズハンドル */}
+              <button
+                type="button"
+                aria-label="グラフの高さを調整"
+                title="ドラッグで高さを調整"
+                onPointerDown={onChartResizeStart}
+                className="absolute bottom-0 right-0 flex h-5 w-5 cursor-ns-resize touch-none items-end justify-end rounded-tl text-muted-foreground/40 hover:text-muted-foreground"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                  <path
+                    d="M11 3 L3 11 M11 7 L7 11"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    fill="none"
+                  />
+                </svg>
+              </button>
+            </div>
             {chartCatAlias && (
               <p className="mt-1 text-center text-[10px] text-muted-foreground">
                 棒・スライスをクリックするとそのカテゴリだけに絞り込めます
