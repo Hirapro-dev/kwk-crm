@@ -1,7 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -17,6 +15,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { updateActivity } from '@/lib/domain/activity_actions';
 import type { ActivityListItem } from '@/lib/domain/types';
 import { formatDateTime } from '@/lib/utils/date';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState, useTransition } from 'react';
 
 const CONTACT_TYPES = ['アウト', 'イン', 'LINE／メール', '対面接触（個別面談）', 'その他'] as const;
 const CONTACT_CONTENTS = ['営業', '営業サポート', 'サポートチーム対応'] as const;
@@ -53,18 +54,24 @@ function ActivityEditForm({ activity, onDone }: EditFormProps) {
   const [inPerson, setInPerson] = useState(flags.includes('接触対応'));
 
   useEffect(() => {
-    if (dBunrui === 'イン') { setConnected(true); setAbsent(false); setInPerson(false); }
-    else if (dBunrui === '対面接触（個別面談）') { setConnected(false); setAbsent(false); setInPerson(true); }
+    if (dBunrui === 'イン') {
+      setConnected(true);
+      setAbsent(false);
+      setInPerson(false);
+    } else if (dBunrui === '対面接触（個別面談）') {
+      setConnected(false);
+      setAbsent(false);
+      setInPerson(true);
+    }
   }, [dBunrui]);
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const sBunrui = [
-      connected ? '通電' : '',
-      absent ? '不在' : '',
-      inPerson ? '接触対応' : '',
-    ].filter(Boolean).join('|') || undefined;
+    const sBunrui =
+      [connected ? '通電' : '', absent ? '不在' : '', inPerson ? '接触対応' : '']
+        .filter(Boolean)
+        .join('|') || undefined;
 
     startTransition(async () => {
       const res = await updateActivity(activity.id, {
@@ -75,7 +82,10 @@ function ActivityEditForm({ activity, onDone }: EditFormProps) {
         description: description || undefined,
         registered_at_local: datetimeLocal || undefined,
       });
-      if (!res.ok) { setError(res.error ?? '更新に失敗しました'); return; }
+      if (!res.ok) {
+        setError(res.error ?? '更新に失敗しました');
+        return;
+      }
       router.refresh();
       onDone();
     });
@@ -83,33 +93,66 @@ function ActivityEditForm({ activity, onDone }: EditFormProps) {
 
   return (
     <TableRow>
-      <TableCell colSpan={7} className="bg-accent/30 p-3">
+      <TableCell colSpan={8} className="bg-accent/30 p-3">
         <form onSubmit={onSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="space-y-1">
               <label className="text-xs font-medium">接触種別 *</label>
               <Select value={dBunrui} onChange={(e) => setDBunrui(e.target.value)} required>
                 <option value="">選択</option>
-                {CONTACT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                {CONTACT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
               </Select>
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">接触内容</label>
               <Select value={mBunrui} onChange={(e) => setMBunrui(e.target.value)}>
                 <option value="">選択</option>
-                {CONTACT_CONTENTS.map((c) => <option key={c} value={c}>{c}</option>)}
+                {CONTACT_CONTENTS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
               </Select>
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">状態</label>
               <div className="flex gap-3 pt-1">
                 {[
-                  { label: '通電', val: connected, set: (v: boolean) => { setConnected(v); if (v) setAbsent(false); }, disabled: dBunrui !== 'アウト' },
-                  { label: '不在', val: absent, set: (v: boolean) => { setAbsent(v); if (v) setConnected(false); }, disabled: dBunrui !== 'アウト' },
+                  {
+                    label: '通電',
+                    val: connected,
+                    set: (v: boolean) => {
+                      setConnected(v);
+                      if (v) setAbsent(false);
+                    },
+                    disabled: dBunrui !== 'アウト',
+                  },
+                  {
+                    label: '不在',
+                    val: absent,
+                    set: (v: boolean) => {
+                      setAbsent(v);
+                      if (v) setConnected(false);
+                    },
+                    disabled: dBunrui !== 'アウト',
+                  },
                   { label: '接触対応', val: inPerson, set: () => {}, disabled: true },
                 ].map(({ label, val, set, disabled }) => (
-                  <label key={label} className={`flex items-center gap-1 text-xs ${disabled ? 'text-muted-foreground' : 'cursor-pointer'}`}>
-                    <input type="checkbox" checked={val} disabled={disabled} onChange={(e) => set(e.target.checked)} className="h-3 w-3" />
+                  <label
+                    key={label}
+                    className={`flex items-center gap-1 text-xs ${disabled ? 'text-muted-foreground' : 'cursor-pointer'}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={val}
+                      disabled={disabled}
+                      onChange={(e) => set(e.target.checked)}
+                      className="h-3 w-3"
+                    />
                     {label}
                   </label>
                 ))}
@@ -117,12 +160,22 @@ function ActivityEditForm({ activity, onDone }: EditFormProps) {
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">日時</label>
-              <Input type="datetime-local" value={datetimeLocal} onChange={(e) => setDatetimeLocal(e.target.value)} className="text-xs" />
+              <Input
+                type="datetime-local"
+                value={datetimeLocal}
+                onChange={(e) => setDatetimeLocal(e.target.value)}
+                className="text-xs"
+              />
             </div>
           </div>
           <div className="space-y-1">
             <label className="text-xs font-medium">対応詳細</label>
-            <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} className="text-sm" />
+            <Textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="text-sm"
+            />
           </div>
           {error && <p className="text-xs text-destructive">{error}</p>}
           <div className="flex gap-2">
@@ -143,9 +196,16 @@ interface Props {
   activities: ActivityListItem[];
   currentUserId: string;
   currentUserRole: string;
+  /** 会員名列(会員詳細へのリンク)を表示するか。ダッシュボード・直近一覧で使用 */
+  showMember?: boolean;
 }
 
-export function ActivityTimeline({ activities, currentUserId, currentUserRole }: Props) {
+export function ActivityTimeline({
+  activities,
+  currentUserId,
+  currentUserRole,
+  showMember = false,
+}: Props) {
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const canEdit = (a: ActivityListItem) =>
@@ -154,9 +214,7 @@ export function ActivityTimeline({ activities, currentUserId, currentUserRole }:
   const hasAnyEditable = activities.some(canEdit);
 
   if (activities.length === 0) {
-    return (
-      <p className="py-8 text-center text-sm text-muted-foreground">対応歴はありません</p>
-    );
+    return <p className="py-8 text-center text-sm text-muted-foreground">対応歴はありません</p>;
   }
 
   return (
@@ -165,6 +223,7 @@ export function ActivityTimeline({ activities, currentUserId, currentUserRole }:
         <TableHeader>
           <TableRow className="bg-gray-50 hover:bg-gray-50">
             <TableHead className="h-9 whitespace-nowrap">日時</TableHead>
+            {showMember && <TableHead className="h-9 whitespace-nowrap">会員</TableHead>}
             <TableHead className="h-9 whitespace-nowrap">対応者</TableHead>
             <TableHead className="h-9 whitespace-nowrap">接触種別</TableHead>
             <TableHead className="h-9 whitespace-nowrap">接触内容</TableHead>
@@ -184,6 +243,20 @@ export function ActivityTimeline({ activities, currentUserId, currentUserRole }:
                   <TableCell className="whitespace-nowrap py-2 text-xs">
                     <time dateTime={ts}>{formatDateTime(ts)}</time>
                   </TableCell>
+                  {showMember && (
+                    <TableCell className="whitespace-nowrap py-2 text-sm">
+                      {a.member?.id ? (
+                        <Link
+                          href={`/members/${a.member.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {a.member.name ?? a.member.id}
+                        </Link>
+                      ) : (
+                        '-'
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="whitespace-nowrap py-2 text-sm">
                     {a.owner?.full_name ?? '-'}
                   </TableCell>

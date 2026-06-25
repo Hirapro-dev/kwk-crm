@@ -23,8 +23,8 @@ import {
 import { getCurrentUser } from '@/lib/domain/auth';
 import {
   getMyDashboardStats,
+  getMyLatestActivities,
   getProtectExpiringSoon,
-  getRecentActivities24h,
 } from '@/lib/domain/dashboard';
 import { getFavoriteReportList } from '@/lib/domain/dashboard_widgets';
 import { formatDateTime } from '@/lib/utils/date';
@@ -35,7 +35,7 @@ export default async function DashboardPage() {
   const [stats, protectExpiring, recent, favorites] = await Promise.all([
     getMyDashboardStats(me.id),
     getProtectExpiringSoon(me.id),
-    getRecentActivities24h(me.id, 100),
+    getMyLatestActivities(me.id, 20),
     getFavoriteReportList(me.id),
   ]);
 
@@ -210,7 +210,7 @@ export default async function DashboardPage() {
             <span>直近の対応歴</span>
             <div className="flex items-center gap-3">
               <span className="text-xs font-normal text-muted-foreground">
-                自分 · 過去24時間 · {recent.length}件
+                自分 · 直近{recent.length}件
               </span>
               <Link
                 href="/activities/recent"
@@ -222,7 +222,12 @@ export default async function DashboardPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <ActivityTimeline activities={recent} currentUserId={me.id} currentUserRole={me.role} />
+          <ActivityTimeline
+            activities={recent}
+            currentUserId={me.id}
+            currentUserRole={me.role}
+            showMember
+          />
         </CardContent>
       </Card>
     </div>

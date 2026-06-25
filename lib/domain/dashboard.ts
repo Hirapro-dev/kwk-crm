@@ -250,7 +250,33 @@ export async function getRecentActivitiesNDays(
   return (data ?? []) as unknown as ActivityListItem[];
 }
 
-/** @deprecated 後方互換。page.tsx から直接は使わず getRecentActivities24h を使うこと。 */
+/**
+ * 自分が対応者(owner_id)の対応歴を、期間制限なしで新しい順に返す(ダッシュボード用)。
+ * 取込データなど登録日時が古いものも含めて直近N件を表示する。
+ */
+export async function getMyLatestActivities(
+  userId: string,
+  limit = 20,
+): Promise<ActivityListItem[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('activities')
+    .select(
+      `id, legacy_sf_id, owner_id, member_id, created_by_id,
+       description, d_bunrui, m_bunrui, s_bunrui,
+       registered_date, registered_datetime, created_at, updated_at,
+       owner:users!activities_owner_id_fkey(id, full_name),
+       member:members!activities_member_id_fkey(id, name)`,
+    )
+    .is('deleted_at', null)
+    .eq('owner_id', userId)
+    .order('registered_datetime', { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (error) return [];
+  return (data ?? []) as unknown as ActivityListItem[];
+}
+
+/** @deprecated 後方互換。page.tsx から直接は使わず getMyLatestActivities を使うこと。 */
 export async function getMyRecentActivities(
   userId: string,
   limit = 10,

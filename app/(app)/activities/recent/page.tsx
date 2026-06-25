@@ -70,7 +70,12 @@ export default async function RecentActivitiesPage() {
                 </Badge>
                 <span className="text-xs text-muted-foreground">{rows.length}件</span>
               </div>
-              <ActivityTimeline activities={rows} currentUserId={me.id} currentUserRole={me.role} />
+              <ActivityTimeline
+                activities={rows}
+                currentUserId={me.id}
+                currentUserRole={me.role}
+                showMember
+              />
             </Card>
           );
         })
