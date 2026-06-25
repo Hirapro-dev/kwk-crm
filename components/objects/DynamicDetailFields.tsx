@@ -146,7 +146,7 @@ export function DynamicDetailFields({
                 // 例: protect_by_user_id → record.protect_by_user?.full_name
                 //     owner_id           → record.owner?.full_name
                 const resolvedName = resolveUserName(record, f.field_name, raw);
-                valueNode = resolvedName ?? formatFieldValue(raw, f.data_type);
+                valueNode = resolvedName ?? formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
               }
               return (
                 <div key={f.id} className="flex min-w-0 flex-col border-b pb-2 last:border-b-0">

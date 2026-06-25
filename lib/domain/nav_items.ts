@@ -49,13 +49,22 @@ async function fetchNavItems(): Promise<NavItem[] | null> {
   }
 }
 
+/** DBに存在しないDEFAULT項目をマージする(migration未適用でも新タブが表示される) */
+function mergeWithDefaults(dbRows: NavItem[]): NavItem[] {
+  const dbIds = new Set(dbRows.map((r) => r.id));
+  const missing = DEFAULT_NAV_ITEMS.filter((n) => !dbIds.has(n.id));
+  return [...dbRows, ...missing].sort((a, b) => a.sort_order - b.sort_order);
+}
+
 /** レイアウト用: 表示ON項目を順序通りに。未適用・空・エラー時は既定にフォールバック。 */
 export async function getVisibleNavTabs(): Promise<TabItem[]> {
-  const rows = (await fetchNavItems()) ?? DEFAULT_NAV_ITEMS;
+  const dbRows = await fetchNavItems();
+  const rows = dbRows ? mergeWithDefaults(dbRows) : DEFAULT_NAV_ITEMS;
   return rows.filter((n) => n.is_visible).map(toTab);
 }
 
 /** 設定編集用: 全項目(非表示含む)を順序通りに。フォールバックあり。 */
 export async function getAllNavItems(): Promise<NavItem[]> {
-  return (await fetchNavItems()) ?? DEFAULT_NAV_ITEMS;
+  const dbRows = await fetchNavItems();
+  return dbRows ? mergeWithDefaults(dbRows) : DEFAULT_NAV_ITEMS;
 }

@@ -96,7 +96,7 @@ export function DynamicListTable<T extends Record<string, unknown>>({
                     }
                   }
                   const raw = getFieldValue(row, f.field_name, f.is_in_db, f.csv_column_name);
-                  const formatted = formatFieldValue(raw, f.data_type);
+                  const formatted = formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
                   // 電話番号列はスマホでタップ発信できるよう tel: リンク化
                   const isPhone = f.field_name === 'phone1' || f.field_name === 'phone';
                   return (

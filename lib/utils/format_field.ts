@@ -15,14 +15,28 @@ export type FieldDataType =
   | 'enum'
   | 'jsonb';
 
+/** label からデータ型を推定する (field_definitions.data_type が未更新でも正しくフォーマットする) */
+function inferTypeFromLabel(label: string): FieldDataType {
+  if (/額$|金$|数$|枚$|率$|金利$|料率$|ﾚｰﾄ$|レート$|ﾎﾟｲﾝﾄ$|ポイント$/.test(label)) return 'number';
+  if (/日時$/.test(label)) return 'datetime';
+  if (/日$/.test(label)) return 'date';
+  if (/フラグ$/.test(label)) return 'boolean';
+  return 'text';
+}
+
 /**
  * フィールド値を表示用文字列に整形する。
  * 空・null は '-' を返す。
+ * label を渡すと、data_type が 'text' でも label から型を推定してフォーマットする。
  */
-export function formatFieldValue(value: unknown, dataType: FieldDataType): string {
+export function formatFieldValue(value: unknown, dataType: FieldDataType, label?: string): string {
   if (value === null || value === undefined || value === '') return '-';
 
-  switch (dataType) {
+  // data_type が 'text' かつ label がある場合は推定型を優先
+  const effectiveType: FieldDataType =
+    dataType === 'text' && label ? inferTypeFromLabel(label) : dataType;
+
+  switch (effectiveType) {
     case 'number': {
       const n = typeof value === 'number' ? value : Number(value);
       if (!Number.isFinite(n)) return String(value);
