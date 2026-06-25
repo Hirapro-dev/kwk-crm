@@ -102,7 +102,7 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[90%] sm:max-w-[720px]">
           <DialogHeader>
             <DialogTitle>会員情報の編集</DialogTitle>
           </DialogHeader>

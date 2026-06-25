@@ -84,3 +84,26 @@ export async function updateMember(input: UpdateMemberInput): Promise<{ error?: 
   revalidatePath('/members');
   return {};
 }
+
+/**
+ * 会員を論理削除する (admin のみ / 物理削除はしない)。
+ * 紐づく申込・対応歴の記録はそのまま残る。
+ */
+export async function deleteMember(id: string): Promise<{ error?: string }> {
+  const me = await getCurrentUser();
+  if (me.role !== 'admin') {
+    return { error: '会員の削除は管理者のみ可能です' };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('members')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('deleted_at', null);
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/members');
+  return {};
+}

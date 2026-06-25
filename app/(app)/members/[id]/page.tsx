@@ -16,10 +16,10 @@ import { NewActivityTrigger } from '@/components/activities/NewActivityTrigger';
 import { CollapsibleSection } from '@/components/layout/CollapsibleSection';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
 import { renderHighlightFieldValue } from '@/components/members/HighlightFieldValue';
+import { MemberDeleteButton } from '@/components/members/MemberDeleteButton';
 import { MemberEditDialog } from '@/components/members/MemberEditDialog';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -121,19 +121,17 @@ export default async function MemberDetailPage({ params }: PageProps) {
         recordSubName={`${member.id}${member.name_kana ? ` ・ ${member.name_kana}` : ''}`}
         facts={highlightFacts}
         actions={
-          <>
-            <Button variant="outline" size="sm">
-              フォロー
-            </Button>
-            <MemberEditDialog
-              member={member}
-              currentUserRole={me.role}
-              protectUsers={protectUsers}
-            />
-            <Button variant="outline" size="sm">
-              削除
-            </Button>
-          </>
+          // 編集・削除は管理者のみ
+          me.role === 'admin' ? (
+            <>
+              <MemberEditDialog
+                member={member}
+                currentUserRole={me.role}
+                protectUsers={protectUsers}
+              />
+              <MemberDeleteButton memberId={member.id} memberName={member.name ?? member.id} />
+            </>
+          ) : null
         }
       />
 
