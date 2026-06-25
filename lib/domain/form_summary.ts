@@ -106,7 +106,12 @@ export async function getFormSummary(opts: {
     const phone = hasPhone(r.phone);
     if (phoneAcquired && !phone) continue;
     if (emailOnly && phone) continue;
-    if (unpaid && Number(r.member?.total_paid_amount ?? 0) !== 0) continue;
+    // 未入金: 会員紐付けがある問合せのみ対象。その会員の累計入金額=0 を判定。
+    // 会員未紐付の問合せは除外(skip)する。
+    if (unpaid) {
+      if (!r.member) continue;
+      if (Number(r.member.total_paid_amount ?? 0) !== 0) continue;
+    }
 
     const ymd = isoToJstYmd(r.registered_at);
     const b = bucketOf(ymd, opts.granularity);
