@@ -26,7 +26,7 @@ export function formatFieldValue(value: unknown, dataType: FieldDataType): strin
     case 'number': {
       const n = typeof value === 'number' ? value : Number(value);
       if (!Number.isFinite(n)) return String(value);
-      return n.toLocaleString();
+      return new Intl.NumberFormat('ja-JP').format(n);
     }
     case 'date': {
       if (typeof value !== 'string') return String(value);
@@ -59,16 +59,32 @@ export function formatFieldValue(value: unknown, dataType: FieldDataType): strin
 /**
  * 任意のオブジェクトから、field_name に対応する値を取り出す。
  * - DB物理カラム (is_in_db=true) → record[field_name]
- * - extra jsonb (is_in_db=false) → record.extra?.[field_name]
+ * - extra jsonb (is_in_db=false) の探索順:
+ *   1. extra[csv_column_name]  (直接キー)
+ *   2. extra.legacy_breakdown[csv_column_name]  (04_members.ts が利用額/出金額を格納する場所)
+ *   3. extra[field_name]  (extra_001 等のフォールバック)
  */
 export function getFieldValue(
   record: Record<string, unknown>,
   fieldName: string,
   isInDb: boolean,
+  csvColumnName?: string | null,
 ): unknown {
   if (isInDb) {
     return record[fieldName];
   }
   const extra = record.extra as Record<string, unknown> | null | undefined;
-  return extra?.[fieldName];
+  if (!extra) return undefined;
+
+  if (csvColumnName) {
+    // 1. extra に直接キーがある場合
+    if (csvColumnName in extra) return extra[csvColumnName];
+
+    // 2. legacy_breakdown の中 (会員CSVの案件別利用額・出金額が格納される)
+    const breakdown = extra.legacy_breakdown as Record<string, unknown> | null | undefined;
+    if (breakdown && csvColumnName in breakdown) return breakdown[csvColumnName];
+  }
+
+  // 3. field_name (extra_NNN) でフォールバック
+  return extra[fieldName];
 }

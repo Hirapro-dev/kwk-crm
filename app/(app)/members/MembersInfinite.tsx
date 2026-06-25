@@ -73,7 +73,7 @@ export function MembersInfinite({ initialRows, fields, total, params }: Props) {
       }
 
       // --- 汎用レンダリング ---
-      const raw = getFieldValue(rec, f.field_name, f.is_in_db);
+      const raw = getFieldValue(rec, f.field_name, f.is_in_db, f.csv_column_name);
       const formatted = formatFieldValue(raw, f.data_type);
       const isPhone = f.field_name === 'phone1' || f.field_name === 'phone';
       return (

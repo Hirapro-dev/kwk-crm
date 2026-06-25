@@ -141,7 +141,7 @@ export function DynamicDetailFields({
               if (override !== undefined && override !== null) {
                 valueNode = override;
               } else {
-                const raw = getFieldValue(record, f.field_name, f.is_in_db);
+                const raw = getFieldValue(record, f.field_name, f.is_in_db, f.csv_column_name);
                 // _id 末尾のフィールドは、対応するJOINオブジェクト(full_name)で名前解決を試みる
                 // 例: protect_by_user_id → record.protect_by_user?.full_name
                 //     owner_id           → record.owner?.full_name
