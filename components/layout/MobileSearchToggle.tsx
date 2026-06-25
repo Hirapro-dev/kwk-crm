@@ -46,12 +46,12 @@ export function MobileSearchToggle() {
         {open ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
       </button>
 
-      {/* 展開した検索バー: ヘッダー直下にフルワイド */}
+      {/*
+        展開した検索バー: ヘッダー(relative)の実際の下端に top-full で吸着させる。
+        env(safe-area-inset-top) を手計算しないため、端末ごとのセーフエリア差でズレない。
+      */}
       {open && (
-        <div
-          className="sf-header absolute inset-x-0 z-[100] flex h-11 items-center px-4 shadow-md md:hidden"
-          style={{ top: 'calc(env(safe-area-inset-top) + 3rem)' }}
-        >
+        <div className="absolute inset-x-0 top-full z-[100] flex h-11 items-center bg-[hsl(var(--sf-header))] px-4 text-white shadow-md md:hidden">
           <form onSubmit={onSubmit} className="flex w-full items-center gap-2">
             <Search className="h-4 w-4 shrink-0 text-white/70" aria-hidden="true" />
             <input
