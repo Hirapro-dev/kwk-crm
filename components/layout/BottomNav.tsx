@@ -60,6 +60,7 @@ export function BottomNav() {
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card shadow-[0_-1px_4px_rgba(0,0,0,0.08)] md:hidden"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="メインナビゲーション"
     >
       <div className="flex h-16 items-stretch">

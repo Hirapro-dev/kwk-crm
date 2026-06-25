@@ -80,6 +80,8 @@
   .sf-header {
     background-color: hsl(var(--sf-header));
     color: hsl(var(--sf-header-foreground));
+    /* PWA standalone モード: iOS ステータスバーとの被りを防ぐ */
+    padding-top: env(safe-area-inset-top);
   }
   .sf-link {
     color: hsl(var(--sf-link));

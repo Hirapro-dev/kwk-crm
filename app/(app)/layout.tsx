@@ -31,13 +31,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         モバイルではボトムナビ分 (pb-16) のパディングを追加
       */}
       <main
-        className="relative flex-1 overflow-y-auto px-4 py-4 pb-20 md:pb-4"
+        className="relative flex-1 overflow-y-auto px-4 py-4 md:pb-4"
         style={{
           backgroundColor: '#f0fffd',
           backgroundImage: 'url(/lightning_blue_background.png)',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'top center',
           backgroundSize: '100% auto',
+          /* モバイル: ボトムナビ(4rem) + ホームバー分のセーフエリア */
+          paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))',
         }}
       >
         {children}
