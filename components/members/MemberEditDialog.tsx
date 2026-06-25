@@ -55,7 +55,6 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
     phone1: member.phone1 ?? '',
     postal_code: member.postal_code ?? '',
     address: ((member as unknown as Record<string, unknown>).address as string) ?? '',
-    customer_type: member.customer_type ?? '',
     do_not_call: member.do_not_call ?? false,
   });
 
@@ -143,9 +142,6 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
             <Field label="住所">
               <Input value={form.address} onChange={set('address')} />
             </Field>
-            <Field label="顧客種別">
-              <Input value={form.customer_type} onChange={set('customer_type')} />
-            </Field>
             <div className="flex items-center gap-2">
               <input
                 id="do_not_call"
@@ -171,18 +167,12 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
               <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50/50 p-3">
                 <p className="text-xs font-semibold text-amber-700">プロテクト設定（管理者のみ）</p>
                 <Field label="プロテクト者">
-                  <select
-                    value={protectUserId}
-                    onChange={(e) => setProtectUserId(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  >
-                    <option value="">なし（解除）</option>
-                    {protectUsers.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.full_name ?? u.id}
-                      </option>
-                    ))}
-                  </select>
+                  <UserCombobox
+                    users={protectUsers}
+                    value={protectUserId || null}
+                    onChange={(id) => setProtectUserId(id ?? '')}
+                    placeholder="名前で検索（空欄で全員表示）"
+                  />
                 </Field>
                 <Field label="プロテクト終了日">
                   <Input
