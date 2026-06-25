@@ -228,7 +228,7 @@ async function main(): Promise<void> {
 
     // 各 CSV ヘッダーを処理
     const toInsert: Record<string, unknown>[] = [];
-    const toUpdate: { id: number; csv_column_name: string }[] = [];
+    const toUpdate: { id: number; csv_column_name: string; data_type: string }[] = [];
     let skipped = 0;
 
     for (const header of headers) {
@@ -241,8 +241,12 @@ async function main(): Promise<void> {
         // DB 物理カラムマッピングあり: 既存 field_name=mappedDbCol を csv_column_name で更新
         const existRow = existingMap.get(mappedDbCol);
         if (existRow) {
-          // csv_column_name が空ならセット
-          toUpdate.push({ id: (existRow as { id: number }).id, csv_column_name: trimmed });
+          // csv_column_name と data_type を更新
+          toUpdate.push({
+            id: (existRow as { id: number }).id,
+            csv_column_name: trimmed,
+            data_type: inferDataType(trimmed),
+          });
         }
         // 既存になければ INSERT (System側に登録漏れ)
         else {
@@ -313,11 +317,11 @@ async function main(): Promise<void> {
         continue;
       }
     }
-    // UPDATE (csv_column_name のみ更新)
+    // UPDATE (csv_column_name + data_type を更新)
     for (const upd of toUpdate) {
       const { error } = await supabase
         .from('field_definitions')
-        .update({ csv_column_name: upd.csv_column_name })
+        .update({ csv_column_name: upd.csv_column_name, data_type: upd.data_type })
         .eq('id', upd.id);
       if (error) {
         logger.error(`UPDATE 失敗 id=${upd.id}: ${error.message}`);
