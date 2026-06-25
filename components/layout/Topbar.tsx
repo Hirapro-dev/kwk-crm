@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { AppLauncherButton } from './AppLauncherButton';
 import { HeaderSearch } from './HeaderSearch';
+import { MobileSearchToggle } from './MobileSearchToggle';
 import { SettingsMenu } from './SettingsMenu';
 import type { TabItem } from './TabsNav';
 
@@ -20,7 +21,7 @@ export async function Topbar({ tabs }: { tabs: TabItem[] }) {
   const isAdmin = me.role === 'admin';
 
   return (
-    <header className="sf-header flex h-12 items-center gap-3 px-4">
+    <header className="sf-header relative flex h-12 items-center gap-3 px-4">
       {/* 左: アプリランチャー(クライアント) + アプリ名 */}
       <div className="flex items-center gap-3">
         <AppLauncherButton tabs={tabs} />
@@ -46,8 +47,9 @@ export async function Topbar({ tabs }: { tabs: TabItem[] }) {
             <Bell className="h-4 w-4" />
           </HeaderIconButton>
         </div>
-        {/* モバイル: 設定のみ */}
-        <div className="flex md:hidden">
+        {/* モバイル: 検索トグル + 設定 */}
+        <div className="flex items-center md:hidden">
+          <MobileSearchToggle />
           <SettingsMenu isAdmin={isAdmin} />
         </div>
         {/* ユーザーアバター (常時表示) */}

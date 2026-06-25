@@ -2,6 +2,7 @@ import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import { formatFieldValue, getFieldValue } from '@/lib/utils/format_field';
 import type { ReactNode } from 'react';
 import { CollapsibleFieldGroup } from './CollapsibleFieldGroup';
+import { ExpandAllButton } from './ExpandAllButton';
 
 /**
  * field_definitions に基づいて、レコードの詳細フィールドを動的に並べる。
@@ -117,9 +118,16 @@ export function DynamicDetailFields({
   }
 
   const groups = groupBySection(fields);
+  const hasCollapsible = groups.some((g) => g.name !== null);
 
   return (
     <div className="space-y-5">
+      {/* 複数のアコーディオングループがある場合だけ「すべて展開」ボタンを表示 */}
+      {hasCollapsible && groups.length > 1 && (
+        <div className="flex justify-end">
+          <ExpandAllButton />
+        </div>
+      )}
       {groups.map((group, gi) => {
         const body = (
           <dl className={COLUMN_CLASSES[columns]}>
