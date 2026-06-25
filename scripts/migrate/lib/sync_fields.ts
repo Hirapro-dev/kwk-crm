@@ -58,7 +58,7 @@ export async function syncExtraFieldDefinitions(
   // 既存の field_definitions を取得
   const { data: existing, error: fetchErr } = await supabase
     .from('field_definitions')
-    .select('field_name, sort_order_detail')
+    .select('field_name, sort_order_list, sort_order_detail')
     .eq('object_id', objectId);
   if (fetchErr) {
     logger.error(`field_definitions 取得エラー: ${fetchErr.message}`);
@@ -66,7 +66,12 @@ export async function syncExtraFieldDefinitions(
   }
 
   const existingNames = new Set((existing ?? []).map((f) => f.field_name));
-  let maxSort = Math.max(100, ...(existing ?? []).map((f) => f.sort_order_detail ?? 100));
+  // 一覧・詳細いずれの並び順でも確実に最下部へ来るよう、両方の最大値から採番する
+  let maxSort = Math.max(
+    100,
+    ...(existing ?? []).map((f) => f.sort_order_list ?? 100),
+    ...(existing ?? []).map((f) => f.sort_order_detail ?? 100),
+  );
 
   const toInsert = [...allKeys]
     .filter((k) => !existingNames.has(k))

@@ -22,6 +22,9 @@ import {
 import { FieldEditor } from './FieldEditor';
 import { NewFieldForm } from './NewFieldForm';
 
+// 移行スクリプトでフィールドを追加した直後でも最新を表示するため、常に動的レンダリング
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
