@@ -30,6 +30,14 @@ export interface Bucket {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+/** ISO/タイムスタンプ文字列を JST の YYYY-MM-DD に変換する */
+export function isoToJstYmd(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth() + 1)}-${pad(jst.getUTCDate())}`;
+}
+
 /** YYYY-MM-DD をローカル年月日に分解 */
 function parseYmd(dateStr: string): { y: number; m: number; d: number } {
   const [y, m, d] = dateStr

@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { getNewCustomerSummary, listInfoAcquiredPoints } from '@/lib/domain/customer_summary';
+import { getFormSummary, listFormsForSummary } from '@/lib/domain/form_summary';
 import { getSalesSummary, listProjectsForFilter } from '@/lib/domain/sales_summary';
 import { cn } from '@/lib/utils/cn';
 import { GRANULARITY_LABELS, normalizeGranularity } from '@/lib/utils/date_bucket';
@@ -27,6 +28,7 @@ import { normalizePreset, resolveDateRange } from '@/lib/utils/date_preset';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { CustomerSummaryFilterBar } from './CustomerSummaryFilterBar';
+import { FormSummaryFilterBar } from './FormSummaryFilterBar';
 import { SalesBarChart } from './SalesBarChart';
 import { SummaryFilterBar } from './SummaryFilterBar';
 
@@ -39,11 +41,12 @@ interface PageProps {
 const TABS = [
   { key: 'payment', label: '入金' },
   { key: 'customers', label: '新規顧客取得' },
+  { key: 'forms', label: 'フォーム集計' },
 ] as const;
 
 export default async function SummaryPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const tab = sp.tab === 'customers' ? 'customers' : 'payment';
+  const tab = sp.tab === 'customers' ? 'customers' : sp.tab === 'forms' ? 'forms' : 'payment';
 
   return (
     <div className="space-y-3">
@@ -70,7 +73,13 @@ export default async function SummaryPage({ searchParams }: PageProps) {
         })}
       </div>
 
-      {tab === 'customers' ? <CustomerTab sp={sp} /> : <PaymentTab sp={sp} />}
+      {tab === 'customers' ? (
+        <CustomerTab sp={sp} />
+      ) : tab === 'forms' ? (
+        <FormTab sp={sp} />
+      ) : (
+        <PaymentTab sp={sp} />
+      )}
     </div>
   );
 }
@@ -314,6 +323,116 @@ async function CustomerTab({ sp }: { sp: SP }) {
           <p className="px-4 py-2 text-xs text-muted-foreground">
             ※ 会員氏名軸は最大1,000件まで表示します。期間や条件で絞り込んでください。
           </p>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* ===================== フォーム集計タブ ===================== */
+async function FormTab({ sp }: { sp: SP }) {
+  const preset = sp.fpreset ? normalizePreset(sp.fpreset) : 'this_month';
+  const range = resolveDateRange(preset, sp.ffrom ?? null, sp.fto ?? null);
+  const granularity = normalizeGranularity(sp.fgran);
+  const mode: 'record' | 'unique' = sp.fmode === 'unique' ? 'unique' : 'record';
+  const selectedForms = (sp.forms ?? '')
+    .split(',')
+    .map((s) => Number.parseInt(s.trim(), 10))
+    .filter((n) => Number.isFinite(n));
+
+  const [result, formOptions] = await Promise.all([
+    getFormSummary({ from: range.from, to: range.to, granularity, formIds: selectedForms }),
+    listFormsForSummary(),
+  ]);
+
+  const buckets = mode === 'unique' ? result.uniqueBuckets : result.recordBuckets;
+  const total = mode === 'unique' ? result.uniqueTotal : result.recordTotal;
+  const valueLabel = mode === 'unique' ? 'ユニーク件数' : 'レコード件数';
+
+  const chartData = {
+    data: buckets.map((b) => ({ name: b.label, value: b.count })),
+    categoryLabel: '期間',
+    valueLabel,
+  };
+
+  const noForm = selectedForms.length === 0;
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 md:grid-cols-3">
+        <SummaryCard label={`${valueLabel} 合計`} value={`${total.toLocaleString()} 件`} />
+        <SummaryCard label="選択フォーム数" value={`${selectedForms.length} 件`} />
+        <SummaryCard label="表示粒度" value={GRANULARITY_LABELS[granularity]} />
+      </div>
+
+      <Card className="overflow-hidden p-0 shadow-sm">
+        <PanelHeader
+          iconLabel="FRM"
+          iconColor="#00C896"
+          viewName="フォーム集計サマリ"
+          totalCount={buckets.length}
+        />
+
+        <PanelFilterBar>
+          <Suspense>
+            <FormSummaryFilterBar
+              preset={preset}
+              from={sp.ffrom ?? ''}
+              to={sp.fto ?? ''}
+              granularity={granularity}
+              formOptions={formOptions}
+              selectedForms={selectedForms}
+              mode={mode}
+            />
+          </Suspense>
+        </PanelFilterBar>
+
+        {noForm ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">
+            集計するフォームを選択してください（複数選択可）
+          </p>
+        ) : (
+          <>
+            <div className="border-b px-4 py-3">
+              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                {valueLabel} ({GRANULARITY_LABELS[granularity]})
+              </div>
+              {buckets.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  該当するデータがありません
+                </p>
+              ) : (
+                <ReportChart type="bar_vertical" chartData={chartData} height={320} />
+              )}
+            </div>
+
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50 hover:bg-gray-50">
+                  <TableHead className="h-9">期間</TableHead>
+                  <TableHead className="h-9 text-right">{valueLabel}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {buckets.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={2} className="text-center text-sm text-muted-foreground">
+                      該当データがありません
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  buckets.map((b) => (
+                    <TableRow key={b.key} className="sf-row-hover">
+                      <TableCell className="py-2 font-medium">{b.label}</TableCell>
+                      <TableCell className="py-2 text-right tabular-nums">
+                        {b.count.toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </>
         )}
       </Card>
     </div>
