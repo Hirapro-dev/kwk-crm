@@ -47,18 +47,10 @@ export default async function DashboardPage() {
           iconColor="#00C896"
           viewName="ダッシュボード"
           actions={
-            <>
-              <span className="text-xs text-muted-foreground">
-                {me.full_name ?? me.email} ·{' '}
-                <Badge variant="outline">{me.role}</Badge>
-              </span>
-              <Link
-                href="/activities"
-                className="inline-flex h-8 items-center rounded bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                + 対応歴を記録
-              </Link>
-            </>
+            <span className="text-xs text-muted-foreground">
+              {me.full_name ?? me.email} ·{' '}
+              <Badge variant="outline">{me.role}</Badge>
+            </span>
           }
         />
       </Card>
