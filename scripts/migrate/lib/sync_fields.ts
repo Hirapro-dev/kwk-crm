@@ -28,20 +28,29 @@ export function inferDataType(label: string): string {
  *
  * @param supabase  移行用 Supabase クライアント
  * @param objectId  対象オブジェクト ID (例: 'members', 'inquiries')
- * @param rows      取込済みレコード配列 (extra プロパティを持つ)
+ * @param source    string[] (CSVヘッダー) または rows (extra プロパティを持つ配列)
+ *                  string[] を渡すと値が空でも全カラムが登録される (推奨)
  * @param dryRun    true の場合は INSERT しない
  */
 export async function syncExtraFieldDefinitions(
   supabase: SupabaseClient,
   objectId: string,
-  rows: Array<{ extra: Record<string, unknown> }>,
+  source: string[] | Array<{ extra: Record<string, unknown> }>,
   dryRun = false,
 ): Promise<void> {
   // _ 始まりの内部フラグキーを除いた全ユニークキーを収集
   const allKeys = new Set<string>();
-  for (const r of rows) {
-    for (const k of Object.keys(r.extra)) {
-      if (!k.startsWith('_') && k !== 'legacy_breakdown') allKeys.add(k);
+  if (source.length > 0 && typeof source[0] === 'string') {
+    // string[] (CSVヘッダー): 値が空でも全カラムを登録
+    for (const k of source as string[]) {
+      if (k && !k.startsWith('_')) allKeys.add(k);
+    }
+  } else {
+    // rows[]: extra のキーを収集 (値があるもののみ)
+    for (const r of source as Array<{ extra: Record<string, unknown> }>) {
+      for (const k of Object.keys(r.extra)) {
+        if (!k.startsWith('_') && k !== 'legacy_breakdown') allKeys.add(k);
+      }
     }
   }
   if (allKeys.size === 0) return;

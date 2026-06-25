@@ -295,8 +295,13 @@ async function main(): Promise<void> {
     .select('id', { count: 'exact', head: true });
   logger.info(`DB 件数: ${count}`);
 
+  // ヘッダーベースで同期することで、値が空のカラムも登録される
   logger.info('field_definitions を自動同期中...');
-  await syncExtraFieldDefinitions(supabase, 'applications', validRows, args.dryRun);
+  const allCsvHeaders6 = rawRows.length > 0 ? Object.keys(rawRows[0]!) : [];
+  const extraHeaders6 = allCsvHeaders6
+    .map((h) => h.trim())
+    .filter((h) => h && !COMMON_KEYS.has(h));
+  await syncExtraFieldDefinitions(supabase, 'applications', extraHeaders6, args.dryRun);
 }
 
 main().catch((e) => {

@@ -270,8 +270,18 @@ async function main(): Promise<void> {
     .select('id', { count: 'exact', head: true });
   logger.info(`DB 件数: ${count}`);
 
+  // ヘッダーベースで同期することで、値が空のカラムも登録される
   logger.info('field_definitions を自動同期中...');
-  await syncExtraFieldDefinitions(supabase, 'inquiries', dedup, args.dryRun);
+  const csvAllHeaders = new Set<string>();
+  for (const p of csvPaths) {
+    if (!existsSync(p)) continue;
+    const headerRows = readCsv(p, { trimValues: true });
+    if (headerRows.length > 0) {
+      for (const k of Object.keys(headerRows[0]!)) csvAllHeaders.add(k.trim());
+    }
+  }
+  const extraHeaders5 = [...csvAllHeaders].filter((h) => h && !COMMON_KEYS.has(h));
+  await syncExtraFieldDefinitions(supabase, 'inquiries', extraHeaders5, args.dryRun);
 }
 
 main().catch((e) => {

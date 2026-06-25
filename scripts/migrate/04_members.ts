@@ -294,8 +294,13 @@ async function main(): Promise<void> {
   else logger.info(`DB 件数: ${count}`);
 
   // CSV に新しいカラムが追加されても自動的に field_definitions へ反映
+  // ヘッダーベースで同期することで、値が空のカラムも登録される
   logger.info('field_definitions を自動同期中...');
-  await syncExtraFieldDefinitions(supabase, 'members', validRows, args.dryRun);
+  const allCsvHeaders = rawRows.length > 0 ? Object.keys(rawRows[0]!) : [];
+  const extraHeaders = allCsvHeaders
+    .map((h) => h.trim())
+    .filter((h) => h && !MAPPED_MEMBER_COLS.has(h));
+  await syncExtraFieldDefinitions(supabase, 'members', extraHeaders, args.dryRun);
 }
 
 main().catch((e) => {
