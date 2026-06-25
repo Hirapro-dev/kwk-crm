@@ -22,9 +22,9 @@ export function renderHighlightFieldValue(
   // プロテクト: protect_by_user_id → ユーザー名 + 期限
   if (field_name === 'protect_by_user_id') {
     if (!member.protect_by_user_id) {
-      return <span className="text-muted-foreground">なし</span>;
+      return <span className="text-muted-foreground">free</span>;
     }
-    const name = member.protect_by_user?.full_name ?? '-';
+    const name = member.protect_by_user?.full_name ?? 'free';
     const expiry = member.protect_expires_at
       ? member.protect_expires_at >= '2099-01-01'
         ? '(固定)'

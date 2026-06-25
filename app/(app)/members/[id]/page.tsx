@@ -90,7 +90,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
             label: 'プロテクト',
             value: member.protect_by_user_id ? (
               <span>
-                {member.protect_by_user?.full_name ?? '-'}
+                {member.protect_by_user?.full_name ?? 'free'}
                 {member.protect_expires_at && (
                   <span className="ml-2 text-xs text-muted-foreground">
                     {member.protect_expires_at >= '2099-01-01'
@@ -100,7 +100,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
                 )}
               </span>
             ) : (
-              <span className="text-muted-foreground">なし</span>
+              <span className="text-muted-foreground">free</span>
             ),
           },
         ];
@@ -157,7 +157,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
                 fieldOverrides={{
                   protect_by_user_id: member.protect_by_user_id ? (
                     <span>
-                      {member.protect_by_user?.full_name ?? '-'}
+                      {member.protect_by_user?.full_name ?? 'free'}
                       {member.protect_expires_at && (
                         <span className="ml-1.5 text-xs text-muted-foreground">
                           {member.protect_expires_at >= '2099-01-01'
@@ -167,7 +167,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
                       )}
                     </span>
                   ) : (
-                    <span className="text-muted-foreground">なし</span>
+                    <span className="text-muted-foreground">free</span>
                   ),
                 }}
               />

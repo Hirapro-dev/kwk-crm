@@ -48,10 +48,10 @@ export function MembersInfinite({ initialRows, fields, total, params }: Props) {
           <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">
             {protectUser ? (
               <Link href={`/settings/users/${protectUser.id}`} className="sf-link">
-                {protectUser.full_name ?? '-'}
+                {protectUser.full_name ?? 'free'}
               </Link>
             ) : (
-              <span className="text-muted-foreground">-</span>
+              <span className="text-muted-foreground">free</span>
             )}
           </TableCell>
         );
