@@ -350,9 +350,20 @@ async function FormTab({ sp }: { sp: SP }) {
     .split(',')
     .map((s) => Number.parseInt(s.trim(), 10))
     .filter((n) => Number.isFinite(n));
+  const formFilters = {
+    phoneAcquired: sp.ffp === '1',
+    emailOnly: sp.ffe === '1',
+    unpaid: sp.ffu === '1',
+  };
 
   const [result, formOptions] = await Promise.all([
-    getFormSummary({ from: range.from, to: range.to, granularity, formIds: selectedForms }),
+    getFormSummary({
+      from: range.from,
+      to: range.to,
+      granularity,
+      formIds: selectedForms,
+      filters: formFilters,
+    }),
     listFormsForSummary(),
   ]);
 
@@ -395,6 +406,9 @@ async function FormTab({ sp }: { sp: SP }) {
               formOptions={formOptions}
               selectedForms={selectedForms}
               mode={mode}
+              phoneAcquired={formFilters.phoneAcquired}
+              emailOnly={formFilters.emailOnly}
+              unpaid={formFilters.unpaid}
             />
           </Suspense>
         </PanelFilterBar>

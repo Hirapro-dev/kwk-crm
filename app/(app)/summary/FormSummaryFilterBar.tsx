@@ -19,6 +19,9 @@ interface Props {
   formOptions: FormOption[];
   selectedForms: number[];
   mode: FormMode;
+  phoneAcquired: boolean;
+  emailOnly: boolean;
+  unpaid: boolean;
 }
 
 const PRESET_BUTTONS: DatePresetKey[] = [
@@ -42,6 +45,9 @@ export function FormSummaryFilterBar({
   formOptions,
   selectedForms,
   mode,
+  phoneAcquired,
+  emailOnly,
+  unpaid,
 }: Props) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -166,6 +172,29 @@ export function FormSummaryFilterBar({
           >
             {label}
           </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          条件
+        </span>
+        {(
+          [
+            { key: 'ffp', label: '電話番号取得済み', val: phoneAcquired },
+            { key: 'ffe', label: 'メアドのみ取得', val: emailOnly },
+            { key: 'ffu', label: '未入金', val: unpaid },
+          ] as const
+        ).map(({ key, label, val }) => (
+          <label key={key} className="flex cursor-pointer items-center gap-1.5 text-xs">
+            <input
+              type="checkbox"
+              checked={val}
+              onChange={() => updateQuery({ [key]: val ? null : '1' })}
+              className="h-4 w-4"
+            />
+            {label}
+          </label>
         ))}
       </div>
     </div>

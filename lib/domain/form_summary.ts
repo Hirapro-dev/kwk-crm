@@ -21,13 +21,30 @@ export interface FormSummaryResult {
   uniqueTotal: number;
 }
 
-/** 人単位のユニークキー(重複排除用) */
-function personKey(r: {
+/** フォーム集計のチェックボックスフィルタ */
+export interface FormSummaryFilters {
+  phoneAcquired: boolean;
+  emailOnly: boolean;
+  unpaid: boolean;
+}
+
+/** 電話番号文字列に数字10桁以上が含まれるか */
+function hasPhone(phone: string | null): boolean {
+  if (!phone) return false;
+  return phone.replace(/\D/g, '').length >= 10;
+}
+
+interface InquiryRow {
   id: string;
   member_id: string | null;
   email: string | null;
   phone: string | null;
-}): string {
+  registered_at: string;
+  member: { total_paid_amount: number | null } | null;
+}
+
+/** 人単位のユニークキー(重複排除用) */
+function personKey(r: InquiryRow): string {
   if (r.member_id) return `m:${r.member_id}`;
   const email = (r.email ?? '').trim().toLowerCase();
   if (email) return `e:${email}`;
@@ -41,6 +58,7 @@ export async function getFormSummary(opts: {
   to: string | null;
   granularity: Granularity;
   formIds: number[];
+  filters: FormSummaryFilters;
 }): Promise<FormSummaryResult> {
   const empty: FormSummaryResult = {
     recordBuckets: [],
@@ -52,19 +70,15 @@ export async function getFormSummary(opts: {
 
   const supabase = await createClient();
 
-  const rows: {
-    id: string;
-    member_id: string | null;
-    email: string | null;
-    phone: string | null;
-    registered_at: string;
-  }[] = [];
+  const rows: InquiryRow[] = [];
   let fromIdx = 0;
   const PAGE = 1000;
   while (true) {
     let q = supabase
       .from('inquiries')
-      .select('id, member_id, email, phone, registered_at')
+      .select(
+        'id, member_id, email, phone, registered_at, member:members!inquiries_member_id_fkey(total_paid_amount)',
+      )
       .is('deleted_at', null)
       .in('form_id', opts.formIds);
     // registered_at(timestamptz)を JST 日付境界で絞り込み
@@ -74,10 +88,12 @@ export async function getFormSummary(opts: {
     const { data, error } = await q.range(fromIdx, fromIdx + PAGE - 1);
     if (error) break;
     if (!data || data.length === 0) break;
-    rows.push(...(data as typeof rows));
+    rows.push(...(data as unknown as InquiryRow[]));
     if (data.length < PAGE) break;
     fromIdx += PAGE;
   }
+
+  const { phoneAcquired, emailOnly, unpaid } = opts.filters;
 
   const recordCounts = new Map<string, FormBucketRow>();
   const uniquePerBucket = new Map<string, Set<string>>();
@@ -86,6 +102,12 @@ export async function getFormSummary(opts: {
   let recordTotal = 0;
 
   for (const r of rows) {
+    // チェックボックスフィルタ(AND)
+    const phone = hasPhone(r.phone);
+    if (phoneAcquired && !phone) continue;
+    if (emailOnly && phone) continue;
+    if (unpaid && Number(r.member?.total_paid_amount ?? 0) !== 0) continue;
+
     const ymd = isoToJstYmd(r.registered_at);
     const b = bucketOf(ymd, opts.granularity);
     bucketLabel.set(b.key, b.label);
