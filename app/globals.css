@@ -75,6 +75,21 @@
   }
 }
 
+/*
+ * iOS (ホーム画面PWA含む) では、フォントサイズが 16px 未満の入力欄を
+ * タップするとブラウザが自動でズームしてしまう。
+ * モバイル幅でフォーム要素を 16px にすることで自動ズームを防ぐ。
+ * viewport では maximum-scale を指定していないため、手動ピンチズームは維持される。
+ * Tailwind の text-sm(14px) を上書きするため !important を付与。
+ */
+@media screen and (max-width: 640px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Salesforce Lightning 風ユーティリティ */
 @layer components {
   .sf-header {
