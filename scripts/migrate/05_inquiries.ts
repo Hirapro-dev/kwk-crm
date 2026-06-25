@@ -22,6 +22,7 @@ import { writeErrors, type ErrorRecord } from './lib/error_writer';
 import { loadFormsMap } from './lib/forms_loader';
 import { logger, maskEmail, maskPhone } from './lib/logger';
 import { normalizeEmail, normalizePhone, nz, parseJpDateTime } from './lib/normalizers';
+import { syncExtraFieldDefinitions } from './lib/sync_fields';
 
 const SCRIPT_NAME = '05_inquiries';
 const DEFAULT_CSVS = ['KAWARA版関連.csv', '機密保持_CP.csv'];
@@ -268,6 +269,9 @@ async function main(): Promise<void> {
     .from('inquiries')
     .select('id', { count: 'exact', head: true });
   logger.info(`DB 件数: ${count}`);
+
+  logger.info('field_definitions を自動同期中...');
+  await syncExtraFieldDefinitions(supabase, 'inquiries', dedup, args.dryRun);
 }
 
 main().catch((e) => {

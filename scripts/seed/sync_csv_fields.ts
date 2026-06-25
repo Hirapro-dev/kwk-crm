@@ -22,6 +22,7 @@ import { resolve } from 'node:path';
 import { parseArgs } from '../migrate/lib/args';
 import { readCsv } from '../migrate/lib/csv';
 import { createMigrateClient } from '../migrate/lib/db';
+import { inferDataType } from '../migrate/lib/sync_fields';
 import { logger } from '../migrate/lib/logger';
 
 interface CsvTarget {
@@ -163,16 +164,6 @@ const TARGETS: CsvTarget[] = [
   },
 ];
 
-/** CSV ヘッダーから推定するデータ型 */
-function inferDataType(csvCol: string): string {
-  if (/額$|金$|数$|枚$|率$|金利$|料率$|ﾚｰﾄ$|レート$|ﾎﾟｲﾝﾄ$|ポイント$/.test(csvCol)) {
-    return 'number';
-  }
-  if (/日$/.test(csvCol)) return 'date';
-  if (/日時$/.test(csvCol)) return 'datetime';
-  if (/フラグ$/.test(csvCol)) return 'boolean';
-  return 'text';
-}
 
 async function main(): Promise<void> {
   const args = parseArgs();

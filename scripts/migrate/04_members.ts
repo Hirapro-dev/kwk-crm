@@ -37,6 +37,7 @@ import {
   parseJpDateTime,
 } from './lib/normalizers';
 import { loadUsersForOwnerResolver } from './lib/users_loader';
+import { syncExtraFieldDefinitions } from './lib/sync_fields';
 
 const SCRIPT_NAME = '04_members';
 const DEFAULT_CSV = '会員情報.csv';
@@ -291,6 +292,10 @@ async function main(): Promise<void> {
     .select('id', { count: 'exact', head: true });
   if (cntErr) logger.warn(`件数取得エラー: ${cntErr.message}`);
   else logger.info(`DB 件数: ${count}`);
+
+  // CSV に新しいカラムが追加されても自動的に field_definitions へ反映
+  logger.info('field_definitions を自動同期中...');
+  await syncExtraFieldDefinitions(supabase, 'members', validRows, args.dryRun);
 }
 
 main().catch((e) => {

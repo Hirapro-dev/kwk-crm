@@ -20,6 +20,7 @@ import { logger } from './lib/logger';
 import { nz, parseAmount, parseJpDate, parseJpDateTime } from './lib/normalizers';
 import { loadProjectsMap } from './lib/projects_loader';
 import { loadUsersForOwnerResolver } from './lib/users_loader';
+import { syncExtraFieldDefinitions } from './lib/sync_fields';
 
 const SCRIPT_NAME = '06_applications';
 const DEFAULT_CSV = '申し込み情報.csv';
@@ -293,6 +294,9 @@ async function main(): Promise<void> {
     .from('applications')
     .select('id', { count: 'exact', head: true });
   logger.info(`DB 件数: ${count}`);
+
+  logger.info('field_definitions を自動同期中...');
+  await syncExtraFieldDefinitions(supabase, 'applications', validRows, args.dryRun);
 }
 
 main().catch((e) => {
