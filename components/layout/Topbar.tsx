@@ -21,47 +21,55 @@ export async function Topbar({ tabs }: { tabs: TabItem[] }) {
   const isAdmin = me.role === 'admin';
 
   return (
-    <header className="sf-header relative flex h-12 items-center gap-3 px-4">
-      {/* 左: アプリランチャー(クライアント) + アプリ名 */}
-      <div className="flex items-center gap-3">
-        <AppLauncherButton tabs={tabs} />
-        <Link href="/" className="text-sm font-semibold tracking-tight">
-          ひらプロCRM
-        </Link>
-      </div>
-
-      {/* 中央: 検索 (PC のみ表示) */}
-      <div className="ml-4 hidden w-80 md:block">
-        <HeaderSearch />
-      </div>
-
-      {/* 右: アイコン群 */}
-      <div className="ml-auto flex items-center gap-1">
-        {/* PC のみ: ヘルプ・設定・通知 */}
-        <div className="hidden md:flex md:items-center md:gap-1">
-          <HeaderIconButton aria-label="ヘルプ">
-            <HelpCircle className="h-4 w-4" />
-          </HeaderIconButton>
-          <SettingsMenu isAdmin={isAdmin} />
-          <HeaderIconButton aria-label="通知">
-            <Bell className="h-4 w-4" />
-          </HeaderIconButton>
+    /*
+     * sf-header に padding-top: env(safe-area-inset-top) を当てているため、
+     * <header> 自体は高さ可変の背景エリア。
+     * コンテンツは内側の <div h-12> に閉じ込めることで
+     * PWA standalone モードでもステータスバー領域と重ならない。
+     */
+    <header className="sf-header relative">
+      <div className="flex h-12 items-center gap-3 px-4">
+        {/* 左: アプリランチャー(クライアント) + アプリ名 */}
+        <div className="flex items-center gap-3">
+          <AppLauncherButton tabs={tabs} />
+          <Link href="/" className="text-sm font-semibold tracking-tight">
+            ひらプロCRM
+          </Link>
         </div>
-        {/* モバイル: 検索トグル + 設定 */}
-        <div className="flex items-center md:hidden">
-          <MobileSearchToggle />
-          <SettingsMenu isAdmin={isAdmin} />
+
+        {/* 中央: 検索 (PC のみ表示) */}
+        <div className="ml-4 hidden w-80 md:block">
+          <HeaderSearch />
         </div>
-        {/* ユーザーアバター (常時表示) */}
-        <div className="ml-1 flex items-center gap-2">
-          <div
-            className="grid h-7 w-7 place-items-center rounded-full bg-white/20 text-xs font-semibold"
-            aria-hidden="true"
-          >
-            {userInitial}
+
+        {/* 右: アイコン群 */}
+        <div className="ml-auto flex items-center gap-1">
+          {/* PC のみ: ヘルプ・設定・通知 */}
+          <div className="hidden md:flex md:items-center md:gap-1">
+            <HeaderIconButton aria-label="ヘルプ">
+              <HelpCircle className="h-4 w-4" />
+            </HeaderIconButton>
+            <SettingsMenu isAdmin={isAdmin} />
+            <HeaderIconButton aria-label="通知">
+              <Bell className="h-4 w-4" />
+            </HeaderIconButton>
           </div>
-          <div className="hidden flex-col text-xs leading-tight sm:flex">
-            <span className="opacity-90">{me.full_name ?? me.email}</span>
+          {/* モバイル: 検索トグル + 設定 */}
+          <div className="flex items-center md:hidden">
+            <MobileSearchToggle />
+            <SettingsMenu isAdmin={isAdmin} />
+          </div>
+          {/* ユーザーアバター (常時表示) */}
+          <div className="ml-1 flex items-center gap-2">
+            <div
+              className="grid h-7 w-7 place-items-center rounded-full bg-white/20 text-xs font-semibold"
+              aria-hidden="true"
+            >
+              {userInitial}
+            </div>
+            <div className="hidden flex-col text-xs leading-tight sm:flex">
+              <span className="opacity-90">{me.full_name ?? me.email}</span>
+            </div>
           </div>
         </div>
       </div>

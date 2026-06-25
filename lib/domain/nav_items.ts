@@ -26,6 +26,7 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
   { id: 'applications', label: '申込', href: '/applications', match_prefix: true, sort_order: 40, is_visible: true },
   { id: 'summary', label: 'サマリ', href: '/summary', match_prefix: true, sort_order: 50, is_visible: true },
   { id: 'reports', label: 'レポート', href: '/reports', match_prefix: true, sort_order: 60, is_visible: true },
+  { id: 'ai', label: 'AI', href: '/ai', match_prefix: false, sort_order: 70, is_visible: true },
 ];
 
 const SELECT_COLS = 'id,label,href,match_prefix,sort_order,is_visible';

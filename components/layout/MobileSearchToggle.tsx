@@ -48,7 +48,10 @@ export function MobileSearchToggle() {
 
       {/* 展開した検索バー: ヘッダー直下にフルワイド */}
       {open && (
-        <div className="sf-header absolute inset-x-0 top-12 z-[100] flex h-11 items-center px-4 shadow-md md:hidden">
+        <div
+          className="sf-header absolute inset-x-0 z-[100] flex h-11 items-center px-4 shadow-md md:hidden"
+          style={{ top: 'calc(env(safe-area-inset-top) + 3rem)' }}
+        >
           <form onSubmit={onSubmit} className="flex w-full items-center gap-2">
             <Search className="h-4 w-4 shrink-0 text-white/70" aria-hidden="true" />
             <input
