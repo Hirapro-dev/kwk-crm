@@ -292,37 +292,29 @@ export function ReportResultView({
             )}
           </CardHeader>
           <CardContent>
-            {/* 右下のハンドルをドラッグして高さを調整(ブラウザに保存) */}
-            <div className="relative">
-              <ReportChart
-                type={chart.type}
-                chartData={chartData}
-                title={chart.title}
-                height={chartHeight}
-                onCategoryClick={
-                  chartCatAlias
-                    ? (name) => setSelected((cur) => (cur === name ? null : name))
-                    : undefined
-                }
-                activeCategory={selected}
-              />
-              {/* リサイズハンドル */}
-              <button
-                type="button"
-                aria-label="グラフの高さを調整"
-                title="ドラッグで高さを調整"
-                onPointerDown={onChartResizeStart}
-                className="absolute bottom-0 right-0 flex h-5 w-5 cursor-ns-resize touch-none items-end justify-end rounded-tl text-muted-foreground/40 hover:text-muted-foreground"
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-                  <path
-                    d="M11 3 L3 11 M11 7 L7 11"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    fill="none"
-                  />
-                </svg>
-              </button>
+            <ReportChart
+              type={chart.type}
+              chartData={chartData}
+              title={chart.title}
+              height={chartHeight}
+              onCategoryClick={
+                chartCatAlias
+                  ? (name) => setSelected((cur) => (cur === name ? null : name))
+                  : undefined
+              }
+              activeCategory={selected}
+            />
+            {/* リサイズハンドル: 下部のバーを上下にドラッグして高さを調整(ブラウザに保存) */}
+            <div
+              role="separator"
+              aria-label="グラフの高さを調整"
+              title="ドラッグで高さを調整"
+              onPointerDown={onChartResizeStart}
+              className="mt-2 flex h-6 cursor-ns-resize touch-none select-none items-center justify-center gap-2 rounded-md border border-dashed bg-muted/40 text-[11px] text-muted-foreground transition-colors hover:bg-muted"
+            >
+              <span className="h-1 w-8 rounded-full bg-muted-foreground/40" />
+              ドラッグで高さ調整（{chartHeight}px）
+              <span className="h-1 w-8 rounded-full bg-muted-foreground/40" />
             </div>
             {chartCatAlias && (
               <p className="mt-1 text-center text-[10px] text-muted-foreground">
