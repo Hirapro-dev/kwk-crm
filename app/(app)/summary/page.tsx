@@ -250,7 +250,7 @@ async function CustomerTab({ sp }: { sp: SP }) {
           label="新規個人情報取得数 合計"
           value={`${result.total.toLocaleString()} 件`}
         />
-        <SummaryCard label="表示粒度" value={GRANULARITY_LABELS[granularity]} />
+        <SummaryCard label="累計入金額" value={`¥${result.totalPaid.toLocaleString('ja-JP')}`} />
       </div>
 
       <div className="border-b px-4 py-3">
@@ -262,7 +262,7 @@ async function CustomerTab({ sp }: { sp: SP }) {
             該当する新規取得データがありません
           </p>
         ) : (
-          <ReportChart type="bar_vertical" chartData={chartData} height={320} />
+          <ScrollableChart count={result.buckets.length} chartData={chartData} />
         )}
       </div>
 
@@ -404,10 +404,9 @@ async function FormTab({ sp }: { sp: SP }) {
       </PanelFilterBar>
 
       {/* 集計カード */}
-      <div className="grid gap-3 border-b p-4 md:grid-cols-3">
+      <div className="grid gap-3 border-b p-4 md:grid-cols-2">
         <SummaryCard label={`${valueLabel} 合計`} value={`${total.toLocaleString()} 件`} />
         <SummaryCard label="選択フォーム数" value={`${selectedForms.length} 件`} />
-        <SummaryCard label="表示粒度" value={GRANULARITY_LABELS[granularity]} />
       </div>
 
       {noForm ? (
@@ -425,7 +424,7 @@ async function FormTab({ sp }: { sp: SP }) {
                 該当するデータがありません
               </p>
             ) : (
-              <ReportChart type="bar_vertical" chartData={chartData} height={320} />
+              <ScrollableChart count={buckets.length} chartData={chartData} />
             )}
           </div>
 
@@ -458,6 +457,28 @@ async function FormTab({ sp }: { sp: SP }) {
         </>
       )}
     </>
+  );
+}
+
+/**
+ * グラフを横スクロール対応で表示する。
+ * バー数が多いとき(スマホ等で詰まる場合)は最小幅を確保して横スクロールさせる。
+ */
+function ScrollableChart({
+  count,
+  chartData,
+}: {
+  count: number;
+  chartData: { data: { name: string; value: number }[]; categoryLabel: string; valueLabel: string };
+}) {
+  // 1カテゴリあたり約40px。コンテナより広い場合のみ横スクロールが出る。
+  const minWidth = count * 40;
+  return (
+    <div className="overflow-x-auto">
+      <div style={{ minWidth: `${minWidth}px` }}>
+        <ReportChart type="bar_vertical" chartData={chartData} height={320} />
+      </div>
+    </div>
   );
 }
 

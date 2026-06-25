@@ -42,6 +42,8 @@ export interface PointBreakdownRow {
 export interface CustomerSummaryResult {
   buckets: CustomerBucketRow[];
   total: number;
+  /** 対象会員の累計入金額(total_paid_amount)の合計 */
+  totalPaid: number;
   /** 会員氏名軸の明細(上限あり) */
   members: CustomerMemberRow[];
   /** 会員氏名軸が上限で打ち切られたか */
@@ -103,6 +105,7 @@ export async function getNewCustomerSummary(opts: {
   const pointCounts = new Map<string, number>();
   const members: CustomerMemberRow[] = [];
   let total = 0;
+  let totalPaid = 0;
   let membersTruncated = false;
 
   for (const r of rows) {
@@ -110,6 +113,8 @@ export async function getNewCustomerSummary(opts: {
     if (phoneAcquired && !phone) continue;
     if (emailOnly && phone) continue;
     if (unpaid && Number(r.total_paid_amount ?? 0) !== 0) continue;
+
+    totalPaid += Number(r.total_paid_amount ?? 0);
 
     // 時間バケット
     const b = bucketOf(r.info_acquired_date, opts.granularity);
@@ -143,7 +148,7 @@ export async function getNewCustomerSummary(opts: {
   // 会員氏名軸は取得日の新しい順
   members.sort((a, b) => b.info_acquired_date.localeCompare(a.info_acquired_date));
 
-  return { buckets, total, members, membersTruncated, pointBreakdown };
+  return { buckets, total, totalPaid, members, membersTruncated, pointBreakdown };
 }
 
 /**
