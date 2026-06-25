@@ -40,6 +40,16 @@ export function MembersInfinite({ initialRows, fields, total, params }: Props) {
           </TableCell>
         );
       }
+      if (f.field_name === 'name') {
+        const name = rec.name as string | null | undefined;
+        return (
+          <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">
+            <Link href={`/members/${id}`} className="sf-link">
+              {name ?? '-'}
+            </Link>
+          </TableCell>
+        );
+      }
       if (f.field_name === 'protect_by_user_id') {
         const protectUser = (m as MemberWithOwner).protect_by_user;
         const name = protectUser?.full_name ?? null;
