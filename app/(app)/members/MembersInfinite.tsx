@@ -52,12 +52,11 @@ export function MembersInfinite({ initialRows, fields, total, params }: Props) {
       }
       if (f.field_name === 'protect_by_user_id') {
         const protectUser = (m as MemberWithOwner).protect_by_user;
-        const name = protectUser?.full_name ?? null;
         return (
           <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">
             {protectUser ? (
               <Link href={`/settings/users/${protectUser.id}`} className="sf-link">
-                {name ?? protectUser.id}
+                {protectUser.full_name ?? '-'}
               </Link>
             ) : (
               <span className="text-muted-foreground">-</span>

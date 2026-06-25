@@ -39,6 +39,30 @@ interface Props {
   columns?: 1 | 2 | 3 | 4;
 }
 
+/**
+ * `_id` 末尾のフィールドに対して、対応するJOINオブジェクトの full_name を返す。
+ * 例: protect_by_user_id → record.protect_by_user?.full_name
+ *     owner_id           → record.owner?.full_name
+ *     created_by_id      → record.created_by?.full_name
+ * 解決できない場合は null を返し、呼び出し元は通常の formatFieldValue にフォールバックする。
+ */
+function resolveUserName(
+  record: Record<string, unknown>,
+  fieldName: string,
+  rawValue: unknown,
+): string | null {
+  if (!fieldName.endsWith('_id') || rawValue === null || rawValue === undefined || rawValue === '') {
+    return null;
+  }
+  const joinKey = fieldName.replace(/_id$/, '');
+  const joined = record[joinKey];
+  if (joined && typeof joined === 'object') {
+    const name = (joined as Record<string, unknown>).full_name;
+    if (typeof name === 'string' && name.length > 0) return name;
+  }
+  return null;
+}
+
 /** セクション単位のグルーピング結果 */
 interface GroupedSection {
   name: string | null;
@@ -112,7 +136,11 @@ export function DynamicDetailFields({
                 valueNode = override;
               } else {
                 const raw = getFieldValue(record, f.field_name, f.is_in_db);
-                valueNode = formatFieldValue(raw, f.data_type);
+                // _id 末尾のフィールドは、対応するJOINオブジェクト(full_name)で名前解決を試みる
+                // 例: protect_by_user_id → record.protect_by_user?.full_name
+                //     owner_id           → record.owner?.full_name
+                const resolvedName = resolveUserName(record, f.field_name, raw);
+                valueNode = resolvedName ?? formatFieldValue(raw, f.data_type);
               }
               return (
                 <div key={f.id} className="flex flex-col border-b pb-2 last:border-b-0">
