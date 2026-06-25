@@ -52,28 +52,31 @@ export default async function DashboardPage() {
             </span>
           }
         />
+
+        {/* サマリ — ダッシュボードカード内に格納 */}
+        <div className="space-y-4 p-4">
+          {/* 1行目 — 対応歴 */}
+          <section className="grid gap-4 sm:grid-cols-3">
+            <StatCard label="今日の対応件数" value={stats.todayActivities.toLocaleString()} />
+            <StatCard label="今月の対応件数" value={stats.monthActivities.toLocaleString()} />
+            <StatCard label="プロテクト数" value={stats.protectCount.toLocaleString()} />
+          </section>
+
+          {/* 2行目 — 申込(acquirer_id ベース) */}
+          <section className="grid gap-4 sm:grid-cols-2">
+            <StatCard
+              label="今月の入金件数"
+              value={stats.monthPaymentCount.toLocaleString()}
+              note="申込獲得者ベース"
+            />
+            <StatCard
+              label="今月の入金額"
+              value={`¥${stats.monthPaymentAmount.toLocaleString('ja-JP')}`}
+              note="申込獲得者ベース"
+            />
+          </section>
+        </div>
       </Card>
-
-      {/* サマリカード: 1行目 — 対応歴 */}
-      <section className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="今日の対応件数" value={stats.todayActivities.toLocaleString()} />
-        <StatCard label="今月の対応件数" value={stats.monthActivities.toLocaleString()} />
-        <StatCard label="プロテクト数" value={stats.protectCount.toLocaleString()} />
-      </section>
-
-      {/* サマリカード: 2行目 — 申込(acquirer_id ベース) */}
-      <section className="grid gap-4 sm:grid-cols-2">
-        <StatCard
-          label="今月の入金件数"
-          value={stats.monthPaymentCount.toLocaleString()}
-          note="申込獲得者ベース"
-        />
-        <StatCard
-          label="今月の入金額"
-          value={`¥${stats.monthPaymentAmount.toLocaleString('ja-JP')}`}
-          note="申込獲得者ベース"
-        />
-      </section>
 
       {/* お気に入りレポート一覧 */}
       <Card>
@@ -219,15 +222,14 @@ export default async function DashboardPage() {
 }
 
 function StatCard({ label, value, note }: { label: string; value: string; note?: string }) {
+  // ダッシュボードカード内に格納するため、枠線セル(border)で表現してカード入れ子の重複感を避ける
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">{label}</div>
-          {note && <div className="text-[10px] text-muted-foreground/60">{note}</div>}
-        </div>
-        <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
-      </CardContent>
-    </Card>
+    <div className="rounded-md border bg-card p-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">{label}</div>
+        {note && <div className="text-[10px] text-muted-foreground/60">{note}</div>}
+      </div>
+      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
+    </div>
   );
 }
