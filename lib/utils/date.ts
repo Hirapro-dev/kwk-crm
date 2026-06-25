@@ -29,6 +29,9 @@ export function formatDateTime(date: Date | string | null | undefined): string {
     minute: '2-digit',
     hour12: false,
   });
+  if (p.hour === '00' && p.minute === '00') {
+    return `${p.year}/${p.month}/${p.day}`;
+  }
   return `${p.year}/${p.month}/${p.day} ${p.hour}:${p.minute}`;
 }
 
