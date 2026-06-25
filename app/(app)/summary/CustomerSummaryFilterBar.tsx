@@ -7,6 +7,9 @@ import { GRANULARITY_LABELS, type Granularity } from '@/lib/utils/date_bucket';
 import { DATE_PRESET_LABELS, type DatePresetKey, normalizePreset } from '@/lib/utils/date_preset';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useTransition } from 'react';
+import { PointMultiSelect } from './PointMultiSelect';
+
+export type CustomerAxis = 'point' | 'member';
 
 interface Props {
   preset: DatePresetKey;
@@ -16,6 +19,12 @@ interface Props {
   phoneAcquired: boolean;
   emailOnly: boolean;
   unpaid: boolean;
+  /** 個人情報取得ポイント候補 */
+  pointOptions: string[];
+  /** 選択中の取得ポイント */
+  selectedPoints: string[];
+  /** 一覧の表示軸 */
+  axis: CustomerAxis;
 }
 
 const PRESET_BUTTONS: DatePresetKey[] = [
@@ -39,6 +48,9 @@ export function CustomerSummaryFilterBar({
   phoneAcquired,
   emailOnly,
   unpaid,
+  pointOptions,
+  selectedPoints,
+  axis,
 }: Props) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -151,6 +163,45 @@ export function CustomerSummaryFilterBar({
             />
             {label}
           </label>
+        ))}
+      </div>
+
+      {/* 個人情報取得ポイント(複数選択) */}
+      <div className="flex flex-wrap items-start gap-2">
+        <span className="mt-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          取得ポイント
+        </span>
+        <PointMultiSelect
+          options={pointOptions}
+          selected={selectedPoints}
+          onChange={(next) => updateQuery({ pts: next.length ? next.join(',') : null })}
+        />
+      </div>
+
+      {/* 一覧の表示軸 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          一覧の軸
+        </span>
+        {(
+          [
+            { key: 'point', label: '個人情報取得ポイント軸' },
+            { key: 'member', label: '会員氏名軸' },
+          ] as const
+        ).map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => updateQuery({ axis: key === 'point' ? null : key })}
+            className={cn(
+              'rounded border px-3 py-1 text-xs transition-colors',
+              axis === key
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-input bg-card text-foreground hover:bg-accent',
+            )}
+          >
+            {label}
+          </button>
         ))}
       </div>
     </div>

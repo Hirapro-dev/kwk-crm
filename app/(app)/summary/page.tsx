@@ -19,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getNewCustomerSummary } from '@/lib/domain/customer_summary';
+import { getNewCustomerSummary, listInfoAcquiredPoints } from '@/lib/domain/customer_summary';
 import { getSalesSummary, listProjectsForFilter } from '@/lib/domain/sales_summary';
 import { cn } from '@/lib/utils/cn';
 import { GRANULARITY_LABELS, normalizeGranularity } from '@/lib/utils/date_bucket';
@@ -177,18 +177,22 @@ async function CustomerTab({ sp }: { sp: SP }) {
   const preset = sp.cpreset ? normalizePreset(sp.cpreset) : 'this_month';
   const range = resolveDateRange(preset, sp.cfrom ?? null, sp.cto ?? null);
   const granularity = normalizeGranularity(sp.gran);
+  const selectedPoints = (sp.pts ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const axis: 'point' | 'member' = sp.axis === 'member' ? 'member' : 'point';
   const filters = {
     phoneAcquired: sp.fp === '1',
     emailOnly: sp.fe === '1',
     unpaid: sp.fu === '1',
+    points: selectedPoints,
   };
 
-  const result = await getNewCustomerSummary({
-    from: range.from,
-    to: range.to,
-    granularity,
-    filters,
-  });
+  const [result, pointOptions] = await Promise.all([
+    getNewCustomerSummary({ from: range.from, to: range.to, granularity, filters }),
+    listInfoAcquiredPoints(),
+  ]);
 
   const chartData = {
     data: result.buckets.map((b) => ({ name: b.label, value: b.count })),
@@ -224,6 +228,9 @@ async function CustomerTab({ sp }: { sp: SP }) {
               phoneAcquired={filters.phoneAcquired}
               emailOnly={filters.emailOnly}
               unpaid={filters.unpaid}
+              pointOptions={pointOptions}
+              selectedPoints={selectedPoints}
+              axis={axis}
             />
           </Suspense>
         </PanelFilterBar>
@@ -241,32 +248,73 @@ async function CustomerTab({ sp }: { sp: SP }) {
           )}
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50 hover:bg-gray-50">
-              <TableHead className="h-9">期間</TableHead>
-              <TableHead className="h-9 text-right">新規取得数</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {result.buckets.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={2} className="text-center text-sm text-muted-foreground">
-                  該当データがありません
-                </TableCell>
+        {/* 一覧: 軸切替(個人情報取得ポイント軸 / 会員氏名軸) */}
+        {axis === 'member' ? (
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50 hover:bg-gray-50">
+                <TableHead className="h-9">取得日</TableHead>
+                <TableHead className="h-9">会員氏名</TableHead>
+                <TableHead className="h-9">個人情報取得ポイント</TableHead>
               </TableRow>
-            ) : (
-              result.buckets.map((b) => (
-                <TableRow key={b.key} className="sf-row-hover">
-                  <TableCell className="py-2 font-medium">{b.label}</TableCell>
-                  <TableCell className="py-2 text-right tabular-nums">
-                    {b.count.toLocaleString()}
+            </TableHeader>
+            <TableBody>
+              {result.members.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
+                    該当データがありません
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : (
+                result.members.map((m) => (
+                  <TableRow key={m.id} className="sf-row-hover">
+                    <TableCell className="whitespace-nowrap py-2 text-xs">
+                      {m.info_acquired_date}
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <Link href={`/members/${m.id}`} className="sf-link font-medium">
+                        {m.name ?? m.id}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="py-2 text-sm">{m.info_acquired_points ?? '-'}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50 hover:bg-gray-50">
+                <TableHead className="h-9">個人情報取得ポイント</TableHead>
+                <TableHead className="h-9 text-right">新規取得数</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {result.pointBreakdown.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={2} className="text-center text-sm text-muted-foreground">
+                    該当データがありません
+                  </TableCell>
+                </TableRow>
+              ) : (
+                result.pointBreakdown.map((p) => (
+                  <TableRow key={p.point} className="sf-row-hover">
+                    <TableCell className="py-2 font-medium">{p.point}</TableCell>
+                    <TableCell className="py-2 text-right tabular-nums">
+                      {p.count.toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        )}
+        {axis === 'member' && result.membersTruncated && (
+          <p className="px-4 py-2 text-xs text-muted-foreground">
+            ※ 会員氏名軸は最大1,000件まで表示します。期間や条件で絞り込んでください。
+          </p>
+        )}
       </Card>
     </div>
   );
