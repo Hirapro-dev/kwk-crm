@@ -76,8 +76,8 @@ export function FormSummaryFilterBar({
 
   return (
     <div className="space-y-2 rounded border bg-card p-3 shadow-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+      <div className="flex items-center gap-2 overflow-x-auto">
+        <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
           期間
         </span>
         {PRESET_BUTTONS.map((p) => (
@@ -86,7 +86,7 @@ export function FormSummaryFilterBar({
             type="button"
             onClick={() => onPresetClick(p)}
             className={cn(
-              'rounded border px-3 py-1 text-xs transition-colors',
+              'shrink-0 whitespace-nowrap rounded border px-3 py-1 text-xs transition-colors',
               preset === p
                 ? 'border-primary bg-primary text-primary-foreground'
                 : 'border-input bg-card text-foreground hover:bg-accent',
