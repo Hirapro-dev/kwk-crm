@@ -495,6 +495,20 @@ Phase 1 では:
   2. ただし**実画面のカラム表示は現状のハードコードのまま**
   3. CSV取込で新カラム検出 → field_definitions 自動追加は Phase 4 以降
 
+### 5.11 summary_favorites (サマリお気に入り) ★2026-06 追加
+サマリ画面(フォーム集計など)の表示条件を保存し、上部ダイアログから再表示するためのマスタ。
+
+- `id` uuid PK
+- `name` text NOT NULL — お気に入り表示名
+- `summary_type` text NOT NULL DEFAULT `forms` — `forms` / `customers` / `payment`
+- `config` jsonb NOT NULL — 復元用 URL クエリ(キー→値)
+- `visibility` text NOT NULL CHECK in (`private`,`public`) — `private`=自分のみ / `public`=全員
+- `created_by` uuid FK → users
+- `created_at`, `updated_at`, `deleted_at` timestamptz
+
+**RLS**: SELECT は public + 自分のもの(+admin)。INSERT は本人。UPDATE/DELETE は作成者 or admin。
+**フォールバック**: テーブル未適用(migration 37 未実行)でも一覧は空配列で画面を壊さない。
+
 ---
 
 ## 6. データ移行計画

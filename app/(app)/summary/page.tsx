@@ -19,9 +19,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { getCurrentUser } from '@/lib/domain/auth';
 import { getNewCustomerSummary, listInfoAcquiredPoints } from '@/lib/domain/customer_summary';
 import { getFormSummary, listFormsForSummary } from '@/lib/domain/form_summary';
 import { getSalesSummary, listProjectsForFilter } from '@/lib/domain/sales_summary';
+import { listSummaryFavorites } from '@/lib/domain/summary_favorites';
 import { cn } from '@/lib/utils/cn';
 import { GRANULARITY_LABELS, normalizeGranularity } from '@/lib/utils/date_bucket';
 import { normalizePreset, resolveDateRange } from '@/lib/utils/date_preset';
@@ -30,6 +32,8 @@ import { Suspense } from 'react';
 import { CustomerSummaryFilterBar } from './CustomerSummaryFilterBar';
 import { FormSummaryFilterBar } from './FormSummaryFilterBar';
 import { SalesBarChart } from './SalesBarChart';
+import { SaveFavoriteButton } from './SaveFavoriteButton';
+import { SummaryFavoritesButton } from './SummaryFavoritesButton';
 import { SummaryFilterBar } from './SummaryFilterBar';
 
 type SP = Record<string, string | undefined>;
@@ -48,29 +52,36 @@ export default async function SummaryPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const tab = sp.tab === 'customers' ? 'customers' : sp.tab === 'forms' ? 'forms' : 'payment';
 
+  const [me, favorites] = await Promise.all([getCurrentUser(), listSummaryFavorites()]);
+
   return (
     <div className="space-y-3">
-      {/* タブナビ */}
-      <div className="flex gap-1 border-b">
-        {TABS.map((t) => {
-          const params = new URLSearchParams();
-          if (t.key !== 'payment') params.set('tab', t.key);
-          const href = params.toString() ? `/summary?${params.toString()}` : '/summary';
-          return (
-            <Link
-              key={t.key}
-              href={href}
-              className={cn(
-                '-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors',
-                tab === t.key
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {t.label}
-            </Link>
-          );
-        })}
+      {/* タブナビ + お気に入りボタン */}
+      <div className="flex items-center justify-between gap-2 border-b">
+        <div className="flex gap-1">
+          {TABS.map((t) => {
+            const params = new URLSearchParams();
+            if (t.key !== 'payment') params.set('tab', t.key);
+            const href = params.toString() ? `/summary?${params.toString()}` : '/summary';
+            return (
+              <Link
+                key={t.key}
+                href={href}
+                className={cn(
+                  '-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors',
+                  tab === t.key
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {t.label}
+              </Link>
+            );
+          })}
+        </div>
+        <div className="pb-1">
+          <SummaryFavoritesButton favorites={favorites} currentUserId={me.id} />
+        </div>
       </div>
 
       {tab === 'customers' ? (
@@ -371,6 +382,7 @@ async function FormTab({ sp }: { sp: SP }) {
           iconColor="#00C896"
           viewName="フォーム集計サマリ"
           totalCount={buckets.length}
+          actions={<SaveFavoriteButton summaryType="forms" disabled={noForm} />}
         />
 
         <PanelFilterBar>
