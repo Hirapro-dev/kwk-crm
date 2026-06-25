@@ -95,16 +95,17 @@ function ReportTable({
         <h2 className="text-sm font-bold text-foreground">{title}</h2>
         <p className="text-xs text-muted-foreground">{rows.length} 件</p>
       </div>
-      <Table>
+      <div className="overflow-x-auto">
+        <Table className="min-w-[600px]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-10" />
-              <TableHead>レポート名</TableHead>
-              <TableHead>タイプ</TableHead>
-              <TableHead>公開範囲</TableHead>
-              <TableHead>作成者</TableHead>
-              <TableHead>最終実行</TableHead>
-              <TableHead className="text-right">最終件数</TableHead>
+              <TableHead className="whitespace-nowrap">レポート名</TableHead>
+              <TableHead className="whitespace-nowrap">タイプ</TableHead>
+              <TableHead className="whitespace-nowrap">公開範囲</TableHead>
+              <TableHead className="whitespace-nowrap">作成者</TableHead>
+              <TableHead className="whitespace-nowrap">最終実行</TableHead>
+              <TableHead className="whitespace-nowrap text-right">最終件数</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -123,7 +124,7 @@ function ReportTable({
                     <TableCell>
                       <FavoriteButton reportId={r.id} isFavorited={isFav} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="min-w-[160px]">
                       <Link
                         href={`/reports/${r.id}`}
                         className="font-medium text-primary hover:underline"
@@ -139,18 +140,18 @@ function ReportTable({
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-xs">
+                    <TableCell className="whitespace-nowrap text-xs">
                       <Badge variant="outline">{r.report_type}</Badge>
                       {typeMeta && (
                         <span className="ml-1 text-muted-foreground">{typeMeta.name}</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-xs">{r.visibility}</TableCell>
-                    <TableCell className="text-xs">{r.creator?.full_name ?? '-'}</TableCell>
-                    <TableCell className="text-xs">
+                    <TableCell className="whitespace-nowrap text-xs">{r.visibility}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">{r.creator?.full_name ?? '-'}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">
                       {r.last_run_at ? formatDateTime(r.last_run_at) : '未実行'}
                     </TableCell>
-                    <TableCell className="text-right text-xs tabular-nums">
+                    <TableCell className="whitespace-nowrap text-right text-xs tabular-nums">
                       {r.last_run_row_count?.toLocaleString() ?? '-'}
                     </TableCell>
                   </TableRow>
@@ -159,6 +160,7 @@ function ReportTable({
             )}
           </TableBody>
         </Table>
+      </div>
     </Card>
   );
 }
