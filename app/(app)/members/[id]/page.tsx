@@ -10,12 +10,13 @@
  *  - 右カラムは「+ 対応歴を追加」ボタン + 表形式の対応歴
  */
 
-import { notFound } from 'next/navigation';
-import Link from 'next/link';
 import { ActivityFormCard } from '@/components/activities/ActivityFormCard';
 import { ActivityTimeline } from '@/components/activities/ActivityTimeline';
+import { NewActivityTrigger } from '@/components/activities/NewActivityTrigger';
 import { CollapsibleSection } from '@/components/layout/CollapsibleSection';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
+import { renderHighlightFieldValue } from '@/components/members/HighlightFieldValue';
+import { MemberEditDialog } from '@/components/members/MemberEditDialog';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -34,10 +35,10 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import { listInquiries } from '@/lib/domain/inquiries';
 import { getMember } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
+import { listAllUsers } from '@/lib/domain/users_admin';
 import { formatDate, formatDateTime } from '@/lib/utils/date';
-import { NewActivityTrigger } from '@/components/activities/NewActivityTrigger';
-import { MemberEditDialog } from '@/components/members/MemberEditDialog';
-import { renderHighlightFieldValue } from '@/components/members/HighlightFieldValue';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { MemberTabs } from './MemberTabs';
 
 interface PageProps {
@@ -67,6 +68,15 @@ export default async function MemberDetailPage({ params }: PageProps) {
       listInquiries({ memberId: id, pageSize: 100, page: 1 }),
     ]);
 
+  // プロテクト者の選択肢 (admin のみ。プロテクト編集UIで使用)
+  const protectUsers =
+    me.role === 'admin'
+      ? (await listAllUsers({ activeOnly: true })).map((u) => ({
+          id: u.id,
+          full_name: u.full_name,
+        }))
+      : [];
+
   // ハイライトパネルの facts を動的生成
   // highlight フィールドが未設定のときは最低限の情報をフォールバック表示
   const highlightFacts =
@@ -83,7 +93,9 @@ export default async function MemberDetailPage({ params }: PageProps) {
                 {member.protect_by_user?.full_name ?? '-'}
                 {member.protect_expires_at && (
                   <span className="ml-2 text-xs text-muted-foreground">
-                    {member.protect_expires_at >= '2099-01-01' ? '(固定)' : `〜${formatDate(member.protect_expires_at)}`}
+                    {member.protect_expires_at >= '2099-01-01'
+                      ? '(固定)'
+                      : `〜${formatDate(member.protect_expires_at)}`}
                   </span>
                 )}
               </span>
@@ -113,7 +125,11 @@ export default async function MemberDetailPage({ params }: PageProps) {
             <Button variant="outline" size="sm">
               フォロー
             </Button>
-            <MemberEditDialog member={member} />
+            <MemberEditDialog
+              member={member}
+              currentUserRole={me.role}
+              protectUsers={protectUsers}
+            />
             <Button variant="outline" size="sm">
               削除
             </Button>
@@ -163,100 +179,94 @@ export default async function MemberDetailPage({ params }: PageProps) {
             <div className="space-y-3">
               {/* 申込履歴 (member_id で紐付け) */}
               <CollapsibleSection title="申込履歴" count={relApps.total} bodyClassName="p-0">
-                  {relApps.rows.length === 0 ? (
-                    <p className="p-4 text-sm text-muted-foreground">
-                      申込はありません
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-gray-50 hover:bg-gray-50">
-                            <TableHead className="h-9 whitespace-nowrap">申込ID</TableHead>
-                            <TableHead className="h-9 whitespace-nowrap">案件</TableHead>
-                            <TableHead className="h-9 whitespace-nowrap">申込日</TableHead>
-                            <TableHead className="h-9 whitespace-nowrap">ステータス</TableHead>
-                            <TableHead className="h-9 whitespace-nowrap text-right">
-                              入金額
-                            </TableHead>
+                {relApps.rows.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">申込はありません</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50 hover:bg-gray-50">
+                          <TableHead className="h-9 whitespace-nowrap">申込ID</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">案件</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">申込日</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">ステータス</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap text-right">入金額</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {relApps.rows.map((a) => (
+                          <TableRow key={a.id} className="sf-row-hover">
+                            <TableCell className="whitespace-nowrap py-2">
+                              <Link
+                                href={`/applications/${a.id}`}
+                                className="text-primary hover:underline"
+                              >
+                                {a.id}
+                              </Link>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {a.project?.name ?? '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {formatDate(a.application_date) || '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {a.status ? <Badge>{a.status}</Badge> : '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2 text-right tabular-nums">
+                              {a.payment_amount !== null
+                                ? `¥${Number(a.payment_amount).toLocaleString()}`
+                                : '-'}
+                            </TableCell>
                           </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {relApps.rows.map((a) => (
-                            <TableRow key={a.id} className="sf-row-hover">
-                              <TableCell className="whitespace-nowrap py-2">
-                                <Link
-                                  href={`/applications/${a.id}`}
-                                  className="text-primary hover:underline"
-                                >
-                                  {a.id}
-                                </Link>
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap py-2">
-                                {a.project?.name ?? '-'}
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap py-2">
-                                {formatDate(a.application_date) || '-'}
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap py-2">
-                                {a.status ? <Badge>{a.status}</Badge> : '-'}
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap py-2 text-right tabular-nums">
-                                {a.payment_amount !== null
-                                  ? `¥${Number(a.payment_amount).toLocaleString()}`
-                                  : '-'}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CollapsibleSection>
 
               {/* 問合せ履歴 (member_id で紐付け) */}
               <CollapsibleSection title="問合せ履歴" count={relInqs.total} bodyClassName="p-0">
-                  {relInqs.rows.length === 0 ? (
-                    <p className="p-4 text-sm text-muted-foreground">
-                      問合せはありません
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-gray-50 hover:bg-gray-50">
-                            <TableHead className="h-9 whitespace-nowrap">問合せID</TableHead>
-                            <TableHead className="h-9 whitespace-nowrap">フォーム</TableHead>
-                            <TableHead className="h-9 whitespace-nowrap">登録日時</TableHead>
-                            <TableHead className="h-9 whitespace-nowrap">氏名</TableHead>
+                {relInqs.rows.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">問合せはありません</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50 hover:bg-gray-50">
+                          <TableHead className="h-9 whitespace-nowrap">問合せID</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">フォーム</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">登録日時</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">氏名</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {relInqs.rows.map((q) => (
+                          <TableRow key={q.id} className="sf-row-hover">
+                            <TableCell className="whitespace-nowrap py-2">
+                              <Link
+                                href={`/inquiries/${q.id}`}
+                                className="text-primary hover:underline"
+                              >
+                                {q.id}
+                              </Link>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {q.form?.name ?? '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {formatDateTime(q.registered_at) || '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {q.name ?? '-'}
+                            </TableCell>
                           </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {relInqs.rows.map((q) => (
-                            <TableRow key={q.id} className="sf-row-hover">
-                              <TableCell className="whitespace-nowrap py-2">
-                                <Link
-                                  href={`/inquiries/${q.id}`}
-                                  className="text-primary hover:underline"
-                                >
-                                  {q.id}
-                                </Link>
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap py-2">
-                                {q.form?.name ?? '-'}
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap py-2">
-                                {formatDateTime(q.registered_at) || '-'}
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap py-2">
-                                {q.name ?? '-'}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CollapsibleSection>
             </div>
           }
