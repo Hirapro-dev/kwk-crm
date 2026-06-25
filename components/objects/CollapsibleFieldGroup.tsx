@@ -49,7 +49,7 @@ export function CollapsibleFieldGroup({
           aria-hidden="true"
         />
       </button>
-      {open && <div className="p-3 bg-white">{children}</div>}
+      {open && <div className="min-w-0 overflow-hidden bg-white p-3">{children}</div>}
     </section>
   );
 }

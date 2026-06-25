@@ -46,7 +46,7 @@ export function MemberTabs({ detailsContent, relatedContent }: Props) {
           </button>
         ))}
       </div>
-      <div className="p-4">
+      <div className="min-w-0 overflow-hidden p-4">
         {active === 'details' && detailsContent}
         {active === 'related' && relatedContent}
       </div>

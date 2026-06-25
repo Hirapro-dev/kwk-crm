@@ -263,7 +263,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
         />
 
         {/* 右カラム: 対応歴カード (タブの外、独立) */}
-        <Card id="activity-form-section">
+        <Card id="activity-form-section" className="min-w-0 overflow-hidden">
           <CardHeader className="border-b py-3">
             <CardTitle className="flex items-center justify-between text-sm">
               <span>対応歴</span>
@@ -272,7 +272,7 @@ export default async function MemberDetailPage({ params }: PageProps) {
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 p-4">
+          <CardContent className="min-w-0 space-y-3 overflow-hidden p-4">
             <ActivityFormCard
               memberId={member.id}
               bunruiList={bunruiList}

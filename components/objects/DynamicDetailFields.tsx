@@ -85,13 +85,11 @@ function groupBySection(fields: FieldDefinition[]): GroupedSection[] {
   return groups;
 }
 
-// Tailwind JIT が解析できるよう完全なクラス文字列をマップで持つ。
-// (動的な文字列補間は PurgeCSS で削られるため使わない)
 const COLUMN_CLASSES: Record<1 | 2 | 3 | 4, string> = {
-  1: 'grid grid-cols-1 gap-x-6 gap-y-3',
-  2: 'grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2',
-  3: 'grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3',
-  4: 'grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4',
+  1: 'grid min-w-0 grid-cols-1 gap-x-6 gap-y-3',
+  2: 'grid min-w-0 grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2',
+  3: 'grid min-w-0 grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3',
+  4: 'grid min-w-0 grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4',
 };
 
 export function DynamicDetailFields({
@@ -151,9 +149,9 @@ export function DynamicDetailFields({
                 valueNode = resolvedName ?? formatFieldValue(raw, f.data_type);
               }
               return (
-                <div key={f.id} className="flex flex-col border-b pb-2 last:border-b-0">
-                  <dt className="text-xs font-semibold tracking-wide text-slate-600">{label}</dt>
-                  <dd className="text-[15px] text-slate-900">{valueNode}</dd>
+                <div key={f.id} className="flex min-w-0 flex-col border-b pb-2 last:border-b-0">
+                  <dt className="truncate text-xs font-semibold tracking-wide text-slate-600">{label}</dt>
+                  <dd className="min-w-0 break-words text-[15px] text-slate-900">{valueNode}</dd>
                 </div>
               );
             })}

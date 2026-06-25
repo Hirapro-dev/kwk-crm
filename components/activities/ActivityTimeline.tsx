@@ -160,7 +160,7 @@ export function ActivityTimeline({ activities, currentUserId, currentUserRole }:
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="w-full overflow-x-auto">
       <Table className="min-w-[860px]">
         <TableHeader>
           <TableRow className="bg-gray-50 hover:bg-gray-50">
