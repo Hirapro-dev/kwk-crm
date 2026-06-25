@@ -58,7 +58,8 @@ export default async function SummaryPage({ searchParams }: PageProps) {
     <Card className="overflow-hidden p-0 shadow-sm">
       {/* 上部: サマリタブ + お気に入りボタン */}
       <div className="flex items-center justify-between gap-2 border-b bg-gray-50/60 px-4 pt-2">
-        <div className="flex gap-1">
+        {/* タブ: スマホでは横スクロール・改行なし */}
+        <div className="flex flex-1 gap-1 overflow-x-auto">
           {TABS.map((t) => {
             const params = new URLSearchParams();
             if (t.key !== 'payment') params.set('tab', t.key);
@@ -68,7 +69,7 @@ export default async function SummaryPage({ searchParams }: PageProps) {
                 key={t.key}
                 href={href}
                 className={cn(
-                  '-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors',
+                  '-mb-px whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition-colors',
                   tab === t.key
                     ? 'border-primary text-primary'
                     : 'border-transparent text-muted-foreground hover:text-foreground',
@@ -79,7 +80,7 @@ export default async function SummaryPage({ searchParams }: PageProps) {
             );
           })}
         </div>
-        <div className="pb-1">
+        <div className="shrink-0 pb-1">
           <SummaryFavoritesButton favorites={favorites} currentUserId={me.id} />
         </div>
       </div>
