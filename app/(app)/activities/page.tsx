@@ -68,6 +68,7 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
             activities={result.rows}
             currentUserId={me.id}
             currentUserRole={me.role}
+            showMember
           />
         </div>
       </Card>
