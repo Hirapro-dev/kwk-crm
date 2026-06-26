@@ -1,19 +1,21 @@
 'use server';
 
+import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from './auth';
 
 const FlowRuleSchema = z.object({
-  name:           z.string().min(1, '名前は必須です').max(100),
-  trigger_flag:   z.string().min(1, 'トリガーフラグは必須です').max(50),
-  duration_type:  z.enum(['days_at_time', 'hours']),
+  name: z.string().min(1, '名前は必須です').max(100),
+  trigger_flag: z.string().min(1, 'トリガーフラグは必須です').max(50),
+  duration_type: z.enum(['days_at_time', 'hours']),
   duration_value: z.number().int().min(1, '1以上を入力してください'),
-  reset_hour:     z.number().int().min(0).max(23),
-  reset_minute:   z.number().int().min(0).max(59),
-  is_active:      z.boolean(),
-  sort_order:     z.number().int().min(0),
+  reset_hour: z.number().int().min(0).max(23),
+  reset_minute: z.number().int().min(0).max(59),
+  is_active: z.boolean(),
+  sort_order: z.number().int().min(0),
+  // 適用ロール。空配列 = すべてのロールに適用(DBには null を格納)
+  apply_roles: z.array(z.enum(['admin', 'manager', 'sales', 'support', 'viewer'])).default([]),
 });
 
 export type FlowRuleInput = z.infer<typeof FlowRuleSchema>;
@@ -40,18 +42,15 @@ export async function upsertFlowRule(
     }
 
     const supabase = await createClient();
-    const payload = { ...parsed.data };
+    // 空配列(全ロール)は DB では null として保持
+    const { apply_roles, ...rest } = parsed.data;
+    const payload = { ...rest, apply_roles: apply_roles.length > 0 ? apply_roles : null };
 
     if (id) {
-      const { error } = await supabase
-        .from('flow_rules')
-        .update(payload)
-        .eq('id', id);
+      const { error } = await supabase.from('flow_rules').update(payload).eq('id', id);
       if (error) return { ok: false, error: error.message };
     } else {
-      const { error } = await supabase
-        .from('flow_rules')
-        .insert(payload);
+      const { error } = await supabase.from('flow_rules').insert(payload);
       if (error) return { ok: false, error: error.message };
     }
 

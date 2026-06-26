@@ -1,7 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,24 +12,32 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
-import { upsertFlowRule, type FlowRuleInput } from '@/lib/domain/flow_rule_actions';
-import type { DurationType, FlowRule } from '@/lib/domain/flow_rules_types';
+import { type FlowRuleInput, upsertFlowRule } from '@/lib/domain/flow_rule_actions';
+import {
+  type DurationType,
+  FLOW_RULE_ROLES,
+  type FlowRule,
+  ROLE_LABELS,
+} from '@/lib/domain/flow_rules_types';
+import { useRouter } from 'next/navigation';
+import { useState, useTransition } from 'react';
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  rule?: FlowRule;       // 未指定 = 新規
+  rule?: FlowRule; // 未指定 = 新規
 }
 
 const DEFAULT_FORM: FlowRuleInput = {
-  name:           '',
-  trigger_flag:   '',
-  duration_type:  'days_at_time',
+  name: '',
+  trigger_flag: '',
+  duration_type: 'days_at_time',
   duration_value: 7,
-  reset_hour:     2,
-  reset_minute:   0,
-  is_active:      true,
-  sort_order:     100,
+  reset_hour: 2,
+  reset_minute: 0,
+  is_active: true,
+  sort_order: 100,
+  apply_roles: [],
 };
 
 export function FlowRuleDialog({ open, onClose, rule }: Props) {
@@ -39,17 +45,26 @@ export function FlowRuleDialog({ open, onClose, rule }: Props) {
   const [form, setForm] = useState<FlowRuleInput>(() =>
     rule
       ? {
-          name:           rule.name,
-          trigger_flag:   rule.trigger_flag,
-          duration_type:  rule.duration_type,
+          name: rule.name,
+          trigger_flag: rule.trigger_flag,
+          duration_type: rule.duration_type,
           duration_value: rule.duration_value,
-          reset_hour:     rule.reset_hour,
-          reset_minute:   rule.reset_minute,
-          is_active:      rule.is_active,
-          sort_order:     rule.sort_order,
+          reset_hour: rule.reset_hour,
+          reset_minute: rule.reset_minute,
+          is_active: rule.is_active,
+          sort_order: rule.sort_order,
+          apply_roles: (rule.apply_roles ?? []) as FlowRuleInput['apply_roles'],
         }
       : { ...DEFAULT_FORM },
   );
+
+  const toggleRole = (role: FlowRuleInput['apply_roles'][number]) =>
+    setForm((prev) => ({
+      ...prev,
+      apply_roles: prev.apply_roles.includes(role)
+        ? prev.apply_roles.filter((r) => r !== role)
+        : [...prev.apply_roles, role],
+    }));
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -100,9 +115,7 @@ export function FlowRuleDialog({ open, onClose, rule }: Props) {
 
           {/* トリガーフラグ */}
           <div className="space-y-1">
-            <Label htmlFor="fr-trigger">
-              トリガー (対応歴の状態フラグ)
-            </Label>
+            <Label htmlFor="fr-trigger">トリガー (対応歴の状態フラグ)</Label>
             <Input
               id="fr-trigger"
               value={form.trigger_flag}
@@ -141,9 +154,7 @@ export function FlowRuleDialog({ open, onClose, rule }: Props) {
           {/* 日数/時間数 */}
           <div className="flex items-end gap-3">
             <div className="flex-1 space-y-1">
-              <Label htmlFor="fr-val">
-                {form.duration_type === 'hours' ? '時間数' : '日数'}
-              </Label>
+              <Label htmlFor="fr-val">{form.duration_type === 'hours' ? '時間数' : '日数'}</Label>
               <Input
                 id="fr-val"
                 type="number"
@@ -205,6 +216,28 @@ export function FlowRuleDialog({ open, onClose, rule }: Props) {
             />
           </div>
 
+          {/* 適用ロール */}
+          <div className="space-y-2">
+            <Label>適用ロール</Label>
+            <div className="flex flex-wrap gap-3">
+              {FLOW_RULE_ROLES.map((role) => (
+                <label key={role} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.apply_roles.includes(role)}
+                    onChange={() => toggleRole(role)}
+                    className="h-3.5 w-3.5"
+                  />
+                  {ROLE_LABELS[role] ?? role}
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              選択したロールのユーザーが対応歴を残した時のみプロテクトを適用します。
+              {form.apply_roles.length === 0 && ' (未選択 = すべてのロールに適用)'}
+            </p>
+          </div>
+
           {/* 有効フラグ */}
           <div className="flex items-center gap-3">
             <Switch
@@ -224,7 +257,10 @@ export function FlowRuleDialog({ open, onClose, rule }: Props) {
           <Button variant="outline" onClick={onClose} disabled={pending}>
             キャンセル
           </Button>
-          <Button onClick={onSave} disabled={pending || !form.name.trim() || !form.trigger_flag.trim()}>
+          <Button
+            onClick={onSave}
+            disabled={pending || !form.name.trim() || !form.trigger_flag.trim()}
+          >
             {pending ? '保存中...' : '保存'}
           </Button>
         </DialogFooter>

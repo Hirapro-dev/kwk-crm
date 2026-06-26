@@ -19,6 +19,7 @@ import { calcExpiresAt, findMatchingRule } from './flow_rules';
  * @param userId         プロテクト担当になるユーザーの UUID
  * @param userFullName   表示名 (owner_name_raw に格納)
  * @param sBunrui        活動の小分類(パイプ区切り)
+ * @param userRole       対応者のロール。ルールの適用ロールに含まれない場合はスキップ
  */
 export async function applyProtect(
   supabase: SupabaseClient,
@@ -26,11 +27,13 @@ export async function applyProtect(
   userId: string,
   userFullName: string,
   sBunrui: string | null | undefined,
+  userRole?: string | null,
 ): Promise<void> {
   if (!memberId || !sBunrui) return;
 
   try {
-    const rule = await findMatchingRule(supabase, sBunrui);
+    // userRole 指定時はルールの適用ロールで絞り込む(対象外ロールなら rule=null → 何もしない)
+    const rule = await findMatchingRule(supabase, sBunrui, userRole);
     if (!rule) return;
 
     const expiresAt = calcExpiresAt(rule).toISOString();

@@ -1,8 +1,5 @@
 'use client';
 
-import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -15,7 +12,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { deleteFlowRule, toggleFlowRule } from '@/lib/domain/flow_rule_actions';
-import { formatDuration, type FlowRule } from '@/lib/domain/flow_rules_types';
+import { type FlowRule, ROLE_LABELS, formatDuration } from '@/lib/domain/flow_rules_types';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState, useTransition } from 'react';
 import { FlowRuleDialog } from './FlowRuleDialog';
 
 interface Props {
@@ -69,6 +69,7 @@ export function FlowRuleList({ rules }: Props) {
             <TableHead className="h-9">フロー名</TableHead>
             <TableHead className="h-9 w-28">トリガー</TableHead>
             <TableHead className="h-9">リセット方法</TableHead>
+            <TableHead className="h-9 w-44">適用ロール</TableHead>
             <TableHead className="h-9 w-16 text-center">有効</TableHead>
             <TableHead className="h-9 w-20 text-right">操作</TableHead>
           </TableRow>
@@ -76,7 +77,7 @@ export function FlowRuleList({ rules }: Props) {
         <TableBody>
           {rules.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+              <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
                 フロールールが登録されていません
               </TableCell>
             </TableRow>
@@ -94,6 +95,19 @@ export function FlowRuleList({ rules }: Props) {
                 </TableCell>
                 <TableCell className="py-2 text-sm text-muted-foreground">
                   {formatDuration(rule)}
+                </TableCell>
+                <TableCell className="py-2">
+                  {rule.apply_roles && rule.apply_roles.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {rule.apply_roles.map((r) => (
+                        <Badge key={r} variant="secondary" className="text-[11px]">
+                          {ROLE_LABELS[r] ?? r}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">全ロール</span>
+                  )}
                 </TableCell>
                 <TableCell className="py-2 text-center">
                   <Switch

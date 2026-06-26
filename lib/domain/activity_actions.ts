@@ -100,6 +100,7 @@ export async function createActivity(input: ActivityCreateInput): Promise<Activi
       me.id,
       me.full_name ?? me.email,
       values.s_bunrui ?? null,
+      me.role,
     );
   }
 

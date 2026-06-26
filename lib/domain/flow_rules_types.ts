@@ -5,6 +5,18 @@
 
 export type DurationType = 'days_at_time' | 'hours';
 
+/** ルールを適用できる全ロール */
+export const FLOW_RULE_ROLES = ['admin', 'manager', 'sales', 'support', 'viewer'] as const;
+export type FlowRuleRole = (typeof FLOW_RULE_ROLES)[number];
+
+export const ROLE_LABELS: Record<string, string> = {
+  admin: '管理者',
+  manager: 'マネージャ',
+  sales: '営業',
+  support: 'サポート',
+  viewer: '閲覧',
+};
+
 export interface FlowRule {
   id: number;
   name: string;
@@ -15,8 +27,16 @@ export interface FlowRule {
   reset_minute: number;
   is_active: boolean;
   sort_order: number;
+  /** 適用するロール。null/空配列 = すべてのロールに適用 */
+  apply_roles: string[] | null;
   created_at: string;
   updated_at: string;
+}
+
+/** ルールが指定ロールに適用されるか(null/空 = 全ロール) */
+export function ruleAppliesToRole(rule: FlowRule, role: string | null | undefined): boolean {
+  if (!rule.apply_roles || rule.apply_roles.length === 0) return true;
+  return !!role && rule.apply_roles.includes(role);
 }
 
 /** 有効期限を計算する */

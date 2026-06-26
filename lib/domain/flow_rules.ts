@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import type { FlowRule } from './flow_rules_types';
+import { type FlowRule, ruleAppliesToRole } from './flow_rules_types';
 
 export type { DurationType, FlowRule } from './flow_rules_types';
 export { calcExpiresAt, formatDuration } from './flow_rules_types';
@@ -20,10 +20,15 @@ export async function listFlowRules(): Promise<FlowRule[]> {
   return (data ?? []) as FlowRule[];
 }
 
-/** s_bunrui に最もマッチするアクティブなフロールールを返す */
+/**
+ * s_bunrui に最もマッチするアクティブなフロールールを返す。
+ * userRole を渡すと、そのロールに適用されるルールのみを対象にする
+ * (apply_roles が null/空のルールは全ロールに適用)。
+ */
 export async function findMatchingRule(
   supabase: Awaited<ReturnType<typeof createClient>>,
   sBunrui: string | null | undefined,
+  userRole?: string | null,
 ): Promise<FlowRule | null> {
   if (!sBunrui) return null;
 
@@ -36,11 +41,13 @@ export async function findMatchingRule(
     .eq('is_active', true)
     .in('trigger_flag', flags)
     .order('sort_order')
-    .order('id')
-    .limit(flags.length);
+    .order('id');
 
   if (error || !data || data.length === 0) return null;
 
   const rules = data as FlowRule[];
-  return rules[0] ?? null;
+  // userRole 指定時は適用ロールで絞り込む(未指定なら従来どおり全件対象)
+  const applicable =
+    userRole === undefined ? rules : rules.filter((r) => ruleAppliesToRole(r, userRole));
+  return applicable[0] ?? null;
 }
