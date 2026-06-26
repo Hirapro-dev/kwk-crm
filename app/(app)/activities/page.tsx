@@ -1,21 +1,15 @@
 /**
  * 対応歴一覧画面(仕様書 §8.1, §8.2)
  *
- * 本システムの中核画面。新規入力フォームを上部に常設し、
- * その下に一覧をタイムライン形式で表示する。
+ * 一覧をタイムライン形式で表示する(入力は会員詳細から行う)。
  */
 
-import { ActivityForm } from '@/components/activities/ActivityForm';
 import { ActivityTimeline } from '@/components/activities/ActivityTimeline';
 import { PanelFilterBar, PanelHeader } from '@/components/layout/PanelHeader';
 import { Card } from '@/components/ui/card';
 import { PaginationBar } from '@/components/ui/pagination-link';
+import { getDBunruiList, listActivities } from '@/lib/domain/activities';
 import { getCurrentUser } from '@/lib/domain/auth';
-import {
-  getDBunruiList,
-  getRecentBunruiPairs,
-  listActivities,
-} from '@/lib/domain/activities';
 import { ActivitiesFilterBar } from './ActivitiesFilterBar';
 
 interface PageProps {
@@ -34,7 +28,7 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
   const me = await getCurrentUser();
   const page = Number.parseInt(sp.page ?? '1', 10) || 1;
 
-  const [result, bunruiList, recentPairs] = await Promise.all([
+  const [result, bunruiList] = await Promise.all([
     listActivities({
       memberId: sp.member || undefined,
       dBunrui: sp.d || undefined,
@@ -45,14 +39,10 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
       pageSize: 50,
     }),
     getDBunruiList(),
-    getRecentBunruiPairs(200),
   ]);
 
   return (
     <div className="space-y-3">
-      {/* 主役: 入力フォーム(上部固定、カードはフォーム側で持つ) */}
-      <ActivityForm bunruiList={bunruiList} recentPairs={recentPairs} initiallyOpen />
-
       <Card className="overflow-hidden p-0 shadow-sm">
         <PanelHeader
           iconLabel="ACT"
@@ -75,10 +65,10 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
 
         <div className="p-2">
           <ActivityTimeline
-              activities={result.rows}
-              currentUserId={me.id}
-              currentUserRole={me.role}
-            />
+            activities={result.rows}
+            currentUserId={me.id}
+            currentUserRole={me.role}
+          />
         </div>
       </Card>
 
