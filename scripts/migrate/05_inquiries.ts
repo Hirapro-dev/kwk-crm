@@ -78,6 +78,11 @@ function transformRow(
 ): InquiryRow | ErrorRecord {
   const id = nz(row['問合せID']);
   if (!id) return { ...row, _error: '問合せID が空' };
+  // 問合せIDは TA-数字 形式のみ有効。CSVのコメント欄(引用符不正による行分割)で
+  // ID欄にコメント断片が入った不正行を除外する。
+  if (!/^TA-\d+$/.test(id)) {
+    return { ...row, _error: `問合せID 形式不正(行分割の可能性): ${id.slice(0, 30)}` };
+  }
 
   const registeredAtRaw = row['登録日時'];
   let registeredAt = parseJpDateTime(registeredAtRaw);
