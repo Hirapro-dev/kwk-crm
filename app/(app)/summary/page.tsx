@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { getActivitySummaryByOwner } from '@/lib/domain/activity_summary';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { getNewCustomerSummary, listInfoAcquiredPoints } from '@/lib/domain/customer_summary';
 import { getFormSummary, listFormsForSummary } from '@/lib/domain/form_summary';
@@ -29,6 +30,7 @@ import { GRANULARITY_LABELS, normalizeGranularity } from '@/lib/utils/date_bucke
 import { normalizePreset, resolveDateRange } from '@/lib/utils/date_preset';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { ActivitySummaryFilterBar } from './ActivitySummaryFilterBar';
 import { CustomerSummaryFilterBar } from './CustomerSummaryFilterBar';
 import { FormSummaryFilterBar } from './FormSummaryFilterBar';
 import { SalesBarChart } from './SalesBarChart';
@@ -46,11 +48,19 @@ const TABS = [
   { key: 'payment', label: '入金' },
   { key: 'customers', label: '新規顧客取得' },
   { key: 'forms', label: 'フォーム集計' },
+  { key: 'activities', label: '対応歴' },
 ] as const;
 
 export default async function SummaryPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const tab = sp.tab === 'customers' ? 'customers' : sp.tab === 'forms' ? 'forms' : 'payment';
+  const tab =
+    sp.tab === 'customers'
+      ? 'customers'
+      : sp.tab === 'forms'
+        ? 'forms'
+        : sp.tab === 'activities'
+          ? 'activities'
+          : 'payment';
 
   const [me, favorites] = await Promise.all([getCurrentUser(), listSummaryFavorites()]);
 
@@ -89,6 +99,8 @@ export default async function SummaryPage({ searchParams }: PageProps) {
         <CustomerTab sp={sp} />
       ) : tab === 'forms' ? (
         <FormTab sp={sp} />
+      ) : tab === 'activities' ? (
+        <ActivityTab sp={sp} />
       ) : (
         <PaymentTab sp={sp} />
       )}
@@ -456,6 +468,96 @@ async function FormTab({ sp }: { sp: SP }) {
           </Table>
         </>
       )}
+    </>
+  );
+}
+
+/* ===================== 対応歴タブ ===================== */
+async function ActivityTab({ sp }: { sp: SP }) {
+  const preset = sp.apreset ? normalizePreset(sp.apreset) : 'this_month';
+  const range = resolveDateRange(preset, sp.afrom ?? null, sp.ato ?? null);
+
+  const rows = await getActivitySummaryByOwner({ from: range.from, to: range.to });
+
+  const totalCreated = rows.reduce((s, r) => s + r.total, 0);
+  const totalConnected = rows.reduce((s, r) => s + r.connected, 0);
+  const overallRate = totalCreated > 0 ? totalConnected / totalCreated : 0;
+
+  const chartData = {
+    data: rows.map((r) => ({ name: r.owner_name, value: r.total })),
+    categoryLabel: '対応者',
+    valueLabel: '対応歴作成数',
+  };
+
+  return (
+    <>
+      <PanelHeader
+        iconLabel="ACT"
+        iconColor="#00C896"
+        viewName="対応歴サマリ(対応者別)"
+        totalCount={rows.length}
+      />
+
+      <PanelFilterBar>
+        <Suspense>
+          <ActivitySummaryFilterBar preset={preset} from={sp.afrom ?? ''} to={sp.ato ?? ''} />
+        </Suspense>
+      </PanelFilterBar>
+
+      {/* 集計カード */}
+      <div className="grid gap-3 border-b p-4 md:grid-cols-3">
+        <SummaryCard label="対応歴作成数 合計" value={`${totalCreated.toLocaleString()} 件`} />
+        <SummaryCard label="通電数 合計" value={`${totalConnected.toLocaleString()} 件`} />
+        <SummaryCard label="通電率(全体)" value={`${(overallRate * 100).toFixed(1)} %`} />
+      </div>
+
+      <div className="border-b px-4 py-3">
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          対応者別 対応歴作成数
+        </div>
+        {rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            該当する対応歴データがありません
+          </p>
+        ) : (
+          <ScrollableChart count={rows.length} chartData={chartData} />
+        )}
+      </div>
+
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-gray-50 hover:bg-gray-50">
+            <TableHead className="h-9">対応者</TableHead>
+            <TableHead className="h-9 text-right">対応歴作成数</TableHead>
+            <TableHead className="h-9 text-right">通電数</TableHead>
+            <TableHead className="h-9 text-right">通電率</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
+                該当データがありません
+              </TableCell>
+            </TableRow>
+          ) : (
+            rows.map((r) => (
+              <TableRow key={r.owner_id ?? '(未割当)'} className="sf-row-hover">
+                <TableCell className="py-2 font-medium">{r.owner_name}</TableCell>
+                <TableCell className="py-2 text-right tabular-nums">
+                  {r.total.toLocaleString()}
+                </TableCell>
+                <TableCell className="py-2 text-right tabular-nums">
+                  {r.connected.toLocaleString()}
+                </TableCell>
+                <TableCell className="py-2 text-right tabular-nums">
+                  {(r.rate * 100).toFixed(1)} %
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </>
   );
 }
