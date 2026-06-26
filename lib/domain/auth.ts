@@ -1,7 +1,7 @@
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
 import { DEV_AUTH_COOKIE, devAuthUserFromCookie, isDevAuthEnabled } from '@/lib/dev_auth';
 import { createClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import type { AppUser } from './types';
 
 /**
@@ -41,6 +41,12 @@ export async function getCurrentUser(): Promise<AppUser> {
     // auth.users に存在するが public.users に対応レコードがない場合はログイン画面へ。
     // (パスワードリセット等でUUIDが不一致になった場合もここで救済)
     redirect('/login');
+  }
+
+  // 無効ユーザー(is_active=false)はアクセス不可。サインアウトしてログイン画面へ。
+  if (!(data as AppUser).is_active) {
+    await supabase.auth.signOut();
+    redirect('/login?error=inactive');
   }
 
   return data as AppUser;

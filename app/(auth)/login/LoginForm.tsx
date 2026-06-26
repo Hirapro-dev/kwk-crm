@@ -1,10 +1,10 @@
 'use client';
 
+import { devLogin } from '@/lib/domain/dev_auth_actions';
+import { createClient } from '@/lib/supabase/client';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { devLogin } from '@/lib/domain/dev_auth_actions';
-import { createClient } from '@/lib/supabase/client';
 
 const ACCENT = '#00C896';
 
@@ -44,7 +44,7 @@ export function LoginForm({ devAuth = false }: { devAuth?: boolean }) {
 
     startLoginTransition(async () => {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: identifier,
         password,
       });
@@ -55,6 +55,20 @@ export function LoginForm({ devAuth = false }: { devAuth?: boolean }) {
             : 'メールアドレスまたはパスワードが正しくありません',
         );
         return;
+      }
+      // 無効ユーザー(is_active=false)はログイン不可
+      const uid = data.user?.id;
+      if (uid) {
+        const { data: prof } = await supabase
+          .from('users')
+          .select('is_active')
+          .eq('id', uid)
+          .maybeSingle();
+        if (prof && prof.is_active === false) {
+          await supabase.auth.signOut();
+          setLoginError('このアカウントは無効化されています。管理者にお問い合わせください。');
+          return;
+        }
       }
       router.push('/');
       router.refresh();
@@ -101,7 +115,11 @@ export function LoginForm({ devAuth = false }: { devAuth?: boolean }) {
             </p>
             <button
               type="button"
-              onClick={() => { setMode('login'); setResetSent(false); setResetEmail(''); }}
+              onClick={() => {
+                setMode('login');
+                setResetSent(false);
+                setResetEmail('');
+              }}
               className="text-sm text-[#00C896] hover:underline"
             >
               ← ログイン画面に戻る
@@ -110,7 +128,10 @@ export function LoginForm({ devAuth = false }: { devAuth?: boolean }) {
         ) : (
           <form className="space-y-4" onSubmit={onReset}>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+              <Mail
+                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                aria-hidden="true"
+              />
               <input
                 type="email"
                 required
@@ -123,7 +144,9 @@ export function LoginForm({ devAuth = false }: { devAuth?: boolean }) {
             </div>
 
             {resetError && (
-              <p className="text-center text-sm text-red-500" role="alert">{resetError}</p>
+              <p className="text-center text-sm text-red-500" role="alert">
+                {resetError}
+              </p>
             )}
 
             <button
@@ -153,7 +176,10 @@ export function LoginForm({ devAuth = false }: { devAuth?: boolean }) {
     <form className="space-y-4" onSubmit={onLogin}>
       {/* メールアドレス */}
       <div className="relative">
-        <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+        <Mail
+          className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+          aria-hidden="true"
+        />
         <input
           id="identifier"
           type={devAuth ? 'text' : 'email'}
@@ -168,7 +194,10 @@ export function LoginForm({ devAuth = false }: { devAuth?: boolean }) {
 
       {/* パスワード */}
       <div className="relative">
-        <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+        <Lock
+          className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+          aria-hidden="true"
+        />
         <input
           id="password"
           type={showPassword ? 'text' : 'password'}
@@ -196,7 +225,9 @@ export function LoginForm({ devAuth = false }: { devAuth?: boolean }) {
 
       {/* エラー */}
       {loginError && (
-        <p className="text-center text-sm text-red-500" role="alert">{loginError}</p>
+        <p className="text-center text-sm text-red-500" role="alert">
+          {loginError}
+        </p>
       )}
 
       {/* ログインボタン */}

@@ -1,6 +1,8 @@
 'use client';
 
+import { cn } from '@/lib/utils/cn';
 import {
+  Activity,
   Boxes,
   Briefcase,
   CloudDownload,
@@ -13,7 +15,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils/cn';
 
 /**
  * Salesforce Setup 風 左サイドメニュー。
@@ -35,9 +36,7 @@ interface MenuSection {
 const SECTIONS: MenuSection[] = [
   {
     label: 'ホーム',
-    items: [
-      { href: '/settings', label: '設定ホーム', icon: <HomeIcon className="h-3.5 w-3.5" /> },
-    ],
+    items: [{ href: '/settings', label: '設定ホーム', icon: <HomeIcon className="h-3.5 w-3.5" /> }],
   },
   {
     label: '管理',
@@ -77,6 +76,11 @@ const SECTIONS: MenuSection[] = [
         href: '/settings/navigation',
         label: 'メニューバー',
         icon: <MenuIcon className="h-3.5 w-3.5" />,
+      },
+      {
+        href: '/settings/access-log',
+        label: 'アクセスログ',
+        icon: <Activity className="h-3.5 w-3.5" />,
       },
       // 今後: ロール定義 / フォームマスタ / 対応分類マスタなどを追加予定
     ],

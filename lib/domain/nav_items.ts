@@ -20,12 +20,62 @@ export interface NavItem {
 
 /** migration 14 のシードと一致させる既定値(フォールバック用) */
 export const DEFAULT_NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'ダッシュボード', href: '/', match_prefix: false, sort_order: 10, is_visible: true },
-  { id: 'members', label: '顧客情報', href: '/members', match_prefix: true, sort_order: 20, is_visible: true },
-  { id: 'inquiries', label: '問合せ', href: '/inquiries', match_prefix: true, sort_order: 30, is_visible: true },
-  { id: 'applications', label: '申込', href: '/applications', match_prefix: true, sort_order: 40, is_visible: true },
-  { id: 'summary', label: 'サマリ', href: '/summary', match_prefix: true, sort_order: 50, is_visible: true },
-  { id: 'reports', label: 'レポート', href: '/reports', match_prefix: true, sort_order: 60, is_visible: true },
+  {
+    id: 'dashboard',
+    label: 'ダッシュボード',
+    href: '/',
+    match_prefix: false,
+    sort_order: 10,
+    is_visible: true,
+  },
+  {
+    id: 'members',
+    label: '顧客情報',
+    href: '/members',
+    match_prefix: true,
+    sort_order: 20,
+    is_visible: true,
+  },
+  {
+    id: 'inquiries',
+    label: '問合せ',
+    href: '/inquiries',
+    match_prefix: true,
+    sort_order: 30,
+    is_visible: true,
+  },
+  {
+    id: 'applications',
+    label: '申込',
+    href: '/applications',
+    match_prefix: true,
+    sort_order: 40,
+    is_visible: true,
+  },
+  {
+    id: 'activities',
+    label: '対応歴',
+    href: '/activities',
+    match_prefix: true,
+    sort_order: 45,
+    is_visible: true,
+  },
+  {
+    id: 'summary',
+    label: 'サマリ',
+    href: '/summary',
+    match_prefix: true,
+    sort_order: 50,
+    is_visible: true,
+  },
+  {
+    id: 'reports',
+    label: 'レポート',
+    href: '/reports',
+    match_prefix: true,
+    sort_order: 60,
+    is_visible: true,
+  },
   { id: 'ai', label: 'AI', href: '/ai', match_prefix: false, sort_order: 70, is_visible: true },
 ];
 
