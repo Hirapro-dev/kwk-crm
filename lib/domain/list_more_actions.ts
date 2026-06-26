@@ -5,6 +5,7 @@
  * 既存の list 関数(フィルタ/ソート対応)を pageSize=50 で呼び、行だけ返す。
  */
 
+import { listActivities } from './activities';
 import { listApplications } from './applications';
 import { listInquiries } from './inquiries';
 import { LIST_PAGE_SIZE } from './list_constants';
@@ -48,5 +49,19 @@ export async function loadMoreApplications(
     page,
     pageSize: LIST_PAGE_SIZE,
   });
+  return r.rows;
+}
+
+export async function loadMoreActivities(
+  params: {
+    memberId?: string;
+    ownerId?: string;
+    dBunrui?: string;
+    from?: string;
+    to?: string;
+  },
+  page: number,
+) {
+  const r = await listActivities({ ...params, page, pageSize: LIST_PAGE_SIZE });
   return r.rows;
 }
