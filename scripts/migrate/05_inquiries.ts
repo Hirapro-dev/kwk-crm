@@ -40,7 +40,7 @@ interface InquiryRow {
   address: string | null;
   ad_id: string | null;
   extra: Record<string, unknown>;
-  registered_at: string;
+  registered_at: string | null;
 }
 
 const COMMON_KEYS = new Set([
@@ -84,12 +84,9 @@ function transformRow(
     return { ...row, _error: `問合せID 形式不正(行分割の可能性): ${id.slice(0, 30)}` };
   }
 
-  const registeredAtRaw = row['登録日時'];
-  let registeredAt = parseJpDateTime(registeredAtRaw);
-  if (!registeredAt) {
-    // 登録日時が無い場合は現在時刻でフォールバック
-    registeredAt = new Date().toISOString();
-  }
+  // 登録日時はCSVの値をそのまま反映。空/解析不可は NULL(空欄)とする
+  // (取込日時でフォールバックしない)。
+  const registeredAt = parseJpDateTime(row['登録日時']);
 
   const formName = nz(row['フォーム名']);
   const formId = formName ? (formsMap.get(formName) ?? null) : null;
@@ -202,7 +199,12 @@ async function main(): Promise<void> {
     } else {
       errors.push({ id: r.id, _error: '問合せID 重複(後勝ち)' });
       const prev = dedup[idx]!;
-      dedup[idx] = { ...r, extra: { ...prev.extra, ...r.extra } };
+      dedup[idx] = {
+        ...r,
+        // 登録日時は非NULLを優先(空の行が日付を持つ行を上書きしないように)
+        registered_at: r.registered_at ?? prev.registered_at,
+        extra: { ...prev.extra, ...r.extra },
+      };
     }
   }
 
