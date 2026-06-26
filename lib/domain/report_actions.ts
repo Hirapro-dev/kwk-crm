@@ -1,15 +1,19 @@
 'use server';
 
+import type { ReportDefinition, ReportTypeId } from '@/lib/reports/types';
+import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
-import type { ReportDefinition, ReportTypeId } from '@/lib/reports/types';
 import { getCurrentUser } from './auth';
 
 const ReportSaveSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().min(1).max(200),
-  description: z.string().max(2000).optional().or(z.literal('').transform(() => undefined)),
+  description: z
+    .string()
+    .max(2000)
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
   report_type: z.string(),
   definition: z.record(z.string(), z.unknown()),
   visibility: z.enum(['private', 'team', 'public']).default('private'),
@@ -48,10 +52,7 @@ export async function saveReport(input: {
   };
 
   if (parsed.data.id) {
-    const { error } = await supabase
-      .from('reports')
-      .update(values)
-      .eq('id', parsed.data.id);
+    const { error } = await supabase.from('reports').update(values).eq('id', parsed.data.id);
     if (error) return { ok: false, error: error.message };
     revalidatePath('/reports');
     revalidatePath(`/reports/${parsed.data.id}`);
@@ -94,19 +95,30 @@ export async function deleteReport(id: string): Promise<ReportSaveResult> {
 export async function toggleFavorite(reportId: string): Promise<ReportSaveResult> {
   const me = await getCurrentUser();
   const supabase = await createClient();
-  const { data: r } = await supabase
-    .from('reports')
-    .select('favorited_by')
-    .eq('id', reportId)
-    .maybeSingle();
-  if (!r) return { ok: false, error: 'レポートが見つかりません' };
-  const arr = (r.favorited_by as string[]) ?? [];
-  const next = arr.includes(me.id) ? arr.filter((u) => u !== me.id) : [...arr, me.id];
-  const { error } = await supabase
-    .from('reports')
-    .update({ favorited_by: next })
-    .eq('id', reportId);
-  if (error) return { ok: false, error: error.message };
+
+  // 全ロールでお気に入りできるよう SECURITY DEFINER 関数を使う(migration 38)。
+  const { error: rpcError } = await supabase.rpc('toggle_report_favorite', {
+    p_report_id: reportId,
+  });
+
+  if (rpcError) {
+    // migration 38 未適用(関数なし)時は従来の直接更新にフォールバック
+    //   → 作成者/admin は動作、sales 等は RLS で失敗(従来どおり)
+    const { data: r } = await supabase
+      .from('reports')
+      .select('favorited_by')
+      .eq('id', reportId)
+      .maybeSingle();
+    if (!r) return { ok: false, error: 'レポートが見つかりません' };
+    const arr = (r.favorited_by as string[]) ?? [];
+    const next = arr.includes(me.id) ? arr.filter((u) => u !== me.id) : [...arr, me.id];
+    const { error } = await supabase
+      .from('reports')
+      .update({ favorited_by: next })
+      .eq('id', reportId);
+    if (error) return { ok: false, error: error.message };
+  }
+
   revalidatePath('/reports');
   revalidatePath(`/reports/${reportId}`);
   return { ok: true };

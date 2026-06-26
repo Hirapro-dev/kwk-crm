@@ -35,20 +35,30 @@ export async function applyProtect(
 
     const expiresAt = calcExpiresAt(rule).toISOString();
 
-    const { error } = await supabase
-      .from('members')
-      .update({
-        owner_name_raw:      userFullName,
-        protect_expires_at:  expiresAt,
-        protect_by_user_id:  userId,
-        updated_at:          new Date().toISOString(),
-      })
-      .eq('id', memberId)
-      .is('deleted_at', null);
+    // 全ロールでプロテクトできるよう SECURITY DEFINER 関数を使う(migration 38)。
+    // sales 等が自分担当でない会員にプロテクトを付ける場合も RLS に阻まれない。
+    const { error: rpcError } = await supabase.rpc('apply_member_protect', {
+      p_member_id: memberId,
+      p_user_id: userId,
+      p_expires_at: expiresAt,
+      p_owner_name: userFullName,
+    });
 
-    if (error) {
-      // migration 23/24 未適用時は column not found エラーになる → 無視
-      console.warn('[protect] applyProtect failed:', error.message);
+    if (rpcError) {
+      // migration 38 未適用(関数なし)時は従来の直接更新にフォールバック
+      const { error } = await supabase
+        .from('members')
+        .update({
+          owner_name_raw: userFullName,
+          protect_expires_at: expiresAt,
+          protect_by_user_id: userId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', memberId)
+        .is('deleted_at', null);
+      if (error) {
+        console.warn('[protect] applyProtect failed:', error.message);
+      }
     }
   } catch (e) {
     console.warn('[protect] applyProtect exception:', e);
@@ -68,10 +78,10 @@ export async function expireProtects(supabase: SupabaseClient): Promise<number> 
   const { data, error } = await supabase
     .from('members')
     .update({
-      owner_name_raw:      'free',
-      protect_expires_at:  null,
-      protect_by_user_id:  null,
-      updated_at:          now,
+      owner_name_raw: 'free',
+      protect_expires_at: null,
+      protect_by_user_id: null,
+      updated_at: now,
     })
     .lt('protect_expires_at', now)
     .is('deleted_at', null)
