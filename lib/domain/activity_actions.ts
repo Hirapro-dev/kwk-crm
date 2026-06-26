@@ -92,16 +92,23 @@ export async function createActivity(input: ActivityCreateInput): Promise<Activi
     return { ok: false, error: error?.message ?? '登録に失敗しました' };
   }
 
-  // 時限プロテクト: flow_rules のルールにマッチした場合に自動設定
+  // 時限プロテクト: flow_rules のルールにマッチした場合に自動設定。
+  // 重要: プロテクト適用はあくまで付随処理。ここで何が起きても
+  // 「対応歴は必ず残る」を保証するため、エラーは握りつぶして登録成功を維持する。
+  // (別ユーザーがプロテクト中の場合は applyProtect 側で更新せずスキップする)
   if (values.member_id) {
-    await applyProtect(
-      supabase,
-      values.member_id,
-      me.id,
-      me.full_name ?? me.email,
-      values.s_bunrui ?? null,
-      me.role,
-    );
+    try {
+      await applyProtect(
+        supabase,
+        values.member_id,
+        me.id,
+        me.full_name ?? me.email,
+        values.s_bunrui ?? null,
+        me.role,
+      );
+    } catch (e) {
+      console.warn('[activity] applyProtect skipped (対応歴は登録済み):', e);
+    }
   }
 
   // 関連ページのキャッシュをパージ
