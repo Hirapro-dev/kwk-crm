@@ -38,7 +38,14 @@ export interface InquiryListParams {
 
 /** 一覧でソート可能な inquiries カラム(ホワイトリスト) */
 const INQUIRY_SORTABLE = new Set<string>([
-  'id', 'registered_at', 'form_id', 'member_id', 'name', 'email', 'phone', 'created_at',
+  'id',
+  'registered_at',
+  'form_id',
+  'member_id',
+  'name',
+  'email',
+  'phone',
+  'created_at',
 ]);
 
 export interface InquiryListResult {
@@ -61,7 +68,8 @@ export async function listInquiries(params: InquiryListParams = {}): Promise<Inq
     .from('inquiries')
     .select(
       `
-        id, form_id, member_id, name, email, phone, registered_at, created_at,
+        id, form_id, member_id, name, name_kana, email, phone,
+        postal_code, address, ad_id, extra, registered_at, created_at,
         form:forms!inquiries_form_id_fkey(id, name, category),
         member:members!inquiries_member_id_fkey(id, name)
       `,
@@ -118,7 +126,9 @@ export async function getInquiry(id: string): Promise<Inquiry | null> {
   return (data as unknown as Inquiry) ?? null;
 }
 
-export async function listForms(): Promise<{ id: number; name: string; category: string | null }[]> {
+export async function listForms(): Promise<
+  { id: number; name: string; category: string | null }[]
+> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('forms')

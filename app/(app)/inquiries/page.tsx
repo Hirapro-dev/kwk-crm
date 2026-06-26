@@ -5,6 +5,7 @@
 import { Card } from '@/components/ui/card';
 import { listForms, listInquiries } from '@/lib/domain/inquiries';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
+import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { Suspense } from 'react';
 import { InquiriesFilterBar } from './InquiriesFilterBar';
 import { InquiriesInfinite } from './InquiriesInfinite';
@@ -24,7 +25,7 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const formId = sp.form ? Number.parseInt(sp.form, 10) : undefined;
 
-  const [result, forms] = await Promise.all([
+  const [result, forms, listFields] = await Promise.all([
     listInquiries({
       q: sp.q,
       formId,
@@ -35,6 +36,8 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
       pageSize: LIST_PAGE_SIZE,
     }),
     listForms(),
+    // オブジェクト管理 (/settings/objects/inquiries) の一覧表示制御に従う
+    getVisibleFields('inquiries', 'list'),
   ]);
 
   return (
@@ -71,10 +74,11 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
           </Suspense>
         </div>
 
-        {/* 無限スクロール表示 */}
+        {/* 無限スクロール表示。一覧カラムはオブジェクト管理に従う */}
         <InquiriesInfinite
           key={`${sp.q ?? ''}|${sp.form ?? ''}|${sp.unassigned ?? ''}|${sp.sort ?? ''}|${sp.dir ?? ''}`}
           initialRows={result.rows}
+          fields={listFields}
           total={result.total}
           params={{
             q: sp.q,
