@@ -13,6 +13,9 @@ import { REPORT_TYPES, type ReportTypeId } from '@/lib/reports/types';
 import { ReportBuilder } from '../builder/ReportBuilder';
 import { ObjectSelector } from './ObjectSelector';
 
+// extra 項目(field_definitions)を毎回最新で読み込むため常に動的レンダリング
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
   searchParams: Promise<{ type?: string }>;
 }

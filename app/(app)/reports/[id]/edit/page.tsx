@@ -11,6 +11,9 @@ import { loadExtraColumnsForReportType } from '@/lib/reports/extra_columns';
 import type { ReportTypeId } from '@/lib/reports/types';
 import { ReportBuilder } from '../../builder/ReportBuilder';
 
+// extra 項目(field_definitions)を毎回最新で読み込むため常に動的レンダリング
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
