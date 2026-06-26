@@ -186,7 +186,7 @@ const FORM_COLUMNS = (alias: string): AllowedColumnDef[] => [
 
 const INQUIRY_COLUMNS = (alias: string): AllowedColumnDef[] => [
   { source: `${alias}.id`, label: '問合せID', dataType: 'text', filterable: true, sortable: true, aggregatable: true },
-  { source: `${alias}.form_id`, label: 'フォーム名', dataType: 'number', filterable: true, groupable: true },
+  { source: `${alias}.form_id`, label: 'フォームID', dataType: 'number', filterable: true, groupable: true },
   { source: `${alias}.member_id`, label: '会員ID', dataType: 'text', filterable: true, groupable: true },
   { source: `${alias}.name`, label: '氏名', dataType: 'text', filterable: true, sortable: true },
   { source: `${alias}.name_kana`, label: '氏名かな', dataType: 'text', filterable: true },
