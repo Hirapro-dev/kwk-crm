@@ -25,7 +25,7 @@ import { normalizeEmail, normalizePhone, nz, parseJpDateTime } from './lib/norma
 import { syncExtraFieldDefinitions } from './lib/sync_fields';
 
 const SCRIPT_NAME = '05_inquiries';
-const DEFAULT_CSVS = ['KAWARA版関連.csv', '機密保持_CP.csv'];
+const DEFAULT_CSVS = ['KAWARA版関連.csv', '機密保持・CP.csv'];
 const BATCH_SIZE = 100;
 
 interface InquiryRow {
@@ -181,8 +181,9 @@ async function main(): Promise<void> {
   const errors: ErrorRecord[] = [];
   for (const p of csvPaths) {
     const r = await loadOneCsv(p, formsMap, validMemberIds);
-    all.push(...r.rows);
-    errors.push(...r.errors);
+    // 大量件数(10万件超)を push(...arr) するとスタックオーバーフローするためループで追記
+    for (const x of r.rows) all.push(x);
+    for (const e of r.errors) errors.push(e);
   }
 
   // ID 重複後勝ち + extra マージ
@@ -230,6 +231,8 @@ async function main(): Promise<void> {
     return;
   }
 
+  const ignoreDup = args.skipExisting;
+  logger.info(`投入モード: ${ignoreDup ? '新規のみ(既存スキップ)' : 'upsert(既存更新)'}`);
   const batches = chunk(dedup, BATCH_SIZE);
   let inserted = 0;
   let failed = 0;
@@ -237,7 +240,7 @@ async function main(): Promise<void> {
     const batch = batches[i]!;
     const { error } = await supabase
       .from('inquiries')
-      .upsert(batch, { onConflict: 'id', ignoreDuplicates: false });
+      .upsert(batch, { onConflict: 'id', ignoreDuplicates: ignoreDup });
     if (error) {
       logger.error(`バッチ ${i + 1}/${batches.length} 失敗、1件ずつretry`, {
         message: error.message,
@@ -245,7 +248,7 @@ async function main(): Promise<void> {
       for (const r of batch) {
         const { error: se } = await supabase
           .from('inquiries')
-          .upsert([r], { onConflict: 'id' });
+          .upsert([r], { onConflict: 'id', ignoreDuplicates: ignoreDup });
         if (se) {
           failed++;
           errors.push({ id: r.id, _error: se.message });
