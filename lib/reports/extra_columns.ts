@@ -16,13 +16,20 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { type AllowedColumnDef, REPORT_SCHEMAS, isSafeIdentifier } from './schema_all';
 import type { ReportTypeId } from './types';
-import {
-  type AllowedColumnDef,
-  REPORT_BASE_OBJECT,
-  getBaseAlias,
-  isSafeIdentifier,
-} from './schema_all';
+
+/**
+ * extra(jsonb)を持つオブジェクトと、レポート内で使われる固定エイリアス。
+ * レポートタイプの allowedColumns に該当エイリアスの列が含まれていれば、
+ * そのオブジェクトの extra フィールドを読み込む。
+ */
+const EXTRA_OBJECT_ALIASES: { objectId: string; alias: string }[] = [
+  { objectId: 'members', alias: 'm' },
+  { objectId: 'inquiries', alias: 'inq' },
+  { objectId: 'applications', alias: 'a' },
+  { objectId: 'activities', alias: 'act' },
+];
 
 /**
  * 指定レポートタイプの主軸オブジェクトに紐づく extra jsonb キーを
@@ -33,15 +40,24 @@ import {
 export async function loadExtraColumnsForReportType(
   reportType: ReportTypeId,
 ): Promise<AllowedColumnDef[]> {
-  const objectId = REPORT_BASE_OBJECT[reportType];
-  if (!objectId) return [];
-  const alias = getBaseAlias(reportType);
+  const schema = REPORT_SCHEMAS[reportType];
+  if (!schema) return [];
+
+  // このレポートに登場するオブジェクト(主軸+結合先)のうち extra を持つものを抽出。
+  // allowedColumns の source に該当エイリアス(例 "m.")が含まれていれば対象とする。
+  const targets = EXTRA_OBJECT_ALIASES.filter(({ alias }) =>
+    schema.allowedColumns.some((c) => c.source.startsWith(`${alias}.`)),
+  );
+  if (targets.length === 0) return [];
 
   const supabase = await createClient();
+  const objectIds = targets.map((t) => t.objectId);
+
+  // 全対象オブジェクトの extra フィールドを一括取得
   const { data, error } = await supabase
     .from('field_definitions')
-    .select('field_name, label, is_in_db, is_placeholder')
-    .eq('object_id', objectId)
+    .select('object_id, field_name, label, is_in_db, is_placeholder')
+    .in('object_id', objectIds)
     .eq('is_in_db', false)
     .eq('is_placeholder', false)
     .order('sort_order_detail', { ascending: true })
@@ -53,8 +69,12 @@ export async function loadExtraColumnsForReportType(
     return [];
   }
 
+  const aliasByObject = new Map(targets.map((t) => [t.objectId, t.alias]));
   const results: AllowedColumnDef[] = [];
   for (const row of data ?? []) {
+    const objectId = row.object_id as string;
+    const alias = aliasByObject.get(objectId);
+    if (!alias) continue;
     const fieldName = row.field_name as string;
     const label = (row.label as string | null) ?? fieldName;
     const source = `${alias}.extra:${fieldName}`;
