@@ -354,7 +354,7 @@ erDiagram
 - `inquiry_id` text FK → inquiries (nullable)
 - `member_id` text FK → members (not null)
 - `project_id` int FK → projects (not null)
-- `application_date` date not null
+- `application_date` date nullable — ※2026-06 に NOT NULL を解除(migration 39)。申込日が空のCSV行も取込可能にするため
 - `status` text check in (`対応中`, `未購入`, `完了`, `出金`, `資金移動`)
 - `flow_type` text check in (`入金`, `出金`, `資金移動`, `W`, null許容)
 - `owner_id` uuid FK → users

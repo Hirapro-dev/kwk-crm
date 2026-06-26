@@ -15,12 +15,12 @@ import { chunk } from './lib/chunk';
 import { readCsv } from './lib/csv';
 import { createMigrateClient } from './lib/db';
 import { getEnv } from './lib/env';
-import { writeErrors, type ErrorRecord } from './lib/error_writer';
+import { type ErrorRecord, writeErrors } from './lib/error_writer';
 import { logger } from './lib/logger';
 import { nz, parseAmount, parseJpDate, parseJpDateTime } from './lib/normalizers';
 import { loadProjectsMap } from './lib/projects_loader';
-import { loadUsersForOwnerResolver } from './lib/users_loader';
 import { syncExtraFieldDefinitions } from './lib/sync_fields';
+import { loadUsersForOwnerResolver } from './lib/users_loader';
 
 const SCRIPT_NAME = '06_applications';
 const DEFAULT_CSV = '申し込み情報.csv';
@@ -43,7 +43,7 @@ interface ApplicationRow {
   inquiry_id: string | null;
   member_id: string;
   project_id: number;
-  application_date: string;
+  application_date: string | null;
   status: Status | null;
   flow_type: FlowType | null;
   owner_id: string | null;
@@ -69,11 +69,37 @@ interface ApplicationRow {
 }
 
 const COMMON_KEYS = new Set([
-  '申込情報ID', '投資案件', '問合せ管理ID', '申込日', 'ｽﾃｰﾀｽ', '入金/移動',
-  '会員ID', '会員氏名', '会員かな', '永久担当', '申込獲得者', 'メールアドレス',
-  '契約書送付日', '投資プラン', '起算月', '入金予定日', '入金予定額',
-  '入金日', '入金額', '仮想通貨除外分', '円金利', '郵便番号', '住所',
-  '資金移動日', '資金移動額', '資金移動先', '起算日時', '出金額', '出金日', '契約期間',
+  '申込情報ID',
+  '投資案件',
+  '案件',
+  '問合せ管理ID',
+  '申込日',
+  'ｽﾃｰﾀｽ',
+  '入金/移動',
+  '会員ID',
+  '会員氏名',
+  '会員かな',
+  '永久担当',
+  '申込獲得者',
+  'メールアドレス',
+  '契約書送付日',
+  '投資プラン',
+  '起算月',
+  '入金予定日',
+  '入金予定額',
+  '入金日',
+  '入金額',
+  '仮想通貨除外分',
+  '円金利',
+  '郵便番号',
+  '住所',
+  '資金移動日',
+  '資金移動額',
+  '資金移動先',
+  '起算日時',
+  '出金額',
+  '出金日',
+  '契約期間',
 ]);
 
 function extractExtra(row: Record<string, string>): Record<string, unknown> {
@@ -103,13 +129,14 @@ function transformRow(
   const memberId = nz(row['会員ID']);
   if (!memberId) return { ...row, _error: '会員ID が空' };
 
-  const projectName = nz(row['投資案件']);
-  if (!projectName) return { ...row, _error: '投資案件 が空' };
+  // 案件名の列は CSV により「投資案件」または「案件」
+  const projectName = nz(row['投資案件']) ?? nz(row['案件']);
+  if (!projectName) return { ...row, _error: '投資案件/案件 が空' };
   const projectId = resolvers.projectsMap.get(projectName);
   if (!projectId) return { ...row, _error: `案件マスタにない: ${projectName}` };
 
+  // 申込日は空でも取り込む(application_date は NULL 許容)。不正値も NULL 扱い。
   const applicationDate = parseJpDate(row['申込日']);
-  if (!applicationDate) return { ...row, _error: '申込日が空または不正' };
 
   const statusRaw = nz(row['ｽﾃｰﾀｽ']);
   const status = statusRaw && ALLOWED_STATUS.has(statusRaw) ? (statusRaw as Status) : null;
@@ -119,9 +146,7 @@ function transformRow(
   const ownerNameRaw = nz(row['永久担当']);
   const acquirerNameRaw = nz(row['申込獲得者']);
   const ownerUser = ownerNameRaw ? resolvers.ownerResolver.resolve(ownerNameRaw) : null;
-  const acquirerUser = acquirerNameRaw
-    ? resolvers.ownerResolver.resolve(acquirerNameRaw)
-    : null;
+  const acquirerUser = acquirerNameRaw ? resolvers.ownerResolver.resolve(acquirerNameRaw) : null;
 
   // 問合せ管理ID は inquiries に存在するときのみセット、なければ extra に保持
   const inquiryIdRaw = nz(row['問合せ管理ID']);
@@ -169,7 +194,9 @@ function transformRow(
   };
 }
 
-async function loadValidInquiryIds(supabase: ReturnType<typeof createMigrateClient>): Promise<Set<string>> {
+async function loadValidInquiryIds(
+  supabase: ReturnType<typeof createMigrateClient>,
+): Promise<Set<string>> {
   const ids = new Set<string>();
   let from = 0;
   const PAGE = 1000;
@@ -247,13 +274,19 @@ async function main(): Promise<void> {
   }, {});
   const withInquiry = validRows.filter((r) => r.inquiry_id).length;
   logger.info(`変換完了: 有効=${validRows.length}, エラー=${errors.length}`);
-  logger.info(`inquiry_id解決済み=${withInquiry}, 未解決(extra保持)=${validRows.length - withInquiry}`);
+  logger.info(
+    `inquiry_id解決済み=${withInquiry}, 未解決(extra保持)=${validRows.length - withInquiry}`,
+  );
   logger.info(`ステータス分布`, statusDist);
 
   if (args.dryRun) {
     logger.info('--dry-run: DB 投入はスキップ');
     return;
   }
+
+  // --skip-existing: 既存ID は更新せずスキップ(ON CONFLICT DO NOTHING)
+  const ignoreDup = args.skipExisting;
+  logger.info(`投入モード: ${ignoreDup ? '新規のみ(既存スキップ)' : 'upsert(既存更新)'}`);
 
   const batches = chunk(validRows, BATCH_SIZE);
   let inserted = 0;
@@ -262,7 +295,7 @@ async function main(): Promise<void> {
     const batch = batches[i]!;
     const { error } = await supabase
       .from('applications')
-      .upsert(batch, { onConflict: 'id', ignoreDuplicates: false });
+      .upsert(batch, { onConflict: 'id', ignoreDuplicates: ignoreDup });
     if (error) {
       logger.error(`バッチ ${i + 1}/${batches.length} 失敗、1件ずつretry`, {
         message: error.message,
@@ -270,7 +303,7 @@ async function main(): Promise<void> {
       for (const r of batch) {
         const { error: se } = await supabase
           .from('applications')
-          .upsert([r], { onConflict: 'id' });
+          .upsert([r], { onConflict: 'id', ignoreDuplicates: ignoreDup });
         if (se) {
           failed++;
           errors.push({ id: r.id, _error: se.message });
@@ -283,7 +316,7 @@ async function main(): Promise<void> {
     }
     logger.progress(Math.min((i + 1) * BATCH_SIZE, validRows.length), validRows.length, 'バッチ');
   }
-  logger.info(`投入完了: 成功=${inserted}, 失敗=${failed}`);
+  logger.info(`処理完了(新規投入+既存スキップ含む対象): 成功=${inserted}, 失敗=${failed}`);
 
   if (errors.length > 0) {
     const errPath = writeErrors(`${SCRIPT_NAME}_errors.csv`, errors);
@@ -298,9 +331,7 @@ async function main(): Promise<void> {
   // ヘッダーベースで同期することで、値が空のカラムも登録される
   logger.info('field_definitions を自動同期中...');
   const allCsvHeaders6 = rawRows.length > 0 ? Object.keys(rawRows[0]!) : [];
-  const extraHeaders6 = allCsvHeaders6
-    .map((h) => h.trim())
-    .filter((h) => h && !COMMON_KEYS.has(h));
+  const extraHeaders6 = allCsvHeaders6.map((h) => h.trim()).filter((h) => h && !COMMON_KEYS.has(h));
   await syncExtraFieldDefinitions(supabase, 'applications', extraHeaders6, args.dryRun);
 }
 
