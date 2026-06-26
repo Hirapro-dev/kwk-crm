@@ -45,7 +45,25 @@ export async function applyProtect(
     });
 
     if (rpcError) {
-      // migration 38 未適用(関数なし)時は従来の直接更新にフォールバック
+      // migration 38/43 未適用(関数なし)時は直接更新にフォールバック。
+      // 適用ルールは関数と同じ:
+      //   - 別ユーザーがアクティブにプロテクト中(期限内) → 上書きしない
+      //   - 本人 or free/期限切れ → (再)設定
+      const { data: cur } = await supabase
+        .from('members')
+        .select('protect_by_user_id, protect_expires_at')
+        .eq('id', memberId)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      const curExp = cur?.protect_expires_at as string | null | undefined;
+      const curUser = cur?.protect_by_user_id as string | null | undefined;
+      const isActive = !!curExp && new Date(curExp).getTime() > Date.now();
+      if (isActive && curUser && curUser !== userId) {
+        // 別ユーザーがアクティブにプロテクト中 → 何もしない
+        return;
+      }
+
       const { error } = await supabase
         .from('members')
         .update({
