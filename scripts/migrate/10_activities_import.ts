@@ -124,7 +124,9 @@ async function main() {
     const ownerId = resolveOwner(ownerName);
     if (ownerName && !ownerId) ownerUnresolved++;
 
-    const datetimeRaw = nz(row['登録日時'] ?? row['registered_datetime'] ?? '');
+    const datetimeRaw = nz(
+      row['登録日時'] ?? row['StartDateTime'] ?? row['registered_datetime'] ?? '',
+    );
     const registeredDatetime = parseJpDateTime(datetimeRaw);
     const registeredDate = registeredDatetime ? registeredDatetime.slice(0, 10) : null;
 
