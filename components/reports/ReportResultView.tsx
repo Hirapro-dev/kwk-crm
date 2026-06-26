@@ -24,10 +24,10 @@ import {
 } from '@/components/ui/table';
 import { MEMBER_LINK_ID_ALIAS } from '@/lib/reports/builder_v2';
 import { computeChartData } from '@/lib/reports/chart_data';
+import { categoryName, formatReportCell } from '@/lib/reports/format_cell';
 import { SUMMARY_AGG_LABEL, aggregateColumn, formatSummaryValue } from '@/lib/reports/summary';
 import type { ReportChartConfig, ReportDisplayConfig } from '@/lib/reports/types';
 import { cn } from '@/lib/utils/cn';
-import { formatDate, formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -48,33 +48,23 @@ interface Props {
   showSummaryChips?: boolean;
 }
 
-/** カテゴリ/グループ表示名(空は "(空白)") */
-function displayKey(v: unknown): string {
-  return v === null || v === undefined || v === '' ? '(空白)' : String(v);
-}
+// セル整形は共通の formatReportCell を使用(テーブル/グラフ/グループで表示を一致)
+const formatCell = formatReportCell;
 
-function formatCell(v: unknown, dataType?: string): string {
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'string') {
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) {
-      const d = new Date(v);
-      if (!Number.isNaN(d.getTime())) {
-        // UTC 00:00:00 (= JST 09:00) は日付のみ表示(時刻情報なしと判断)
-        if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0) {
-          return formatDate(v);
-        }
-        return formatDateTime(v);
-      }
-    }
-    // number 型カラムは文字列で返ってくることがあるためカンマ整形
-    if (dataType === 'number' && /^-?\d+(\.\d+)?$/.test(v)) {
-      return Number(v).toLocaleString('ja-JP');
-    }
-    return v;
+/** ソート用に値を比較可能な形へ正規化する */
+function compareValues(a: unknown, b: unknown, dataType?: string): number {
+  const an = a === null || a === undefined || a === '';
+  const bn = b === null || b === undefined || b === '';
+  if (an && bn) return 0;
+  if (an) return 1; // null は末尾
+  if (bn) return -1;
+  if (dataType === 'number') {
+    const na = Number(String(a).replace(/[,¥\s]/g, ''));
+    const nb = Number(String(b).replace(/[,¥\s]/g, ''));
+    if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
   }
-  if (typeof v === 'number') return Number(v).toLocaleString('ja-JP');
-  if (typeof v === 'boolean') return v ? '✓' : '';
-  return JSON.stringify(v);
+  // date/datetime(ISO文字列)や text はそのまま文字列比較(ISOは辞書順=時系列)
+  return String(a).localeCompare(String(b), 'ja');
 }
 
 export function ReportResultView({
@@ -85,6 +75,8 @@ export function ReportResultView({
   showSummaryChips = true,
 }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
+  // 列ヘッダークリックによる昇順/降順ソート(グラフの並びも連動)
+  const [sort, setSort] = useState<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
   // 下部トグル(画像3): 行数 / 詳細行 / 小計 / 総計
   const [showCounts, setShowCounts] = useState(true);
   const [showDetail, setShowDetail] = useState(true);
@@ -125,18 +117,34 @@ export function ReportResultView({
     return m;
   }, [columns]);
 
-  // ----- グラフ用データ(全行ベース。クリックで table を絞り込む) -----
-  const chartData = useMemo(
-    () => (chart ? computeChartData(rows, columns, chart) : null),
-    [chart, rows, columns],
-  );
-  const chartCatAlias = chart ? colById.get(chart.categoryColumnId)?.alias : undefined;
+  const chartCatCol = chart ? colById.get(chart.categoryColumnId) : undefined;
+  const chartCatAlias = chartCatCol?.alias;
 
   // ----- 選択カテゴリで絞り込んだ行 -----
   const filteredRows = useMemo(() => {
     if (!selected || !chartCatAlias) return rows;
-    return rows.filter((r) => displayKey(r[chartCatAlias]) === selected);
-  }, [rows, selected, chartCatAlias]);
+    return rows.filter((r) => categoryName(r[chartCatAlias], chartCatCol?.dataType) === selected);
+  }, [rows, selected, chartCatAlias, chartCatCol]);
+
+  // ----- 昇順/降順ソートを適用した行(テーブル・グラフ共通) -----
+  const sortedRows = useMemo(() => {
+    if (!sort) return filteredRows;
+    const col = colById.get(sort.colId);
+    if (!col) return filteredRows;
+    const arr = [...filteredRows];
+    arr.sort((a, b) => {
+      const cmp = compareValues(a[col.alias], b[col.alias], col.dataType);
+      return sort.dir === 'asc' ? cmp : -cmp;
+    });
+    return arr;
+  }, [filteredRows, sort, colById]);
+
+  // ----- グラフ用データ。ソート時は行の並び順を保持(グラフも昇順/降順に連動) -----
+  const chartData = useMemo(
+    () =>
+      chart ? computeChartData(sortedRows, columns, chart, sort ? 'preserve' : 'value_desc') : null,
+    [chart, sortedRows, columns, sort],
+  );
 
   // ----- サマリー指標(小計 / 総計 / ヘッダーで使う) -----
   const summaries = display?.summaries ?? [];
@@ -155,8 +163,9 @@ export function ReportResultView({
     if (!groupCol) return null;
     const out: Array<{ key: string; rows: Array<Record<string, unknown>> }> = [];
     const idx = new Map<string, number>();
-    for (const r of filteredRows) {
-      const key = displayKey(r[groupCol.alias]);
+    for (const r of sortedRows) {
+      // グループキーはテーブルと同じ整形値で作る(日時は同一日付でまとまる)
+      const key = categoryName(r[groupCol.alias], groupCol.dataType);
       let i = idx.get(key);
       if (i === undefined) {
         i = out.length;
@@ -166,7 +175,7 @@ export function ReportResultView({
       out[i]!.rows.push(r);
     }
     return out;
-  }, [groupCol, filteredRows]);
+  }, [groupCol, sortedRows]);
 
   // ----- 小計/総計行: ラベルは labelColIndex(グループ列) に出す -----
   const renderSummaryRow = (
@@ -292,18 +301,29 @@ export function ReportResultView({
             )}
           </CardHeader>
           <CardContent>
-            <ReportChart
-              type={chart.type}
-              chartData={chartData}
-              title={chart.title}
-              height={chartHeight}
-              onCategoryClick={
-                chartCatAlias
-                  ? (name) => setSelected((cur) => (cur === name ? null : name))
-                  : undefined
-              }
-              activeCategory={selected}
-            />
+            {/* 棒が多いときは最小幅を確保して横スクロール(円/ドーナツは除く) */}
+            <div className="overflow-x-auto">
+              <div
+                style={
+                  chart.type === 'pie' || chart.type === 'donut'
+                    ? undefined
+                    : { minWidth: `${Math.max(chartData.data.length * 40, 320)}px` }
+                }
+              >
+                <ReportChart
+                  type={chart.type}
+                  chartData={chartData}
+                  title={chart.title}
+                  height={chartHeight}
+                  onCategoryClick={
+                    chartCatAlias
+                      ? (name) => setSelected((cur) => (cur === name ? null : name))
+                      : undefined
+                  }
+                  activeCategory={selected}
+                />
+              </div>
+            </div>
             {/* リサイズハンドル: 下部のバーを上下にドラッグして高さを調整(ブラウザに保存) */}
             <div
               role="separator"
@@ -340,11 +360,31 @@ export function ReportResultView({
             <Table>
               <TableHeader>
                 <TableRow>
-                  {columns.map((c) => (
-                    <TableHead key={c.alias} className="whitespace-nowrap text-xs">
-                      {c.label}
-                    </TableHead>
-                  ))}
+                  {columns.map((c) => {
+                    const active = sort?.colId === c.id;
+                    const arrow = active ? (sort?.dir === 'asc' ? ' ▲' : ' ▼') : '';
+                    return (
+                      <TableHead key={c.alias} className="whitespace-nowrap text-xs">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSort((cur) =>
+                              cur?.colId !== c.id
+                                ? { colId: c.id, dir: 'asc' }
+                                : cur.dir === 'asc'
+                                  ? { colId: c.id, dir: 'desc' }
+                                  : null,
+                            )
+                          }
+                          className="inline-flex items-center hover:text-primary"
+                          title="クリックで昇順/降順"
+                        >
+                          {c.label}
+                          <span className="text-primary">{arrow}</span>
+                        </button>
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -420,7 +460,8 @@ export function ReportResultView({
                 ) : (
                   // フラット表示
                   <>
-                    {filteredRows.map((row, i) => (
+                    {sortedRows.map((row, i) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: 行に安定IDがないため index 使用
                       <TableRow key={i}>{renderCells(row)}</TableRow>
                     ))}
                     {hasSummary &&

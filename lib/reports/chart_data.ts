@@ -11,12 +11,14 @@
  *     sum/max 等は値そのものになるため破綻しない。
  */
 
+import { categoryName } from './format_cell';
 import type { ChartAggregate, ReportChartConfig } from './types';
 
 export interface ChartColumnRef {
   id: string;
   alias: string;
   label: string;
+  dataType?: string;
 }
 
 export interface ChartDatum {
@@ -63,6 +65,8 @@ export function computeChartData(
   rows: Array<Record<string, unknown>>,
   columns: ChartColumnRef[],
   chart: ReportChartConfig,
+  /** 並び順: 'value_desc'=値の降順(既定) / 'preserve'=渡された行の出現順(ソート連動用) */
+  orderBy: 'value_desc' | 'preserve' = 'value_desc',
 ): ChartData | null {
   const catCol = columns.find((c) => c.id === chart.categoryColumnId);
   if (!catCol) return null;
@@ -85,11 +89,8 @@ export function computeChartData(
   const order: string[] = [];
 
   for (const row of rows) {
-    const raw = row[catCol.alias];
-    const name =
-      raw === null || raw === undefined || raw === ''
-        ? '(空白)'
-        : String(raw);
+    // テーブルと同じ整形でカテゴリ名を作る(日時/数値の見た目を一致させる)
+    const name = categoryName(row[catCol.alias], catCol.dataType);
     let acc = groups.get(name);
     if (!acc) {
       acc = {
@@ -139,13 +140,13 @@ export function computeChartData(
     return { name, value };
   });
 
-  // 値の降順で並べる(Salesforce のグラフ既定に近い見え方)
-  data.sort((x, y) => y.value - x.value);
+  // 既定は値の降順(Salesforce 風)。ソート連動時は行の出現順を保持する。
+  if (orderBy === 'value_desc') {
+    data.sort((x, y) => y.value - x.value);
+  }
 
   const valueLabel =
-    agg === 'count' || !valCol
-      ? 'レコード件数'
-      : `${AGG_LABEL[agg]}: ${valCol.label}`;
+    agg === 'count' || !valCol ? 'レコード件数' : `${AGG_LABEL[agg]}: ${valCol.label}`;
 
   return { data, categoryLabel: catCol.label, valueLabel };
 }
