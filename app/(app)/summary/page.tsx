@@ -489,6 +489,14 @@ async function ActivityTab({ sp }: { sp: SP }) {
     valueLabel: '対応歴作成数',
   };
 
+  // 対応者名クリック → その期間でのそのユーザーの対応歴一覧へ
+  const activityHref = (ownerId: string) => {
+    const p = new URLSearchParams({ owner: ownerId });
+    if (range.from) p.set('from', range.from);
+    if (range.to) p.set('to', range.to);
+    return `/activities?${p.toString()}`;
+  };
+
   return (
     <>
       <PanelHeader
@@ -543,7 +551,15 @@ async function ActivityTab({ sp }: { sp: SP }) {
           ) : (
             rows.map((r) => (
               <TableRow key={r.owner_id ?? '(未割当)'} className="sf-row-hover">
-                <TableCell className="py-2 font-medium">{r.owner_name}</TableCell>
+                <TableCell className="py-2 font-medium">
+                  {r.owner_id ? (
+                    <Link href={activityHref(r.owner_id)} className="sf-link">
+                      {r.owner_name}
+                    </Link>
+                  ) : (
+                    r.owner_name
+                  )}
+                </TableCell>
                 <TableCell className="py-2 text-right tabular-nums">
                   {r.total.toLocaleString()}
                 </TableCell>
