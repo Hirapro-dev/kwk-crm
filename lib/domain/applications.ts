@@ -14,12 +14,29 @@ export interface ApplicationListItem {
   status: AppStatus | null;
   flow_type: FlowType | null;
   payment_amount: number | null;
+  payment_date: string | null;
   scheduled_payment_date: string | null;
   scheduled_amount: number | null;
+  withdrawal_amount: number | null;
+  withdrawal_date: string | null;
+  transfer_amount: number | null;
+  transfer_date: string | null;
+  transfer_to: string | null;
+  crypto_excluded_amount: number | null;
+  yen_interest: number | null;
+  contract_period: string | null;
+  contract_sent_date: string | null;
+  start_month: string | null;
   owner_id: string | null;
+  acquirer_id: string | null;
+  owner_name_raw: string | null;
+  acquirer_name_raw: string | null;
+  inquiry_id: string | null;
+  extra: Record<string, unknown> | null;
   member: { id: string; name: string } | null;
   project: { id: number; name: string } | null;
   owner: { id: string; full_name: string | null } | null;
+  acquirer: { id: string; full_name: string | null } | null;
 }
 
 export interface Application extends ApplicationListItem {
@@ -60,9 +77,19 @@ export interface ApplicationListParams {
 
 /** 一覧でソート可能な applications カラム(ホワイトリスト) */
 const APPLICATION_SORTABLE = new Set<string>([
-  'id', 'member_id', 'project_id', 'application_date', 'status', 'flow_type',
-  'payment_amount', 'payment_date', 'scheduled_payment_date', 'scheduled_amount',
-  'owner_id', 'withdrawal_amount', 'withdrawal_date',
+  'id',
+  'member_id',
+  'project_id',
+  'application_date',
+  'status',
+  'flow_type',
+  'payment_amount',
+  'payment_date',
+  'scheduled_payment_date',
+  'scheduled_amount',
+  'owner_id',
+  'withdrawal_amount',
+  'withdrawal_date',
 ]);
 
 export interface ApplicationListResult {
@@ -88,10 +115,14 @@ export async function listApplications(
     .select(
       `
         id, member_id, project_id, application_date, status, flow_type,
-        payment_amount, scheduled_payment_date, scheduled_amount, owner_id,
+        payment_amount, payment_date, scheduled_payment_date, scheduled_amount,
+        withdrawal_amount, withdrawal_date, transfer_amount, transfer_date, transfer_to,
+        crypto_excluded_amount, yen_interest, contract_period, contract_sent_date,
+        start_month, owner_id, acquirer_id, owner_name_raw, acquirer_name_raw, inquiry_id, extra,
         member:members!applications_member_id_fkey(id, name),
         project:projects!applications_project_id_fkey(id, name),
-        owner:users!applications_owner_id_fkey(id, full_name)
+        owner:users!applications_owner_id_fkey(id, full_name),
+        acquirer:users!applications_acquirer_id_fkey(id, full_name)
       `,
       { count: 'exact' },
     )
@@ -103,9 +134,7 @@ export async function listApplications(
       nullsFirst: false,
     });
   }
-  query = query
-    .order('application_date', { ascending: false, nullsFirst: false })
-    .range(from, to);
+  query = query.order('application_date', { ascending: false, nullsFirst: false }).range(from, to);
 
   if (params.q && params.q.trim()) {
     const q = params.q.trim().replace(/[%_]/g, '\\$&');

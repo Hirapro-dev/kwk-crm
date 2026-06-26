@@ -6,6 +6,7 @@ import { PanelFilterBar, PanelHeader } from '@/components/layout/PanelHeader';
 import { Card } from '@/components/ui/card';
 import { APP_STATUSES, type AppStatus, listApplications } from '@/lib/domain/applications';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
+import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { listProjects } from '@/lib/domain/projects';
 import { Suspense } from 'react';
 import { ApplicationsFilterBar } from './ApplicationsFilterBar';
@@ -30,7 +31,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
       ? (sp.status as AppStatus)
       : undefined;
 
-  const [result, projects] = await Promise.all([
+  const [result, projects, listFields] = await Promise.all([
     listApplications({
       q: sp.q,
       projectId,
@@ -41,6 +42,8 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
       pageSize: LIST_PAGE_SIZE,
     }),
     listProjects(),
+    // オブジェクト管理 (/settings/objects/applications) の一覧表示制御に従う
+    getVisibleFields('applications', 'list'),
   ]);
 
   return (
@@ -64,10 +67,11 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
           </Suspense>
         </PanelFilterBar>
 
-        {/* 無限スクロール表示 */}
+        {/* 無限スクロール表示。一覧カラムはオブジェクト管理に従う */}
         <ApplicationsInfinite
           key={`${sp.q ?? ''}|${sp.project ?? ''}|${sp.status ?? ''}|${sp.sort ?? ''}|${sp.dir ?? ''}`}
           initialRows={result.rows}
+          fields={listFields}
           total={result.total}
           params={{
             q: sp.q,
