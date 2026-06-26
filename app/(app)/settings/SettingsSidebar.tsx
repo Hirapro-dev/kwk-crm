@@ -10,6 +10,7 @@ import {
   GitBranch,
   Home as HomeIcon,
   Menu as MenuIcon,
+  ShieldCheck,
   Upload,
   Users,
 } from 'lucide-react';
@@ -81,6 +82,11 @@ const SECTIONS: MenuSection[] = [
         href: '/settings/access-log',
         label: 'アクセスログ',
         icon: <Activity className="h-3.5 w-3.5" />,
+      },
+      {
+        href: '/settings/audit-log',
+        label: '監査ログ(操作履歴)',
+        icon: <ShieldCheck className="h-3.5 w-3.5" />,
       },
       // 今後: ロール定義 / フォームマスタ / 対応分類マスタなどを追加予定
     ],

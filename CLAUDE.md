@@ -509,6 +509,27 @@ Phase 1 では:
 **RLS**: SELECT は public + 自分のもの(+admin)。INSERT は本人。UPDATE/DELETE は作成者 or admin。
 **フォールバック**: テーブル未適用(migration 37 未実行)でも一覧は空配列で画面を壊さない。
 
+### 5.12 audit_logs (監査ログ / 操作履歴) ★2026-06 追加 (migration 41)
+不正防止のため「誰がいつ何を作成/編集/削除したか」を**DBトリガーで自動記録**する。
+管理者が `/settings/audit-log` で閲覧する(アクセスログ `/settings/access-log` とは別)。
+
+- `id` bigserial PK
+- `actor_id` uuid — 実行者(`auth.uid()`)
+- `actor_name` text — 実行者の氏名スナップショット
+- `action` text — `INSERT` / `UPDATE` / `DELETE`
+- `table_name` text — 対象テーブル
+- `record_id` text — 対象レコードのID(各PKを text 化)
+- `changes` jsonb — UPDATE時の変更カラム差分 `{col: {old, new}}`(`updated_at` は除外)
+- `created_at` timestamptz
+
+**記録対象トリガー**: `members` / `applications` / `activities` / `users` の INSERT/UPDATE/DELETE。
+**方針**:
+  - 実行者(`auth.uid()`)が NULL の操作(サービスロール/一括取込)は**記録しない**(人の操作のみ)。
+  - 論理削除(`deleted_at` を立てる UPDATE)は UPDATE として記録し、画面側で「削除」と判定表示。
+  - 実質変更なし(`updated_at` のみ)の UPDATE は記録しない。
+**RLS**: admin のみ SELECT。INSERT/UPDATE/DELETE ポリシーは設けず、記録はトリガー関数(SECURITY DEFINER)のみ。
+**フォールバック**: テーブル未適用でも一覧は空配列で画面を壊さない。
+
 ---
 
 ## 6. データ移行計画
