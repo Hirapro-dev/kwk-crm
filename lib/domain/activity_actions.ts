@@ -1,9 +1,9 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
+import { type ActivityCreateInput, ActivityCreateSchema } from './activity_schema';
 import { getCurrentUser } from './auth';
-import { ActivityCreateSchema, type ActivityCreateInput } from './activity_schema';
 import { applyProtect } from './protect';
 
 export interface ActivityCreateResult {
@@ -11,6 +11,34 @@ export interface ActivityCreateResult {
   id?: number;
   error?: string;
   fieldErrors?: Record<string, string[]>;
+}
+
+/**
+ * datetime-local の文字列(JSTの壁時計、例 "2026-06-26T12:45")を
+ * Asia/Tokyo として解釈し、正しい UTC ISO に変換する。
+ *
+ * サーバー(Vercel=UTC)で new Date("2026-06-26T12:45") とすると UTC として
+ * 解釈され +9 ずれるため、明示的に +09:00 を付与する。
+ * 解釈不能なら現在時刻を返す。
+ */
+function jstLocalToIso(local: string | null | undefined): string {
+  if (!local) return new Date().toISOString();
+  // "YYYY-MM-DDTHH:MM" → 秒を補完。既に秒/タイムゾーン付きはそのまま尊重。
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(local);
+  let s = local;
+  if (!hasTz) {
+    if (/T\d{2}:\d{2}$/.test(local)) s = `${local}:00+09:00`;
+    else s = `${local}+09:00`;
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
+/** ISO文字列から JST の YYYY-MM-DD を返す(registered_date 用)。 */
+function jstYmd(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
+  return new Date(d.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 /**
@@ -39,22 +67,10 @@ export async function createActivity(input: ActivityCreateInput): Promise<Activi
 
   const supabase = await createClient();
 
-  let registeredDatetimeIso: string;
-  if (values.registered_at_local) {
-    // datetime-local は秒なしのため :00 を補完。タイムゾーンは Asia/Tokyo として ISO 化。
-    // クライアント側で Date.toISOString() して送る運用にしてもよいが、ここではローカル文字列のまま使う。
-    const local = values.registered_at_local;
-    const parsedDate = new Date(local);
-    if (Number.isNaN(parsedDate.getTime())) {
-      registeredDatetimeIso = new Date().toISOString();
-    } else {
-      registeredDatetimeIso = parsedDate.toISOString();
-    }
-  } else {
-    registeredDatetimeIso = new Date().toISOString();
-  }
-
-  const registeredDate = registeredDatetimeIso.slice(0, 10);
+  // datetime-local(JSTの壁時計)を Asia/Tokyo として正しく UTC ISO 化する
+  const registeredDatetimeIso = jstLocalToIso(values.registered_at_local);
+  // 表示用の日付は JST 基準で算出(UTC slice だと日付がずれるため)
+  const registeredDate = jstYmd(registeredDatetimeIso);
 
   const { data, error } = await supabase
     .from('activities')
@@ -78,7 +94,13 @@ export async function createActivity(input: ActivityCreateInput): Promise<Activi
 
   // 時限プロテクト: flow_rules のルールにマッチした場合に自動設定
   if (values.member_id) {
-    await applyProtect(supabase, values.member_id, me.id, me.full_name ?? me.email, values.s_bunrui ?? null);
+    await applyProtect(
+      supabase,
+      values.member_id,
+      me.id,
+      me.full_name ?? me.email,
+      values.s_bunrui ?? null,
+    );
   }
 
   // 関連ページのキャッシュをパージ
@@ -117,13 +139,10 @@ export async function updateActivity(
 
   const supabase = await createClient();
 
-  let registeredDatetimeIso: string | undefined;
-  if (values.registered_at_local) {
-    const parsedDate = new Date(values.registered_at_local);
-    if (!Number.isNaN(parsedDate.getTime())) {
-      registeredDatetimeIso = parsedDate.toISOString();
-    }
-  }
+  // datetime-local(JSTの壁時計)を Asia/Tokyo として正しく UTC ISO 化する
+  const registeredDatetimeIso = values.registered_at_local
+    ? jstLocalToIso(values.registered_at_local)
+    : undefined;
 
   const updatePayload: Record<string, unknown> = {
     d_bunrui: values.d_bunrui,
@@ -133,13 +152,10 @@ export async function updateActivity(
   };
   if (registeredDatetimeIso) {
     updatePayload.registered_datetime = registeredDatetimeIso;
-    updatePayload.registered_date = registeredDatetimeIso.slice(0, 10);
+    updatePayload.registered_date = jstYmd(registeredDatetimeIso);
   }
 
-  const { error } = await supabase
-    .from('activities')
-    .update(updatePayload)
-    .eq('id', id);
+  const { error } = await supabase.from('activities').update(updatePayload).eq('id', id);
 
   if (error) {
     return { ok: false, error: error.message };
