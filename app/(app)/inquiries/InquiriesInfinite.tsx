@@ -2,7 +2,6 @@
 
 import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTable';
 import { PhoneLink } from '@/components/layout/PhoneLink';
-import { Badge } from '@/components/ui/badge';
 import { TableCell } from '@/components/ui/table';
 import type { InquiryListItem } from '@/lib/domain/inquiries';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
@@ -46,22 +45,11 @@ export function InquiriesInfinite({ initialRows, fields, total, params }: Props)
         );
       }
 
-      // フォーム: カテゴリバッジ + 名称
+      // フォーム: 名称のみ表示(分類バッジは非表示)
       if (f.field_name === 'form_id') {
         return (
           <TableCell key={f.id} className="py-2 text-xs">
-            {r.form ? (
-              <>
-                {r.form.category && (
-                  <Badge variant="outline" className="mr-1 whitespace-nowrap">
-                    {r.form.category}
-                  </Badge>
-                )}
-                <span className="whitespace-nowrap">{r.form.name}</span>
-              </>
-            ) : (
-              '-'
-            )}
+            {r.form ? <span className="whitespace-nowrap">{r.form.name}</span> : '-'}
           </TableCell>
         );
       }
