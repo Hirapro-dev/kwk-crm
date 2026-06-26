@@ -1,22 +1,16 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { createActivity } from '@/lib/domain/activity_actions';
 import type { BunruiPair } from '@/lib/domain/activities_types';
+import { createActivity } from '@/lib/domain/activity_actions';
+import { useEffect, useState, useTransition } from 'react';
 
 /** 接触種別(大分類) 固定選択肢 */
-const CONTACT_TYPES = [
-  'アウト',
-  'イン',
-  'LINE／メール',
-  '対面接触（個別面談）',
-  'その他',
-] as const;
+const CONTACT_TYPES = ['アウト', 'イン', 'LINE／メール', '対面接触（個別面談）', 'その他'] as const;
 type ContactType = (typeof CONTACT_TYPES)[number];
 
 /** 接触内容(中分類) 固定選択肢 */
@@ -81,7 +75,9 @@ export function ActivityForm({
       setOpen(true);
       // フォームが画面外にある場合はスクロールして見せる
       window.setTimeout(() => {
-        document.getElementById('activity-form-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document
+          .getElementById('activity-form-section')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 50);
     };
     window.addEventListener('open-activity-form', handler);
@@ -153,7 +149,8 @@ export function ActivityForm({
       }
       setSuccess('登録しました');
       reset();
-      if (res.id !== undefined) onAfterSubmit?.(res.id);
+      // 登録成功時は id の有無に関わらず一覧を更新する(必ず反映させる)
+      onAfterSubmit?.(res.id ?? 0);
     });
   };
 
@@ -248,7 +245,9 @@ export function ActivityForm({
             checked={inPerson}
             // 対面接触選択時に自動ON&編集不可。それ以外は無効
             disabled={true}
-            onChange={() => { /* 自動制御のみ */ }}
+            onChange={() => {
+              /* 自動制御のみ */
+            }}
           />
         </div>
       </Field>

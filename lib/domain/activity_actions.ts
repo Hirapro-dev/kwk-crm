@@ -86,11 +86,15 @@ export async function createActivity(input: ActivityCreateInput): Promise<Activi
       registered_datetime: registeredDatetimeIso,
     })
     .select('id')
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
-    return { ok: false, error: error?.message ?? '登録に失敗しました' };
+  // 実際の挿入エラー(FK違反等)のみ失敗扱い。
+  // RETURNING(SELECT)が空でも挿入自体は成功しているため成功として扱う
+  // (プロテクト状態に関わらず対応歴は必ず残す)。
+  if (error) {
+    return { ok: false, error: error.message };
   }
+  const newId = (data?.id as number | undefined) ?? undefined;
 
   // 時限プロテクト: flow_rules のルールにマッチした場合に自動設定。
   // 重要: プロテクト適用はあくまで付随処理。ここで何が起きても
@@ -118,7 +122,7 @@ export async function createActivity(input: ActivityCreateInput): Promise<Activi
     revalidatePath(`/members/${values.member_id}`);
   }
 
-  return { ok: true, id: data.id as number };
+  return { ok: true, id: newId };
 }
 
 export interface ActivityUpdateResult {
