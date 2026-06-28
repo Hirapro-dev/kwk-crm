@@ -16,7 +16,12 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { type AllowedColumnDef, REPORT_SCHEMAS, isSafeIdentifier } from './schema_all';
+import {
+  type AllowedColumnDef,
+  type DataType,
+  REPORT_SCHEMAS,
+  isSafeIdentifier,
+} from './schema_all';
 import type { ReportTypeId } from './types';
 
 /**
@@ -56,7 +61,7 @@ export async function loadExtraColumnsForReportType(
   // 全対象オブジェクトの extra フィールドを一括取得
   const { data, error } = await supabase
     .from('field_definitions')
-    .select('object_id, field_name, label, is_in_db, is_placeholder')
+    .select('object_id, field_name, label, data_type, is_in_db, is_placeholder')
     .in('object_id', objectIds)
     .eq('is_in_db', false)
     .eq('is_placeholder', false)
@@ -80,10 +85,14 @@ export async function loadExtraColumnsForReportType(
     const source = `${alias}.extra:${fieldName}`;
     // 防御: 不正な識別子は除外(SQL Builder のホワイトリスト検証と二重ガード)
     if (!isSafeIdentifier(source)) continue;
+    // SQL 上は ->> が text を返すため dataType='text'(フィルタ/SQLはtext)だが、
+    // 表示整形(カンマ/日付)用に field_definitions の実型を displayType に持たせる。
+    const realType = row.data_type as DataType | null;
     results.push({
       source,
       label,
       dataType: 'text', // ->> は常に text
+      displayType: realType ?? 'text',
       isExtra: true,
       filterable: true,
       sortable: true,

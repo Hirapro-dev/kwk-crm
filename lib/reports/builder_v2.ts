@@ -11,6 +11,13 @@
  *   5. デフォルト LIMIT 10,000(Excel 出力時は 50,000)
  */
 
+import {
+  type AllowedColumnDef,
+  REPORT_SCHEMAS,
+  expandExtraSource,
+  findColumn,
+  isSafeIdentifier,
+} from './schema_all';
 import type {
   AggregateFunction,
   FilterOperator,
@@ -20,13 +27,6 @@ import type {
   ReportFilterGroup,
   ReportTypeId,
 } from './types';
-import {
-  type AllowedColumnDef,
-  REPORT_SCHEMAS,
-  expandExtraSource,
-  findColumn,
-  isSafeIdentifier,
-} from './schema_all';
 
 export interface BuiltQuery {
   sql: string;
@@ -103,8 +103,7 @@ function operatorToSql(
   currentUserId: string,
 ): string {
   const op: FilterOperator = cond.op;
-  const value =
-    cond.value === '${current_user}' ? currentUserId : cond.value;
+  const value = cond.value === '${current_user}' ? currentUserId : cond.value;
 
   switch (op) {
     case 'equals':
@@ -259,9 +258,7 @@ function buildFilterGroup(
   const parts: string[] = [];
   for (const c of group.conditions) {
     if ('group' in c) {
-      parts.push(
-        `(${buildFilterGroup(reportType, c.group, pb, currentUserId, extraColumns)})`,
-      );
+      parts.push(`(${buildFilterGroup(reportType, c.group, pb, currentUserId, extraColumns)})`);
     } else {
       const colDef = validateColumn(reportType, c.field, extraColumns);
       // extra なら 'm.extra->>\'key\'' に展開、通常は 'm.name' のまま
@@ -312,7 +309,15 @@ export function buildReportQuery(
     }
     selectParts.push(`${sql} AS ${alias}`);
     usedSources.add(col.source);
-    outputColumns.push({ id: col.id, label: col.label, alias, source: col.source, dataType: colDef.dataType });
+    // 出力列の dataType は表示整形用。extra 列は displayType(実型)を優先する
+    // (フィルタ/SQL は colDef.dataType='text' のままで変更なし)。
+    outputColumns.push({
+      id: col.id,
+      label: col.label,
+      alias,
+      source: col.source,
+      dataType: colDef.displayType ?? colDef.dataType,
+    });
   }
 
   // 会員詳細ページへのリンク用に、会員氏名カラムを含む行レベルレポートでは
@@ -326,9 +331,7 @@ export function buildReportQuery(
   const selectsMemberId = definition.columns.some((c) => c.source === MEMBER_ID_SOURCE);
   // GROUP BY がある場合も m.name が非集計なら m.id を注入してリンクを生成する
   const injectMemberLinkId =
-    selectsMemberName &&
-    !selectsMemberId &&
-    !!findColumn(reportType, MEMBER_ID_SOURCE);
+    selectsMemberName && !selectsMemberId && !!findColumn(reportType, MEMBER_ID_SOURCE);
   if (injectMemberLinkId) {
     selectParts.push(`${sourceSql(MEMBER_ID_SOURCE)} AS ${MEMBER_LINK_ID_ALIAS}`);
     usedSources.add(MEMBER_ID_SOURCE);
