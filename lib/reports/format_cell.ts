@@ -18,6 +18,15 @@ export function formatReportCell(v: unknown, dataType?: string): string {
         return formatDateTime(v);
       }
     }
+    // M/D/YY・M/D/YYYY・YYYY/M/D 形式の日付文字列を YYYY/MM/DD に整形。
+    // 年を含むパターンのみ対象とし、比率等(例 5/6)は変換しない。
+    if (
+      dataType !== 'number' &&
+      (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(v) || /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(v))
+    ) {
+      const f = formatDate(v);
+      if (f) return f;
+    }
     // number 型カラムは文字列で返ってくることがあるためカンマ整形
     if (dataType === 'number' && /^-?\d+(\.\d+)?$/.test(v)) {
       return Number(v).toLocaleString('ja-JP');

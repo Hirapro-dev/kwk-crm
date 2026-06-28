@@ -6,20 +6,13 @@
 
 import { formatDate, formatDateTime } from './date';
 
-export type FieldDataType =
-  | 'text'
-  | 'number'
-  | 'date'
-  | 'datetime'
-  | 'boolean'
-  | 'enum'
-  | 'jsonb';
+export type FieldDataType = 'text' | 'number' | 'date' | 'datetime' | 'boolean' | 'enum' | 'jsonb';
 
 /** label からデータ型を推定する (field_definitions.data_type が未更新でも正しくフォーマットする) */
 function inferTypeFromLabel(label: string): FieldDataType {
   if (/額$|金$|数$|枚$|率$|金利$|料率$|ﾚｰﾄ$|レート$|ﾎﾟｲﾝﾄ$|ポイント$/.test(label)) return 'number';
   if (/日時$/.test(label)) return 'datetime';
-  if (/日$/.test(label)) return 'date';
+  if (/日$|日付$/.test(label)) return 'date';
   if (/フラグ$/.test(label)) return 'boolean';
   return 'text';
 }
