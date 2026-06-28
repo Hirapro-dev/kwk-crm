@@ -52,7 +52,12 @@ function resolveUserName(
   fieldName: string,
   rawValue: unknown,
 ): string | null {
-  if (!fieldName.endsWith('_id') || rawValue === null || rawValue === undefined || rawValue === '') {
+  if (
+    !fieldName.endsWith('_id') ||
+    rawValue === null ||
+    rawValue === undefined ||
+    rawValue === ''
+  ) {
     return null;
   }
   const joinKey = fieldName.replace(/_id$/, '');
@@ -146,12 +151,17 @@ export function DynamicDetailFields({
                 // 例: protect_by_user_id → record.protect_by_user?.full_name
                 //     owner_id           → record.owner?.full_name
                 const resolvedName = resolveUserName(record, f.field_name, raw);
-                valueNode = resolvedName ?? formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
+                valueNode =
+                  resolvedName ?? formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
               }
               return (
                 <div key={f.id} className="flex min-w-0 flex-col border-b pb-2 last:border-b-0">
-                  <dt className="truncate text-xs font-semibold tracking-wide text-slate-600">{label}</dt>
-                  <dd className="min-w-0 break-words text-[15px] text-slate-900">{valueNode}</dd>
+                  <dt className="truncate text-xs font-semibold tracking-wide text-slate-600">
+                    {label}
+                  </dt>
+                  <dd className="min-w-0 whitespace-pre-wrap break-words text-[15px] text-slate-900">
+                    {valueNode}
+                  </dd>
                 </div>
               );
             })}

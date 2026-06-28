@@ -213,8 +213,17 @@ export function ReportResultView({
     const memberId = row[MEMBER_LINK_ID_ALIAS];
     const text = formatCell(row[c.alias], c.dataType);
     const linkable = c.source === 'm.name' && memberId != null && text !== '';
+    // 改行を含む値は元の改行を保持して表示(資産状況などの複数行テキスト)
+    const multiline = text.includes('\n');
     return (
-      <TableCell key={c.alias} className="whitespace-nowrap text-xs">
+      <TableCell
+        key={c.alias}
+        className={
+          multiline
+            ? 'whitespace-pre-wrap align-top text-xs min-w-[16rem]'
+            : 'whitespace-nowrap text-xs'
+        }
+      >
         {linkable ? (
           <Link
             href={`/members/${encodeURIComponent(String(memberId))}`}
