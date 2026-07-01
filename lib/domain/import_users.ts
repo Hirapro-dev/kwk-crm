@@ -12,7 +12,8 @@
 
 import { type RowError, parseCsv } from '@/lib/import/parse';
 import { type UserRecord, type UserResolveMaps, convertUserRow } from '@/lib/import/users_map';
-import { createClient } from '@/lib/supabase/server';
+// 取込はサービスロールで実行(auth.uid()=null → 監査ログに取込を記録しない)。
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from './auth';
 import type { CommitResult, PreviewResult } from './import_actions';
@@ -91,7 +92,7 @@ export async function previewUsersCsv(
     return { ok: false, error: `行数が上限(${MAX_ROWS.toLocaleString()})を超えています` };
   }
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const maps = await buildResolveMaps(supabase);
   const { records, errors } = convertAll(rawRows, maps);
 
@@ -154,7 +155,7 @@ export async function commitUsersCsv(
     return { ok: false, error: `行数が上限(${MAX_ROWS.toLocaleString()})を超えています` };
   }
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const maps = await buildResolveMaps(supabase);
   const { records, existedKeys, errors } = convertAll(rawRows, maps);
   if (records.length === 0) {

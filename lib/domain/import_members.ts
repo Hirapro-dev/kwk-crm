@@ -11,14 +11,13 @@
  * 行変換は lib/import/members_map.ts(純粋関数)を使用。
  */
 
+import { type MemberRecord, type OwnerMaps, convertMemberRow } from '@/lib/import/members_map';
+import { type RowError, parseCsv } from '@/lib/import/parse';
+// 取込(preview/commit)はサービスロールで実行する。
+// commit の upsert が auth.uid()=null になり、監査ログ(audit_logs)に
+// 取込レコードが1件ずつ記録されるのを防ぐ(取込は監査対象外/CLAUDE.md §5.12)。
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import {
-  convertMemberRow,
-  type MemberRecord,
-  type OwnerMaps,
-} from '@/lib/import/members_map';
-import { parseCsv, type RowError } from '@/lib/import/parse';
-import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from './auth';
 import { registerExtraFields } from './field_registry';
 import type { CommitResult, PreviewResult } from './import_actions';
@@ -105,10 +104,13 @@ export async function previewMembersCsv(
     return { ok: false, error: `行数が上限(${MAX_ROWS.toLocaleString()})を超えています` };
   }
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const ownerMaps = await loadOwnerMaps(supabase);
   const { records, errors } = convertAll(rawRows, ownerMaps);
-  const existing = await existingIds(supabase, records.map((r) => r.id));
+  const existing = await existingIds(
+    supabase,
+    records.map((r) => r.id),
+  );
 
   let newCount = 0;
   let updateCount = 0;
@@ -141,7 +143,16 @@ export async function previewMembersCsv(
     errorCount: errors.length,
     errors: errors.slice(0, 50),
     targetLabels: headers.filter((h) =>
-      ['会員ID', '会員氏名', '会員かな', 'Eメール1', '電話番号1', '住所(フル)', '永久担当', '総合計額'].includes(h),
+      [
+        '会員ID',
+        '会員氏名',
+        '会員かな',
+        'Eメール1',
+        '電話番号1',
+        '住所(フル)',
+        '永久担当',
+        '総合計額',
+      ].includes(h),
     ),
     ignoredHeaders: [],
     sample,
@@ -166,7 +177,7 @@ export async function commitMembersCsv(
     return { ok: false, error: `行数が上限(${MAX_ROWS.toLocaleString()})を超えています` };
   }
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const ownerMaps = await loadOwnerMaps(supabase);
   const { records, errors } = convertAll(rawRows, ownerMaps);
   if (records.length === 0) {
@@ -181,7 +192,10 @@ export async function commitMembersCsv(
   let targetRecords = records;
   let skippedCount = 0;
   if (updateOnly) {
-    const existing = await existingIds(supabase, records.map((r) => r.id));
+    const existing = await existingIds(
+      supabase,
+      records.map((r) => r.id),
+    );
     const before = targetRecords.length;
     targetRecords = targetRecords.filter((r) => existing.has(r.id));
     skippedCount = before - targetRecords.length;

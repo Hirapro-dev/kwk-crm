@@ -10,14 +10,15 @@
  * 行変換は lib/import/applications_map.ts(純粋関数)を使用。
  */
 
-import { revalidatePath } from 'next/cache';
 import {
   type AppRecord,
   type AppResolveMaps,
   convertApplicationRow,
 } from '@/lib/import/applications_map';
-import { parseCsv, type RowError } from '@/lib/import/parse';
-import { createClient } from '@/lib/supabase/server';
+import { type RowError, parseCsv } from '@/lib/import/parse';
+// 取込はサービスロールで実行(auth.uid()=null → 監査ログに取込を記録しない)。
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from './auth';
 import { registerExtraFields } from './field_registry';
 import type { CommitResult, PreviewResult } from './import_actions';
@@ -131,10 +132,14 @@ export async function previewApplicationsCsv(
     return { ok: false, error: `行数が上限(${MAX_ROWS.toLocaleString()})を超えています` };
   }
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const maps = await buildResolveMaps(supabase, rawRows);
   const { records, errors } = convertAll(rawRows, maps);
-  const existing = await idsInTable(supabase, 'applications', records.map((r) => r.id));
+  const existing = await idsInTable(
+    supabase,
+    'applications',
+    records.map((r) => r.id),
+  );
 
   let newCount = 0;
   let updateCount = 0;
@@ -192,7 +197,7 @@ export async function commitApplicationsCsv(
     return { ok: false, error: `行数が上限(${MAX_ROWS.toLocaleString()})を超えています` };
   }
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const maps = await buildResolveMaps(supabase, rawRows);
   const { records, errors } = convertAll(rawRows, maps);
   if (records.length === 0) {
@@ -207,7 +212,11 @@ export async function commitApplicationsCsv(
   let targetRecords = records;
   let skippedCount = 0;
   if (updateOnly) {
-    const existing = await idsInTable(supabase, 'applications', records.map((r) => r.id));
+    const existing = await idsInTable(
+      supabase,
+      'applications',
+      records.map((r) => r.id),
+    );
     const before = targetRecords.length;
     targetRecords = targetRecords.filter((r) => existing.has(r.id));
     skippedCount = before - targetRecords.length;

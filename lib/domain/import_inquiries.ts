@@ -11,14 +11,11 @@
  * 行変換は lib/import/inquiries.ts(純粋関数)を使用。
  */
 
+import { INQUIRY_COMMON_KEYS, type InquiryRecord, convertInquiryRow } from '@/lib/import/inquiries';
+import { type RowError, parseCsv } from '@/lib/import/parse';
+// 取込はサービスロールで実行(auth.uid()=null → 監査ログに取込を記録しない)。
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import {
-  convertInquiryRow,
-  INQUIRY_COMMON_KEYS,
-  type InquiryRecord,
-} from '@/lib/import/inquiries';
-import { parseCsv, type RowError } from '@/lib/import/parse';
-import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from './auth';
 import { registerExtraFields } from './field_registry';
 import type { CommitResult, PreviewResult } from './import_actions';
@@ -53,10 +50,7 @@ async function loadFormMap(supabase: Db): Promise<Map<string, number>> {
   return map;
 }
 
-async function loadValidMemberIds(
-  supabase: Db,
-  ids: string[],
-): Promise<Set<string>> {
+async function loadValidMemberIds(supabase: Db, ids: string[]): Promise<Set<string>> {
   const set = new Set<string>();
   for (let i = 0; i < ids.length; i += BATCH) {
     const chunk = ids.slice(i, i + BATCH);
@@ -124,7 +118,7 @@ export async function previewInquiriesCsv(
     return { ok: false, error: `行数が上限(${MAX_ROWS.toLocaleString()})を超えています` };
   }
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const formMap = await loadFormMap(supabase);
   const validMembers = await loadValidMemberIds(supabase, distinctMemberIds(rawRows));
   const { records, errors } = convertAll(rawRows, formMap, validMembers);
@@ -200,7 +194,7 @@ export async function commitInquiriesCsv(
     return { ok: false, error: `行数が上限(${MAX_ROWS.toLocaleString()})を超えています` };
   }
 
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
 
   // 1) forms を非破壊で補完(未登録のフォーム名のみ追加) → 再解決
   let formMap = await loadFormMap(supabase);
@@ -256,9 +250,7 @@ export async function commitInquiriesCsv(
   let upserted = 0;
   for (let i = 0; i < targetRecords.length; i += BATCH) {
     const batch = targetRecords.slice(i, i + BATCH);
-    const { error } = await supabase
-      .from('inquiries')
-      .upsert(batch, { onConflict: 'id' });
+    const { error } = await supabase.from('inquiries').upsert(batch, { onConflict: 'id' });
     if (error) {
       return {
         ok: false,
