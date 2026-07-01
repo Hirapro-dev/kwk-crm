@@ -41,13 +41,46 @@ function monthStartIso(): string {
   return d.toISOString();
 }
 
-export async function getMyDashboardStats(userId: string, role?: string): Promise<DashboardStats> {
+/**
+ * プロテクト集計の対象ユーザーID群を返す。
+ * - admin/manager: null(=全社の有効プロテクトを対象、絞り込みなし)
+ * - それ以外: 自分 + 同名の「無効」アカウント(重複)を合算対象にする
+ *   (重複アカウントに残る保持分もログインユーザーに計上する)
+ */
+async function protectScopeUserIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  role: string | undefined,
+  fullName: string | null | undefined,
+): Promise<string[] | null> {
+  if (role === 'admin' || role === 'manager') return null;
+  const ids = [userId];
+  if (fullName) {
+    const { data } = await supabase
+      .from('users')
+      .select('id')
+      .eq('full_name', fullName)
+      .eq('is_active', false)
+      .is('deleted_at', null);
+    for (const u of (data ?? []) as { id: string }[]) {
+      if (u.id !== userId) ids.push(u.id);
+    }
+  }
+  return ids;
+}
+
+export async function getMyDashboardStats(
+  userId: string,
+  role?: string,
+  fullName?: string | null,
+): Promise<DashboardStats> {
   const supabase = await createClient();
   const today = todayStartIso();
   const monthStart = monthStartIso();
   const now = new Date().toISOString();
-  // admin/manager は全社の有効プロテクト累計、それ以外は自分保持分
+  // admin/manager は全社累計、それ以外は自分+同名無効アカウント合算
   const companyWide = role === 'admin' || role === 'manager';
+  const protectIds = await protectScopeUserIds(supabase, userId, role, fullName);
 
   const monthEnd = new Date();
   monthEnd.setMonth(monthEnd.getMonth() + 1);
@@ -70,7 +103,7 @@ export async function getMyDashboardStats(userId: string, role?: string): Promis
       .is('deleted_at', null)
       .eq('owner_id', userId)
       .gte('registered_datetime', monthStart),
-    // 有効プロテクト数(admin/manager は全社累計、それ以外は自分保持分)
+    // 有効プロテクト数(admin/manager は全社累計、それ以外は自分+同名無効アカウント合算)
     (() => {
       let q = supabase
         .from('members')
@@ -78,7 +111,7 @@ export async function getMyDashboardStats(userId: string, role?: string): Promis
         .is('deleted_at', null)
         .not('protect_expires_at', 'is', null)
         .gt('protect_expires_at', now);
-      if (!companyWide) q = q.eq('protect_by_user_id', userId);
+      if (protectIds) q = q.in('protect_by_user_id', protectIds);
       return q;
     })(),
     // 今月の入金件数・入金額(acquirer_id ベース)
@@ -124,12 +157,13 @@ export interface ProtectSectionData {
 export async function getProtectExpiringSoon(
   userId: string,
   role?: string,
+  fullName?: string | null,
 ): Promise<ProtectSectionData> {
   const supabase = await createClient();
   const now = new Date().toISOString();
   const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
-  // admin/manager は全社のプロテクトを対象(カウントと一覧を一致させる)
-  const companyWide = role === 'admin' || role === 'manager';
+  // admin/manager は全社、それ以外は自分+同名無効アカウント合算(カウントと一覧を一致)
+  const protectIds = await protectScopeUserIds(supabase, userId, role, fullName);
 
   const SELECT = `id, name, address, protect_expires_at,
      protect_by_user:users!members_protect_by_user_id_fkey(id, full_name)`;
@@ -141,7 +175,7 @@ export async function getProtectExpiringSoon(
     .is('deleted_at', null)
     .gt('protect_expires_at', now)
     .lte('protect_expires_at', in3Days);
-  if (!companyWide) soonQuery = soonQuery.eq('protect_by_user_id', userId);
+  if (protectIds) soonQuery = soonQuery.in('protect_by_user_id', protectIds);
   const { data: soonData, error: soonErr } = await soonQuery
     .order('protect_expires_at', { ascending: true })
     .limit(50);
@@ -158,7 +192,7 @@ export async function getProtectExpiringSoon(
       .is('deleted_at', null)
       .not('protect_expires_at', 'is', null)
       .gt('protect_expires_at', now);
-    if (!companyWide) totalQuery = totalQuery.eq('protect_by_user_id', userId);
+    if (protectIds) totalQuery = totalQuery.in('protect_by_user_id', protectIds);
     const { count: total } = await totalQuery;
 
     return {
@@ -175,7 +209,7 @@ export async function getProtectExpiringSoon(
     .is('deleted_at', null)
     .not('protect_expires_at', 'is', null)
     .gt('protect_expires_at', now);
-  if (!companyWide) allQuery = allQuery.eq('protect_by_user_id', userId);
+  if (protectIds) allQuery = allQuery.in('protect_by_user_id', protectIds);
   const { data: allData, error: allErr } = await allQuery
     .order('protect_expires_at', { ascending: true })
     .limit(20);

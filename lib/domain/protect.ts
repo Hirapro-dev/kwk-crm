@@ -48,22 +48,28 @@ export async function applyProtect(
     });
 
     if (rpcError) {
-      // migration 38/43 未適用(関数なし)時は直接更新にフォールバック。
+      // migration 38/43/48 未適用(関数なし)時は直接更新にフォールバック。
       // 適用ルールは関数と同じ:
-      //   - 別ユーザーがアクティブにプロテクト中(期限内) → 上書きしない
-      //   - 本人 or free/期限切れ → (再)設定
+      //   - 別の「有効」ユーザーがアクティブにプロテクト中(期限内) → 上書きしない
+      //   - 保持者が「無効」ユーザー(退職者等) or 本人 or free/期限切れ → (再)設定
       const { data: cur } = await supabase
         .from('members')
-        .select('protect_by_user_id, protect_expires_at')
+        .select(
+          'protect_by_user_id, protect_expires_at, protect_by_user:users!members_protect_by_user_id_fkey(is_active)',
+        )
         .eq('id', memberId)
         .is('deleted_at', null)
         .maybeSingle();
 
       const curExp = cur?.protect_expires_at as string | null | undefined;
       const curUser = cur?.protect_by_user_id as string | null | undefined;
+      const holderActive =
+        (cur as { protect_by_user?: { is_active?: boolean } | null } | null)?.protect_by_user
+          ?.is_active === true;
       const isActive = !!curExp && new Date(curExp).getTime() > Date.now();
-      if (isActive && curUser && curUser !== userId) {
-        // 別ユーザーがアクティブにプロテクト中 → 何もしない
+      if (isActive && curUser && curUser !== userId && holderActive) {
+        // 別の「有効」ユーザーがアクティブにプロテクト中 → 何もしない
+        // (無効保持者なら上書きを許可する)
         return;
       }
 

@@ -33,8 +33,8 @@ import Link from 'next/link';
 export default async function DashboardPage() {
   const me = await getCurrentUser();
   const [stats, protectExpiring, recent, favorites] = await Promise.all([
-    getMyDashboardStats(me.id, me.role),
-    getProtectExpiringSoon(me.id, me.role),
+    getMyDashboardStats(me.id, me.role, me.full_name),
+    getProtectExpiringSoon(me.id, me.role, me.full_name),
     getMyLatestActivities(me.id, 20),
     getFavoriteReportList(me.id),
   ]);
