@@ -33,8 +33,8 @@ import Link from 'next/link';
 export default async function DashboardPage() {
   const me = await getCurrentUser();
   const [stats, protectExpiring, recent, favorites] = await Promise.all([
-    getMyDashboardStats(me.id),
-    getProtectExpiringSoon(me.id),
+    getMyDashboardStats(me.id, me.role),
+    getProtectExpiringSoon(me.id, me.role),
     getMyLatestActivities(me.id, 20),
     getFavoriteReportList(me.id),
   ]);
@@ -59,7 +59,11 @@ export default async function DashboardPage() {
           <section className="grid gap-4 sm:grid-cols-3">
             <StatCard label="今日の対応件数" value={stats.todayActivities.toLocaleString()} />
             <StatCard label="今月の対応件数" value={stats.monthActivities.toLocaleString()} />
-            <StatCard label="プロテクト数" value={stats.protectCount.toLocaleString()} />
+            <StatCard
+              label="プロテクト数"
+              value={stats.protectCount.toLocaleString()}
+              note={stats.protectCompanyWide ? '全社の有効プロテクト' : '自分の保持分'}
+            />
           </section>
 
           {/* 2行目 — 申込(acquirer_id ベース) */}
