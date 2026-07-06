@@ -4,7 +4,8 @@
   "private": true,
   "description": "擬似Salesforce (ひらプロCRM) - 営業活動ログ管理システム",
   "scripts": {
-    "dev": "next dev --turbo",
+    "dev": "next dev",
+    "dev:turbo": "next dev --turbo",
     "build": "next build",
     "start": "next start",
     "lint": "biome check .",
