@@ -16,7 +16,9 @@ const ReportSaveSchema = z.object({
     .or(z.literal('').transform(() => undefined)),
   report_type: z.string(),
   definition: z.record(z.string(), z.unknown()),
-  visibility: z.enum(['private', 'team', 'public']).default('private'),
+  visibility: z.enum(['private', 'team', 'public', 'restricted']).default('private'),
+  /** visibility=restricted のとき閲覧を許可するユーザーID群 */
+  shared_with: z.array(z.string().uuid()).optional(),
 });
 
 export interface ReportSaveResult {
@@ -31,7 +33,8 @@ export async function saveReport(input: {
   description?: string;
   report_type: ReportTypeId | 'custom';
   definition: ReportDefinition;
-  visibility?: 'private' | 'team' | 'public';
+  visibility?: 'private' | 'team' | 'public' | 'restricted';
+  shared_with?: string[];
 }): Promise<ReportSaveResult> {
   const parsed = ReportSaveSchema.safeParse(input);
   if (!parsed.success) {
@@ -42,6 +45,12 @@ export async function saveReport(input: {
     return { ok: false, error: '閲覧専用ロールでは保存できません' };
   }
 
+  // 「指定ユーザーのみ」(restricted) の設定は admin のみ許可
+  const isRestricted = parsed.data.visibility === 'restricted';
+  if (isRestricted && me.role !== 'admin') {
+    return { ok: false, error: '「指定ユーザーのみ」の公開範囲は管理者のみ設定できます' };
+  }
+
   const supabase = await createClient();
   const values = {
     name: parsed.data.name,
@@ -49,6 +58,8 @@ export async function saveReport(input: {
     report_type: parsed.data.report_type,
     definition: parsed.data.definition as unknown as object,
     visibility: parsed.data.visibility,
+    // restricted のときのみ許可ユーザーを保存(重複除去)。それ以外は空配列。
+    shared_with: isRestricted ? Array.from(new Set(parsed.data.shared_with ?? [])) : [],
   };
 
   if (parsed.data.id) {

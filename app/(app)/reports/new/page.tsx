@@ -3,13 +3,15 @@
  * 仕様書 §9.9 / §9.10
  */
 
-import Link from 'next/link';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { getCurrentUser } from '@/lib/domain/auth';
+import { listAllUsers } from '@/lib/domain/users_admin';
 import { loadExtraColumnsForReportType } from '@/lib/reports/extra_columns';
 import { SUMMARY_TEMPLATE_TYPES } from '@/lib/reports/object_pairs';
 import { REPORT_TYPES, type ReportTypeId } from '@/lib/reports/types';
+import Link from 'next/link';
 import { ReportBuilder } from '../builder/ReportBuilder';
 import { ObjectSelector } from './ObjectSelector';
 
@@ -92,6 +94,13 @@ export default async function NewReportPage({ searchParams }: PageProps) {
   // カラム(170+列)もレポートで利用可能になる。
   const extraColumns = await loadExtraColumnsForReportType(type);
 
+  // 「指定ユーザーのみ」は admin のみ設定可。admin のときだけ有効ユーザー一覧を渡す。
+  const me = await getCurrentUser();
+  const canRestrict = me.role === 'admin';
+  const assignableUsers = canRestrict
+    ? (await listAllUsers({ activeOnly: true })).map((u) => ({ id: u.id, full_name: u.full_name }))
+    : [];
+
   return (
     <div className="space-y-3">
       {/* パンくず */}
@@ -113,7 +122,12 @@ export default async function NewReportPage({ searchParams }: PageProps) {
         ]}
       />
 
-      <ReportBuilder reportType={type} extraColumns={extraColumns} />
+      <ReportBuilder
+        reportType={type}
+        extraColumns={extraColumns}
+        canRestrict={canRestrict}
+        assignableUsers={assignableUsers}
+      />
     </div>
   );
 }

@@ -1,17 +1,15 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { ReportResultView } from '@/components/reports/ReportResultView';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ReportResultView } from '@/components/reports/ReportResultView';
-import { cn } from '@/lib/utils/cn';
-import { previewReport } from '@/lib/domain/report_preview_action';
 import { saveReport } from '@/lib/domain/report_actions';
+import { previewReport } from '@/lib/domain/report_preview_action';
+import { type AllowedColumnDef, REPORT_SCHEMAS } from '@/lib/reports/schema_all';
 import { SUMMARY_AGG_LABEL } from '@/lib/reports/summary';
 import type {
   AggregateFunction,
@@ -26,7 +24,9 @@ import type {
   ReportTypeId,
   SummaryAggregate,
 } from '@/lib/reports/types';
-import { REPORT_SCHEMAS, type AllowedColumnDef } from '@/lib/reports/schema_all';
+import { cn } from '@/lib/utils/cn';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 /**
  * Salesforce 風レポートビルダー (仕様書 §9.10)
@@ -50,8 +50,16 @@ import { REPORT_SCHEMAS, type AllowedColumnDef } from '@/lib/reports/schema_all'
  */
 
 const FILTER_OPS: { value: FilterOperator; label: string; supports: string[] }[] = [
-  { value: 'equals', label: '=', supports: ['text', 'number', 'enum', 'boolean', 'date', 'datetime'] },
-  { value: 'not_equals', label: '≠', supports: ['text', 'number', 'enum', 'boolean', 'date', 'datetime'] },
+  {
+    value: 'equals',
+    label: '=',
+    supports: ['text', 'number', 'enum', 'boolean', 'date', 'datetime'],
+  },
+  {
+    value: 'not_equals',
+    label: '≠',
+    supports: ['text', 'number', 'enum', 'boolean', 'date', 'datetime'],
+  },
   { value: 'contains', label: 'を含む', supports: ['text'] },
   { value: 'not_contains', label: 'を含まない', supports: ['text'] },
   { value: 'starts_with', label: 'で始まる', supports: ['text'] },
@@ -63,8 +71,16 @@ const FILTER_OPS: { value: FilterOperator; label: string; supports: string[] }[]
   { value: 'this_month', label: '今月', supports: ['date', 'datetime'] },
   { value: 'this_year', label: '今年', supports: ['date', 'datetime'] },
   { value: 'last_n_days', label: '過去N日間', supports: ['date', 'datetime'] },
-  { value: 'is_null', label: 'NULL', supports: ['text', 'number', 'date', 'datetime', 'enum', 'jsonb'] },
-  { value: 'is_not_null', label: '非NULL', supports: ['text', 'number', 'date', 'datetime', 'enum', 'jsonb'] },
+  {
+    value: 'is_null',
+    label: 'NULL',
+    supports: ['text', 'number', 'date', 'datetime', 'enum', 'jsonb'],
+  },
+  {
+    value: 'is_not_null',
+    label: '非NULL',
+    supports: ['text', 'number', 'date', 'datetime', 'enum', 'jsonb'],
+  },
   { value: 'is_true', label: 'TRUE', supports: ['boolean'] },
   { value: 'is_false', label: 'FALSE', supports: ['boolean'] },
 ];
@@ -103,7 +119,8 @@ interface BuilderProps {
     id?: string;
     name?: string;
     description?: string;
-    visibility?: 'private' | 'team' | 'public';
+    visibility?: 'private' | 'team' | 'public' | 'restricted';
+    shared_with?: string[];
     definition?: ReportDefinition;
   };
   /**
@@ -112,9 +129,19 @@ interface BuilderProps {
    * UI 上は通常カラムと同じく利用可能フィールドに混在表示される。
    */
   extraColumns?: AllowedColumnDef[];
+  /** 「指定ユーザーのみ」を設定できるか(admin のみ true)。 */
+  canRestrict?: boolean;
+  /** 「指定ユーザーのみ」で選択できるユーザー一覧(有効ユーザー)。canRestrict 時に使用。 */
+  assignableUsers?: { id: string; full_name: string | null }[];
 }
 
-export function ReportBuilder({ reportType, initial, extraColumns = [] }: BuilderProps) {
+export function ReportBuilder({
+  reportType,
+  initial,
+  extraColumns = [],
+  canRestrict = false,
+  assignableUsers = [],
+}: BuilderProps) {
   const router = useRouter();
   const baseSchema = REPORT_SCHEMAS[reportType];
 
@@ -132,9 +159,11 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
   // ----- レポートメタ -----
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
-  const [visibility, setVisibility] = useState<'private' | 'team' | 'public'>(
+  const [visibility, setVisibility] = useState<'private' | 'team' | 'public' | 'restricted'>(
     initial?.visibility ?? 'private',
   );
+  // 「指定ユーザーのみ」で閲覧許可するユーザーID
+  const [sharedWith, setSharedWith] = useState<string[]>(initial?.shared_with ?? []);
 
   // ----- 列 / グルーピング / ソート -----
   const [columns, setColumns] = useState<ReportColumn[]>(initial?.definition?.columns ?? []);
@@ -155,18 +184,15 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
     initial?.definition?.filters?.conditions?.filter(
       (c): c is { field: string; op: FilterOperator; value?: unknown } => 'field' in c,
     ) ?? [];
-  const [filters, setFilters] =
-    useState<Array<{ field: string; op: FilterOperator; value?: unknown }>>(
-      initialFilters.map((f) => ({ field: f.field, op: f.op, value: f.value })),
-    );
+  const [filters, setFilters] = useState<
+    Array<{ field: string; op: FilterOperator; value?: unknown }>
+  >(initialFilters.map((f) => ({ field: f.field, op: f.op, value: f.value })));
   const [filterLogic, setFilterLogic] = useState<'AND' | 'OR'>(
     initial?.definition?.filters?.logic ?? 'AND',
   );
 
   // ----- グラフ設定(プレビュー SQL には影響させないため definition とは別管理) -----
-  const [chart, setChart] = useState<ReportChartConfig | null>(
-    initial?.definition?.chart ?? null,
-  );
+  const [chart, setChart] = useState<ReportChartConfig | null>(initial?.definition?.chart ?? null);
 
   // ----- 表示グルーピング / サマリー指標(同じく SQL 非干渉) -----
   const [displayGroupBy, setDisplayGroupBy] = useState<string>(
@@ -216,12 +242,8 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
   // ----- 表示設定(グルーピング / サマリー)。存在しない列参照は除外 -----
   const displayConfig: ReportDisplayConfig | null = useMemo(() => {
     const validGroup =
-      displayGroupBy && columns.some((c) => c.id === displayGroupBy)
-        ? displayGroupBy
-        : undefined;
-    const validSummaries = summaries.filter((s) =>
-      columns.some((c) => c.id === s.columnId),
-    );
+      displayGroupBy && columns.some((c) => c.id === displayGroupBy) ? displayGroupBy : undefined;
+    const validSummaries = summaries.filter((s) => columns.some((c) => c.id === s.columnId));
     if (!validGroup && validSummaries.length === 0) return null;
     return {
       groupByColumnId: validGroup,
@@ -272,10 +294,7 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
   const filteredFields = useMemo(() => {
     const q = fieldQuery.trim().toLowerCase();
     return schema.allowedColumns.filter(
-      (c) =>
-        !q ||
-        c.label.toLowerCase().includes(q) ||
-        c.source.toLowerCase().includes(q),
+      (c) => !q || c.label.toLowerCase().includes(q) || c.source.toLowerCase().includes(q),
     );
   }, [schema, fieldQuery]);
 
@@ -296,8 +315,7 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
       },
     ]);
   };
-  const removeColumn = (id: string) =>
-    setColumns(columns.filter((c) => c.id !== id));
+  const removeColumn = (id: string) => setColumns(columns.filter((c) => c.id !== id));
 
   const moveColumn = (id: string, dir: -1 | 1) => {
     const idx = columns.findIndex((c) => c.id === id);
@@ -317,8 +335,7 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
     setFilters([...filters, { field: def.source, op, value: '' }]);
     setLeftTab('filter'); // 追加後はフィルタタブに切替
   };
-  const removeFilter = (idx: number) =>
-    setFilters(filters.filter((_, i) => i !== idx));
+  const removeFilter = (idx: number) => setFilters(filters.filter((_, i) => i !== idx));
 
   const toggleGroupBy = (source: string) => {
     if (groupBy.includes(source)) {
@@ -348,13 +365,11 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
         // グラフ・表示設定を保存定義にマージ(存在しない列参照は除外)
         definition: {
           ...definition,
-          chart:
-            chart && columns.some((c) => c.id === chart.categoryColumnId)
-              ? chart
-              : undefined,
+          chart: chart && columns.some((c) => c.id === chart.categoryColumnId) ? chart : undefined,
           display: displayConfig ?? undefined,
         },
         visibility,
+        shared_with: visibility === 'restricted' ? sharedWith : undefined,
       });
       if (!res.ok) {
         setSaveError(res.error ?? '保存失敗');
@@ -388,13 +403,17 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
           <Select
             value={visibility}
             onChange={(e) =>
-              setVisibility(e.target.value as 'private' | 'team' | 'public')
+              setVisibility(e.target.value as 'private' | 'team' | 'public' | 'restricted')
             }
             className="h-8 text-xs"
           >
             <option value="private">自分のみ</option>
             <option value="team">チーム</option>
             <option value="public">全社</option>
+            {/* 「指定ユーザーのみ」は admin のみ選択可(既存が restricted の場合も表示) */}
+            {(canRestrict || visibility === 'restricted') && (
+              <option value="restricted">指定ユーザーのみ</option>
+            )}
           </Select>
           <Button onClick={onSave} disabled={saving} size="sm">
             {saving ? '保存中…' : initial?.id ? '更新' : '保存'}
@@ -406,6 +425,44 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
           </p>
         )}
       </div>
+
+      {/* 「指定ユーザーのみ」の閲覧許可ユーザー選択(admin のみ・restricted 選択時) */}
+      {visibility === 'restricted' && (
+        <div className="space-y-2 rounded border bg-card p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">閲覧できるユーザー</Label>
+            <span className="text-[11px] text-muted-foreground">
+              選択中 {sharedWith.length} 名 ・ admin は常に閲覧可
+            </span>
+          </div>
+          {assignableUsers.length === 0 ? (
+            <p className="text-xs text-muted-foreground">選択できるユーザーがいません</p>
+          ) : (
+            <div className="grid max-h-56 grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2 md:grid-cols-3">
+              {assignableUsers.map((u) => {
+                const checked = sharedWith.includes(u.id);
+                return (
+                  <label
+                    key={u.id}
+                    className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) =>
+                        setSharedWith((prev) =>
+                          e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id),
+                        )
+                      }
+                    />
+                    <span className="truncate">{u.full_name ?? u.id}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {showMeta && (
         <div className="space-y-2 rounded border bg-card p-4 shadow-sm">
@@ -428,16 +485,10 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
           <div className="overflow-hidden rounded border bg-card shadow-sm">
             {/* 左ペインタブ */}
             <div className="flex items-stretch border-b bg-slate-100">
-              <LeftTabButton
-                active={leftTab === 'outline'}
-                onClick={() => setLeftTab('outline')}
-              >
+              <LeftTabButton active={leftTab === 'outline'} onClick={() => setLeftTab('outline')}>
                 アウトライン
               </LeftTabButton>
-              <LeftTabButton
-                active={leftTab === 'filter'}
-                onClick={() => setLeftTab('filter')}
-              >
+              <LeftTabButton active={leftTab === 'filter'} onClick={() => setLeftTab('filter')}>
                 フィルタ
                 {filters.length > 0 && (
                   <Badge variant="outline" className="ml-1 h-4 px-1 text-[10px]">
@@ -445,10 +496,7 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
                   </Badge>
                 )}
               </LeftTabButton>
-              <LeftTabButton
-                active={leftTab === 'chart'}
-                onClick={() => setLeftTab('chart')}
-              >
+              <LeftTabButton active={leftTab === 'chart'} onClick={() => setLeftTab('chart')}>
                 グラフ
                 {chart && (
                   <Badge variant="outline" className="ml-1 h-4 px-1 text-[10px]">
@@ -456,10 +504,7 @@ export function ReportBuilder({ reportType, initial, extraColumns = [] }: Builde
                   </Badge>
                 )}
               </LeftTabButton>
-              <LeftTabButton
-                active={leftTab === 'summary'}
-                onClick={() => setLeftTab('summary')}
-              >
+              <LeftTabButton active={leftTab === 'summary'} onClick={() => setLeftTab('summary')}>
                 集計
                 {(displayGroupBy || summaries.length > 0) && (
                   <Badge variant="outline" className="ml-1 h-4 px-1 text-[10px]">
@@ -746,10 +791,7 @@ function OutlinePanel({
         ) : (
           <ul className="space-y-1 text-xs">
             {columns.map((c, i) => (
-              <li
-                key={c.id}
-                className="flex items-start gap-1 rounded border bg-white p-2"
-              >
+              <li key={c.id} className="flex items-start gap-1 rounded border bg-white p-2">
                 <div className="flex flex-col">
                   <button
                     type="button"
@@ -824,9 +866,7 @@ function FilterPanel({
 }: {
   schema: { allowedColumns: AllowedColumnDef[] };
   filters: Array<{ field: string; op: FilterOperator; value?: unknown }>;
-  setFilters: (
-    next: Array<{ field: string; op: FilterOperator; value?: unknown }>,
-  ) => void;
+  setFilters: (next: Array<{ field: string; op: FilterOperator; value?: unknown }>) => void;
   filterLogic: 'AND' | 'OR';
   setFilterLogic: (v: 'AND' | 'OR') => void;
   removeFilter: (idx: number) => void;
@@ -880,9 +920,7 @@ function FilterPanel({
           <ul className="mt-1 space-y-2 text-xs">
             {filters.map((f, i) => {
               const colDef = schema.allowedColumns.find((c) => c.source === f.field);
-              const ops = FILTER_OPS.filter((o) =>
-                o.supports.includes(colDef?.dataType ?? 'text'),
-              );
+              const ops = FILTER_OPS.filter((o) => o.supports.includes(colDef?.dataType ?? 'text'));
               const valueDisabled =
                 f.op === 'is_null' ||
                 f.op === 'is_not_null' ||
@@ -891,10 +929,7 @@ function FilterPanel({
                 f.op === 'this_month' ||
                 f.op === 'this_year';
               return (
-                <li
-                  key={i}
-                  className="space-y-1 rounded border bg-white p-2"
-                >
+                <li key={i} className="space-y-1 rounded border bg-white p-2">
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate text-[11px] font-bold">
                       {colDef?.label ?? f.field}
@@ -1018,9 +1053,7 @@ function ChartPanel({
 
           {/* カテゴリ軸 */}
           <div className="space-y-1">
-            <Label className="text-[11px]">
-              カテゴリ(軸 / スライス)
-            </Label>
+            <Label className="text-[11px]">カテゴリ(軸 / スライス)</Label>
             <Select
               className="h-7 text-xs"
               value={chart.categoryColumnId}
@@ -1047,10 +1080,7 @@ function ChartPanel({
                 } else {
                   patch({
                     valueColumnId: v,
-                    valueAggregate:
-                      chart.valueAggregate === 'count'
-                        ? 'sum'
-                        : chart.valueAggregate,
+                    valueAggregate: chart.valueAggregate === 'count' ? 'sum' : chart.valueAggregate,
                   });
                 }
               }}
@@ -1070,9 +1100,7 @@ function ChartPanel({
             <Select
               className="h-7 text-xs"
               value={chart.valueColumnId ? chart.valueAggregate : 'count'}
-              onChange={(e) =>
-                patch({ valueAggregate: e.target.value as ChartAggregate })
-              }
+              onChange={(e) => patch({ valueAggregate: e.target.value as ChartAggregate })}
               disabled={!chart.valueColumnId}
             >
               {(Object.keys(CHART_AGG_LABEL) as ChartAggregate[])
@@ -1133,8 +1161,7 @@ function SummaryPanel({
     n[i] = { ...n[i]!, ...p };
     setSummaries(n);
   };
-  const remove = (i: number) =>
-    setSummaries(summaries.filter((_, idx) => idx !== i));
+  const remove = (i: number) => setSummaries(summaries.filter((_, idx) => idx !== i));
 
   return (
     <div className="space-y-4 p-3 text-xs">
@@ -1186,9 +1213,7 @@ function SummaryPanel({
             {summaries.map((s, i) => (
               <li key={i} className="space-y-1 rounded border bg-white p-2">
                 <div className="flex items-center justify-between gap-1">
-                  <span className="text-[10px] text-muted-foreground">
-                    指標 {i + 1}
-                  </span>
+                  <span className="text-[10px] text-muted-foreground">指標 {i + 1}</span>
                   <button
                     type="button"
                     onClick={() => remove(i)}
@@ -1201,9 +1226,7 @@ function SummaryPanel({
                 <Select
                   className="h-7 text-xs"
                   value={s.aggregate}
-                  onChange={(e) =>
-                    patch(i, { aggregate: e.target.value as SummaryAggregate })
-                  }
+                  onChange={(e) => patch(i, { aggregate: e.target.value as SummaryAggregate })}
                 >
                   {AGGS.map((a) => (
                     <option key={a} value={a}>

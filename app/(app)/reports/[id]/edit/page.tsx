@@ -2,13 +2,14 @@
  * レポート編集画面(仕様書 §8.1, §9.10)
  */
 
-import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { getReport } from '@/lib/domain/reports';
+import { listAllUsers } from '@/lib/domain/users_admin';
 import { loadExtraColumnsForReportType } from '@/lib/reports/extra_columns';
 import type { ReportTypeId } from '@/lib/reports/types';
+import Link from 'next/link';
+import { notFound, redirect } from 'next/navigation';
 import { ReportBuilder } from '../../builder/ReportBuilder';
 
 // extra 項目(field_definitions)を毎回最新で読み込むため常に動的レンダリング
@@ -28,9 +29,13 @@ export default async function EditReportPage({ params }: PageProps) {
   }
 
   // 主軸オブジェクトの extra jsonb キーを field_definitions からロード
-  const extraColumns = await loadExtraColumnsForReportType(
-    report.report_type as ReportTypeId,
-  );
+  const extraColumns = await loadExtraColumnsForReportType(report.report_type as ReportTypeId);
+
+  // 「指定ユーザーのみ」は admin のみ設定可
+  const canRestrict = me.role === 'admin';
+  const assignableUsers = canRestrict
+    ? (await listAllUsers({ activeOnly: true })).map((u) => ({ id: u.id, full_name: u.full_name }))
+    : [];
 
   return (
     <div className="space-y-4">
@@ -49,9 +54,12 @@ export default async function EditReportPage({ params }: PageProps) {
           name: report.name,
           description: report.description ?? undefined,
           visibility: report.visibility,
+          shared_with: report.shared_with,
           definition: report.definition,
         }}
         extraColumns={extraColumns}
+        canRestrict={canRestrict}
+        assignableUsers={assignableUsers}
       />
     </div>
   );

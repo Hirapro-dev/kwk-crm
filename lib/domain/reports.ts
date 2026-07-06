@@ -1,12 +1,16 @@
-import { createClient } from '@/lib/supabase/server';
 import type { ReportDefinition, ReportTypeId } from '@/lib/reports/types';
+import { createClient } from '@/lib/supabase/server';
+
+export type ReportVisibility = 'private' | 'team' | 'public' | 'restricted';
 
 export interface ReportSummary {
   id: string;
   name: string;
   description: string | null;
   report_type: ReportTypeId | 'custom';
-  visibility: 'private' | 'team' | 'public';
+  visibility: ReportVisibility;
+  /** visibility=restricted のとき閲覧を許可するユーザーID群 */
+  shared_with: string[];
   is_standard: boolean;
   created_by: string;
   last_run_at: string | null;
@@ -33,7 +37,7 @@ export async function listReports(filter?: {
     .from('reports')
     .select(
       `
-        id, name, description, report_type, visibility, is_standard,
+        id, name, description, report_type, visibility, shared_with, is_standard,
         created_by, last_run_at, last_run_duration_ms, last_run_row_count,
         favorited_by, created_at, updated_at,
         creator:users!reports_created_by_fkey(id, full_name, email)
@@ -59,7 +63,7 @@ export async function getReport(id: string): Promise<ReportFull | null> {
     .from('reports')
     .select(
       `
-        id, name, description, report_type, visibility, is_standard,
+        id, name, description, report_type, visibility, shared_with, is_standard,
         folder_id, definition, favorited_by,
         created_by, last_run_at, last_run_duration_ms, last_run_row_count,
         created_at, updated_at,
