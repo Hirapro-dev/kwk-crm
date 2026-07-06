@@ -81,45 +81,87 @@ export async function getProtectSummary(filter: {
     if (rows.length < PAGE) break;
   }
 
-  // 2) 登場した保持者ユーザーの情報を逆引き
-  const userIds = Array.from(counts.keys()).filter((k) => k !== NO_HOLDER_KEY);
-  const userMap = new Map<
-    string,
-    { full_name: string | null; email: string; is_active: boolean; role: string | null }
-  >();
-  if (userIds.length > 0) {
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('id, full_name, email, is_active, role')
-      .in('id', userIds);
-    if (error) throw new Error(`ユーザー取得に失敗: ${error.message}`);
-    for (const u of users ?? []) {
-      userMap.set(u.id, {
-        full_name: u.full_name as string | null,
-        email: u.email as string,
-        is_active: u.is_active as boolean,
-        role: (u.role as string | null) ?? null,
-      });
+  // 2) 全ユーザー(削除除く)を取得。同名アカウントの名寄せに使う(users は小規模)。
+  type U = {
+    id: string;
+    full_name: string | null;
+    email: string;
+    is_active: boolean;
+    role: string | null;
+  };
+  const { data: allUsers, error: uErr } = await supabase
+    .from('users')
+    .select('id, full_name, email, is_active, role')
+    .is('deleted_at', null);
+  if (uErr) throw new Error(`ユーザー取得に失敗: ${uErr.message}`);
+
+  const byId = new Map<string, U>();
+  // 氏名 → 代表アカウント(有効を優先)。同名の有効/無効アカウントを一人に名寄せする。
+  const repByName = new Map<string, U>();
+  for (const raw of allUsers ?? []) {
+    const u: U = {
+      id: raw.id as string,
+      full_name: (raw.full_name as string | null) ?? null,
+      email: raw.email as string,
+      is_active: raw.is_active as boolean,
+      role: (raw.role as string | null) ?? null,
+    };
+    byId.set(u.id, u);
+    if (u.full_name) {
+      const cur = repByName.get(u.full_name);
+      // 未登録、または現代表が無効で今回が有効なら差し替え(有効アカウントを代表に)
+      if (!cur || (!cur.is_active && u.is_active)) repByName.set(u.full_name, u);
     }
   }
 
-  // 3) rows 組み立て + activeFilter 適用 + 件数降順ソート
-  const rows: ProtectSummaryRow[] = Array.from(counts.entries())
-    .map(([uid, count]) => {
-      const u = uid === NO_HOLDER_KEY ? undefined : userMap.get(uid);
+  // 3) counts を氏名で名寄せ合算(同名の有効+無効アカウントを1行にまとめる)
+  const grouped = new Map<string, { rep: U | null; count: number }>();
+  for (const [uid, count] of counts) {
+    let key: string;
+    let rep: U | null;
+    if (uid === NO_HOLDER_KEY) {
+      key = NO_HOLDER_KEY;
+      rep = null;
+    } else {
+      const u = byId.get(uid);
+      if (u?.full_name) {
+        key = `name:${u.full_name}`;
+        rep = repByName.get(u.full_name) ?? u;
+      } else {
+        // 氏名不明(削除済み等) → 名寄せせず単独扱い
+        key = `id:${uid}`;
+        rep = u ?? null;
+      }
+    }
+    const g = grouped.get(key) ?? { rep, count: 0 };
+    g.count += count;
+    grouped.set(key, g);
+  }
+
+  // 4) rows 組み立て + activeFilter / roleFilter + 件数降順ソート
+  const rows: ProtectSummaryRow[] = Array.from(grouped.entries())
+    .map(([key, g]) => {
+      if (key === NO_HOLDER_KEY) {
+        return {
+          user_id: null,
+          user_name: '(担当なし)',
+          is_active: false,
+          role: null,
+          protect_count: g.count,
+        };
+      }
+      const rep = g.rep;
       return {
-        user_id: uid === NO_HOLDER_KEY ? null : uid,
-        // 担当なし / 逆引き不能はいずれも「無効」側として扱う
-        user_name: uid === NO_HOLDER_KEY ? '(担当なし)' : u ? (u.full_name ?? u.email) : '(不明)',
-        is_active: u?.is_active ?? false,
-        role: u?.role ?? null,
-        protect_count: count,
+        user_id: rep?.id ?? null,
+        user_name: rep ? (rep.full_name ?? rep.email) : '(不明)',
+        is_active: rep?.is_active ?? false,
+        role: rep?.role ?? null,
+        protect_count: g.count,
       };
     })
     .filter((r) => {
       if (filter.activeFilter === 'active' && !r.is_active) return false;
       if (filter.activeFilter === 'inactive' && r.is_active) return false;
-      // ロール絞り込み(特定ロール選択時は該当ロールの保持者のみ)
       if (filter.roleFilter !== 'all' && r.role !== filter.roleFilter) return false;
       return true;
     })

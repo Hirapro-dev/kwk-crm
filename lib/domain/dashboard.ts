@@ -41,11 +41,40 @@ function monthStartIso(): string {
   return d.toISOString();
 }
 
+/**
+ * 指定ユーザーと同じ氏名(full_name)を持つ全アカウントのID群を返す(自分を含む)。
+ * 同一人物が有効/無効の重複アカウントを持つ場合、それらに残るプロテクトを
+ * 「一人分」として合算するために使う。full_name が無い/取得失敗時は [userId]。
+ * ※ 同名の別人が居ると合算されうる(氏名を名寄せキーにしているため)点は許容。
+ */
+export async function getSameNameUserIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<string[]> {
+  const { data: me } = await supabase
+    .from('users')
+    .select('full_name')
+    .eq('id', userId)
+    .maybeSingle();
+  const fullName = (me?.full_name as string | null) ?? null;
+  if (!fullName) return [userId];
+  const { data } = await supabase
+    .from('users')
+    .select('id')
+    .eq('full_name', fullName)
+    .is('deleted_at', null);
+  const ids = new Set<string>([userId]);
+  for (const u of (data ?? []) as { id: string }[]) ids.add(u.id);
+  return [...ids];
+}
+
 export async function getMyDashboardStats(userId: string): Promise<DashboardStats> {
   const supabase = await createClient();
   const today = todayStartIso();
   const monthStart = monthStartIso();
   const now = new Date().toISOString();
+  // 同名アカウント(有効/無効)に残る保持分も自分の一人分として合算する
+  const protectIds = await getSameNameUserIds(supabase, userId);
 
   const monthEnd = new Date();
   monthEnd.setMonth(monthEnd.getMonth() + 1);
@@ -68,14 +97,14 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
       .is('deleted_at', null)
       .eq('owner_id', userId)
       .gte('registered_datetime', monthStart),
-    // 有効プロテクト数(ログインユーザー自身の保持分。サマリ/一覧と一致させる)
+    // 有効プロテクト数(自分+同名アカウント合算。サマリ/一覧と一致させる)
     supabase
       .from('members')
       .select('id', { count: 'exact', head: true })
       .is('deleted_at', null)
       .not('protect_expires_at', 'is', null)
       .gt('protect_expires_at', now)
-      .eq('protect_by_user_id', userId),
+      .in('protect_by_user_id', protectIds),
     // 今月の入金件数・入金額(acquirer_id ベース)
     supabase
       .from('applications')
@@ -120,18 +149,20 @@ export async function getProtectExpiringSoon(userId: string): Promise<ProtectSec
   const supabase = await createClient();
   const now = new Date().toISOString();
   const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+  // 自分+同名アカウント合算(カウントと一覧を一致させる)
+  const protectIds = await getSameNameUserIds(supabase, userId);
 
   const SELECT = `id, name, address, protect_expires_at,
      protect_by_user:users!members_protect_by_user_id_fkey(id, full_name)`;
 
-  // 3日以内に解除されるものを取得(ログインユーザー自身の保持分)
+  // 3日以内に解除されるものを取得
   const { data: soonData, error: soonErr } = await supabase
     .from('members')
     .select(SELECT)
     .is('deleted_at', null)
     .gt('protect_expires_at', now)
     .lte('protect_expires_at', in3Days)
-    .eq('protect_by_user_id', userId)
+    .in('protect_by_user_id', protectIds)
     .order('protect_expires_at', { ascending: true })
     .limit(50);
 
@@ -147,7 +178,7 @@ export async function getProtectExpiringSoon(userId: string): Promise<ProtectSec
       .is('deleted_at', null)
       .not('protect_expires_at', 'is', null)
       .gt('protect_expires_at', now)
-      .eq('protect_by_user_id', userId);
+      .in('protect_by_user_id', protectIds);
 
     return {
       rows: soonRows,
@@ -156,14 +187,14 @@ export async function getProtectExpiringSoon(userId: string): Promise<ProtectSec
     };
   }
 
-  // 該当なし → 自分の有効プロテクトを最大20件返す
+  // 該当なし → 自分+同名アカウントの有効プロテクトを最大20件返す
   const { data: allData, error: allErr } = await supabase
     .from('members')
     .select(SELECT)
     .is('deleted_at', null)
     .not('protect_expires_at', 'is', null)
     .gt('protect_expires_at', now)
-    .eq('protect_by_user_id', userId)
+    .in('protect_by_user_id', protectIds)
     .order('protect_expires_at', { ascending: true })
     .limit(20);
 
@@ -201,7 +232,7 @@ export async function getRecentActivities24h(
 
 /**
  * 現在有効なプロテクトを解除期限昇順で返す。
- * @param userId 指定時はそのユーザーが設定したプロテクトのみ(プロテクト一覧ページ用)。
+ * @param userId 指定時はそのユーザー(+同名アカウント)が設定したプロテクトのみ(プロテクト一覧ページ用)。
  *               未指定なら全件(全プロテクト表示 / フロー設定ページ用)。
  *
  * 全プロテクトは250件超になりうるため、1000件ずつページングして全件取得する
@@ -213,6 +244,9 @@ export async function getAllActiveProtects(userId?: string): Promise<ProtectExpi
   const SELECT = `id, name, address, protect_expires_at,
        protect_by_user:users!members_protect_by_user_id_fkey(id, full_name)`;
 
+  // userId 指定時は同名アカウント(有効/無効)も含めて一人分として集約する
+  const holderIds = userId ? await getSameNameUserIds(supabase, userId) : undefined;
+
   const PAGE = 1000;
   const MAX = 10_000;
   const out: ProtectExpiringMember[] = [];
@@ -223,7 +257,7 @@ export async function getAllActiveProtects(userId?: string): Promise<ProtectExpi
       .is('deleted_at', null)
       .not('protect_expires_at', 'is', null)
       .gt('protect_expires_at', now);
-    if (userId) query = query.eq('protect_by_user_id', userId);
+    if (holderIds) query = query.in('protect_by_user_id', holderIds);
 
     const { data, error } = await query
       .order('protect_expires_at', { ascending: true })
