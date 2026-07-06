@@ -57,6 +57,8 @@ export async function loadMoreActivities(
     memberId?: string;
     ownerId?: string;
     dBunrui?: string;
+    mBunrui?: string;
+    sBunrui?: string;
     from?: string;
     to?: string;
   },

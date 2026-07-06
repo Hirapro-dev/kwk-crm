@@ -5,6 +5,8 @@ export interface ActivityListParams {
   memberId?: string;
   ownerId?: string;
   dBunrui?: string;
+  mBunrui?: string; // 接触内容(中分類)
+  sBunrui?: string; // 状態(小分類。パイプ区切り格納のため部分一致で判定)
   from?: string; // ISO date
   to?: string; // ISO date
   page?: number;
@@ -46,6 +48,9 @@ export async function listActivities(params: ActivityListParams = {}): Promise<A
   if (params.memberId) query = query.eq('member_id', params.memberId);
   if (params.ownerId) query = query.eq('owner_id', params.ownerId);
   if (params.dBunrui) query = query.eq('d_bunrui', params.dBunrui);
+  if (params.mBunrui) query = query.eq('m_bunrui', params.mBunrui);
+  // s_bunrui はフラグをパイプ区切りで格納するため部分一致で判定(固定語彙のためエスケープ不要)
+  if (params.sBunrui) query = query.ilike('s_bunrui', `%${params.sBunrui}%`);
   if (params.from) query = query.gte('registered_datetime', params.from);
   if (params.to) query = query.lte('registered_datetime', params.to);
 

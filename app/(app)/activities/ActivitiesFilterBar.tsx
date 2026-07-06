@@ -1,14 +1,17 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { ACTIVITY_STATUS_FLAGS, CONTACT_CONTENTS } from '@/lib/domain/activities_types';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useTransition } from 'react';
 
 export function ActivitiesFilterBar({
   initialMemberId,
   initialDBunrui,
+  initialMBunrui,
+  initialSBunrui,
   initialFrom,
   initialTo,
   bunruiList,
@@ -17,6 +20,8 @@ export function ActivitiesFilterBar({
 }: {
   initialMemberId: string;
   initialDBunrui: string;
+  initialMBunrui: string;
+  initialSBunrui: string;
   initialFrom: string;
   initialTo: string;
   bunruiList: string[];
@@ -29,6 +34,8 @@ export function ActivitiesFilterBar({
 
   const [memberId, setMemberId] = useState(initialMemberId);
   const [dBunrui, setDBunrui] = useState(initialDBunrui);
+  const [mBunrui, setMBunrui] = useState(initialMBunrui);
+  const [sBunrui, setSBunrui] = useState(initialSBunrui);
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo);
   const [owner, setOwner] = useState(initialOwner);
@@ -41,6 +48,8 @@ export function ActivitiesFilterBar({
     };
     set('member', memberId);
     set('d', dBunrui);
+    set('m', mBunrui);
+    set('s', sBunrui);
     set('from', from);
     set('to', to);
     set('owner', owner === 'me' ? currentUserId : owner === 'all' ? '' : owner);
@@ -71,6 +80,22 @@ export function ActivitiesFilterBar({
           </option>
         ))}
       </Select>
+      <Select className="w-44" value={mBunrui} onChange={(e) => setMBunrui(e.target.value)}>
+        <option value="">接触内容: すべて</option>
+        {CONTACT_CONTENTS.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+      </Select>
+      <Select className="w-36" value={sBunrui} onChange={(e) => setSBunrui(e.target.value)}>
+        <option value="">状態: すべて</option>
+        {ACTIVITY_STATUS_FLAGS.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </Select>
       <Select
         className="w-40"
         value={owner === currentUserId ? 'me' : owner === '' ? 'all' : owner}
@@ -87,12 +112,7 @@ export function ActivitiesFilterBar({
           className="w-40"
         />
         <span className="text-sm text-muted-foreground">〜</span>
-        <Input
-          type="date"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          className="w-40"
-        />
+        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
       </div>
       <Button type="submit" disabled={pending}>
         {pending ? '検索中…' : '検索'}
@@ -103,6 +123,8 @@ export function ActivitiesFilterBar({
         onClick={() => {
           setMemberId('');
           setDBunrui('');
+          setMBunrui('');
+          setSBunrui('');
           setFrom('');
           setTo('');
           setOwner('all');

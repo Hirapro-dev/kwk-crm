@@ -16,6 +16,8 @@ interface PageProps {
   searchParams: Promise<{
     member?: string;
     d?: string;
+    m?: string;
+    s?: string;
     from?: string;
     to?: string;
     owner?: string;
@@ -31,6 +33,8 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
   const activityParams = {
     memberId: sp.member || undefined,
     dBunrui: sp.d || undefined,
+    mBunrui: sp.m || undefined,
+    sBunrui: sp.s || undefined,
     ownerId: sp.owner || undefined,
     from: sp.from ? `${sp.from}T00:00:00+09:00` : undefined,
     to: sp.to ? `${sp.to}T23:59:59+09:00` : undefined,
@@ -55,6 +59,8 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
           <ActivitiesFilterBar
             initialMemberId={sp.member ?? ''}
             initialDBunrui={sp.d ?? ''}
+            initialMBunrui={sp.m ?? ''}
+            initialSBunrui={sp.s ?? ''}
             initialFrom={sp.from ?? ''}
             initialTo={sp.to ?? ''}
             initialOwner={sp.owner ?? 'all'}
@@ -64,7 +70,7 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
         </PanelFilterBar>
 
         <ActivitiesInfinite
-          key={`${sp.member ?? ''}|${sp.d ?? ''}|${sp.owner ?? ''}|${sp.from ?? ''}|${sp.to ?? ''}`}
+          key={`${sp.member ?? ''}|${sp.d ?? ''}|${sp.m ?? ''}|${sp.s ?? ''}|${sp.owner ?? ''}|${sp.from ?? ''}|${sp.to ?? ''}`}
           initialRows={result.rows}
           total={result.total}
           currentUserId={me.id}
