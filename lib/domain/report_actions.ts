@@ -52,29 +52,42 @@ export async function saveReport(input: {
   }
 
   const supabase = await createClient();
-  const values = {
+  // 共通項目。shared_with は migration 54 で追加した列のため別管理し、
+  // 未適用環境では列を含めずに保存して通常のレポート保存を壊さない(フォールバック)。
+  const baseValues = {
     name: parsed.data.name,
     description: parsed.data.description ?? null,
     report_type: parsed.data.report_type,
     definition: parsed.data.definition as unknown as object,
     visibility: parsed.data.visibility,
-    // restricted のときのみ許可ユーザーを保存(重複除去)。それ以外は空配列。
-    shared_with: isRestricted ? Array.from(new Set(parsed.data.shared_with ?? [])) : [],
   };
+  const sharedWith = isRestricted ? Array.from(new Set(parsed.data.shared_with ?? [])) : [];
+  const isMissingSharedWith = (msg: string | undefined): boolean =>
+    !!msg && /shared_with/.test(msg);
 
   if (parsed.data.id) {
-    const { error } = await supabase.from('reports').update(values).eq('id', parsed.data.id);
+    let { error } = await supabase
+      .from('reports')
+      .update({ ...baseValues, shared_with: sharedWith })
+      .eq('id', parsed.data.id);
+    if (error && isMissingSharedWith(error.message)) {
+      ({ error } = await supabase.from('reports').update(baseValues).eq('id', parsed.data.id));
+    }
     if (error) return { ok: false, error: error.message };
     revalidatePath('/reports');
     revalidatePath(`/reports/${parsed.data.id}`);
     return { ok: true, id: parsed.data.id };
   }
 
-  const { data, error } = await supabase
+  const insertBase = { ...baseValues, created_by: me.id, is_standard: false };
+  let { data, error } = await supabase
     .from('reports')
-    .insert({ ...values, created_by: me.id, is_standard: false })
+    .insert({ ...insertBase, shared_with: sharedWith })
     .select('id')
     .single();
+  if (error && isMissingSharedWith(error.message)) {
+    ({ data, error } = await supabase.from('reports').insert(insertBase).select('id').single());
+  }
   if (error || !data) return { ok: false, error: error?.message ?? '作成失敗' };
   revalidatePath('/reports');
   return { ok: true, id: data.id as string };
