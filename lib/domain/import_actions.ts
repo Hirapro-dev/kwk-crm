@@ -20,6 +20,7 @@ import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from './auth';
 import { commitActivitiesCsv, previewActivitiesCsv } from './import_activities';
 import { commitApplicationsCsv, previewApplicationsCsv } from './import_applications';
+import { commitArticleReactionsCsv, previewArticleReactionsCsv } from './import_article_reactions';
 import { commitInquiriesCsv, previewInquiriesCsv } from './import_inquiries';
 import { commitMembersCsv, previewMembersCsv } from './import_members';
 import { commitUsersCsv, previewUsersCsv } from './import_users';
@@ -51,6 +52,10 @@ export interface CommitResult {
   ok: boolean;
   error?: string;
   upserted?: number;
+  /** 実際に取り込んだ行のうち、新規作成された件数 */
+  newCount?: number;
+  /** 実際に取り込んだ行のうち、既存を更新した件数 */
+  updateCount?: number;
   /** 更新のみモードで、新規IDのためスキップした件数 */
   skippedCount?: number;
   errorCount?: number;
@@ -98,6 +103,8 @@ export async function previewImport(
     if (object === 'inquiries') return await previewInquiriesCsv([csvText], updateOnly);
     if (object === 'applications') return await previewApplicationsCsv([csvText], updateOnly);
     if (object === 'activities') return await previewActivitiesCsv([csvText], updateOnly);
+    if (object === 'article_reactions')
+      return await previewArticleReactionsCsv([csvText], updateOnly);
     if (object === 'users') return await previewUsersCsv([csvText], updateOnly);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -192,6 +199,8 @@ export async function commitImport(
     if (object === 'inquiries') return await commitInquiriesCsv([csvText], updateOnly);
     if (object === 'applications') return await commitApplicationsCsv([csvText], updateOnly);
     if (object === 'activities') return await commitActivitiesCsv([csvText], updateOnly);
+    if (object === 'article_reactions')
+      return await commitArticleReactionsCsv([csvText], updateOnly);
     if (object === 'users') return await commitUsersCsv([csvText], updateOnly);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -225,26 +234,30 @@ export async function commitImport(
   let upserted = 0;
   let skippedCount = 0;
 
+  // 新規/更新の内訳を出すため、常に既存IDを照会する
+  let existing: Set<string>;
+  try {
+    existing = await findExistingIds(
+      def.table,
+      def.idField,
+      mapped.records.map((r) => r.id),
+    );
+  } catch (e) {
+    return {
+      ok: false,
+      error: `既存データ照会に失敗: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+
   // 更新のみモード: 既存IDの行だけに絞る(新規IDはスキップ)
   let targetRecords = mapped.records;
   if (updateOnly) {
-    let existing: Set<string>;
-    try {
-      existing = await findExistingIds(
-        def.table,
-        def.idField,
-        mapped.records.map((r) => r.id),
-      );
-    } catch (e) {
-      return {
-        ok: false,
-        error: `既存データ照会に失敗: ${e instanceof Error ? e.message : String(e)}`,
-      };
-    }
     const before = targetRecords.length;
     targetRecords = targetRecords.filter((r) => existing.has(r.id));
     skippedCount = before - targetRecords.length;
   }
+  const newCount = targetRecords.filter((r) => !existing.has(r.id)).length;
+  const updateCount = targetRecords.length - newCount;
 
   const rows = targetRecords.map((r) => r.data);
   for (let i = 0; i < rows.length; i += BATCH) {
@@ -266,6 +279,8 @@ export async function commitImport(
   return {
     ok: true,
     upserted,
+    newCount,
+    updateCount,
     skippedCount,
     errorCount: mapped.errors.length,
     errors: mapped.errors.slice(0, 50),

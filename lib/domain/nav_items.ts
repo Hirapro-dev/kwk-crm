@@ -61,6 +61,14 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
     is_visible: true,
   },
   {
+    id: 'article_reactions',
+    label: '記事反応リスト',
+    href: '/article-reactions',
+    match_prefix: true,
+    sort_order: 47,
+    is_visible: true,
+  },
+  {
     id: 'summary',
     label: 'サマリ',
     href: '/summary',

@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/table';
 import { getDBunruiList, getRecentBunruiPairs, listActivities } from '@/lib/domain/activities';
 import { listApplications } from '@/lib/domain/applications';
+import { getReactionsByMember } from '@/lib/domain/article_reactions';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { listInquiries } from '@/lib/domain/inquiries';
 import { getMember } from '@/lib/domain/members';
@@ -54,19 +55,29 @@ export default async function MemberDetailPage({ params }: PageProps) {
 
   const me = await getCurrentUser();
 
-  const [activities, bunruiList, recentPairs, detailFields, highlightFields, relApps, relInqs] =
-    await Promise.all([
-      listActivities({ memberId: id, pageSize: 50, page: 1 }),
-      getDBunruiList(),
-      getRecentBunruiPairs(200),
-      // Phase 2: オブジェクト管理機能の field_definitions に基づき表示するフィールドを取得
-      getVisibleFields('members', 'detail'),
-      // Phase 2.6: ハイライトパネルのフィールド設定
-      getVisibleFields('members', 'highlight'),
-      // 関連タブで表示する申込・問合せ (member_id で紐付け、最大100件)
-      listApplications({ memberId: id, pageSize: 100, page: 1 }),
-      listInquiries({ memberId: id, pageSize: 100, page: 1 }),
-    ]);
+  const [
+    activities,
+    bunruiList,
+    recentPairs,
+    detailFields,
+    highlightFields,
+    relApps,
+    relInqs,
+    relReactions,
+  ] = await Promise.all([
+    listActivities({ memberId: id, pageSize: 50, page: 1 }),
+    getDBunruiList(),
+    getRecentBunruiPairs(200),
+    // Phase 2: オブジェクト管理機能の field_definitions に基づき表示するフィールドを取得
+    getVisibleFields('members', 'detail'),
+    // Phase 2.6: ハイライトパネルのフィールド設定
+    getVisibleFields('members', 'highlight'),
+    // 関連タブで表示する申込・問合せ (member_id で紐付け、最大100件)
+    listApplications({ memberId: id, pageSize: 100, page: 1 }),
+    listInquiries({ memberId: id, pageSize: 100, page: 1 }),
+    // 記事反応履歴 (member_id で紐付け、最大100件)
+    getReactionsByMember(id, 100),
+  ]);
 
   // プロテクト者の選択肢 (admin のみ。プロテクト編集UIで使用)
   const protectUsers =
@@ -259,6 +270,50 @@ export default async function MemberDetailPage({ params }: PageProps) {
                             <TableCell className="whitespace-nowrap py-2">
                               {q.name ?? '-'}
                             </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CollapsibleSection>
+
+              {/* 記事反応履歴 (member_id で紐付け) */}
+              <CollapsibleSection
+                title="記事反応履歴"
+                count={relReactions.length}
+                bodyClassName="p-0"
+              >
+                {relReactions.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">記事反応はありません</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50 hover:bg-gray-50">
+                          <TableHead className="h-9 whitespace-nowrap">日付</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">配信媒体</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">配信ツール</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">種類</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">詳細</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {relReactions.map((r) => (
+                          <TableRow key={r.id} className="sf-row-hover">
+                            <TableCell className="whitespace-nowrap py-2">
+                              {formatDate(r.reacted_date) || '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {r.media ?? '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {r.tool ?? '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {r.reaction_type ?? '-'}
+                            </TableCell>
+                            <TableCell className="py-2">{r.detail ?? '-'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

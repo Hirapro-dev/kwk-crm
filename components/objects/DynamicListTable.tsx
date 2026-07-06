@@ -33,6 +33,11 @@ interface Props<T extends Record<string, unknown>> {
    * 戻り値が null なら通常通り formatFieldValue を使う。
    */
   firstColRenderer?: (row: T, field: FieldDefinition) => ReactNode | null;
+  /**
+   * 任意の列を別の描画 (リンク化など) をしたい場合に渡す。全列で評価される。
+   * 戻り値が null なら通常通り (firstColRenderer or formatFieldValue) を使う。
+   */
+  cellRenderer?: (row: T, field: FieldDefinition) => ReactNode | null;
   /** データなしメッセージ */
   emptyMessage?: string;
 }
@@ -42,6 +47,7 @@ export function DynamicListTable<T extends Record<string, unknown>>({
   fields,
   rowKey,
   firstColRenderer,
+  cellRenderer,
   emptyMessage = '該当するレコードがありません',
 }: Props<T>) {
   if (fields.length === 0) {
@@ -84,6 +90,17 @@ export function DynamicListTable<T extends Record<string, unknown>>({
             rows.map((row, idx) => (
               <TableRow key={rowKey ? rowKey(row, idx) : idx} className="sf-row-hover">
                 {fields.map((f, fi) => {
+                  // 任意列のカスタム描画優先 (リンク化など)
+                  if (cellRenderer) {
+                    const custom = cellRenderer(row, f);
+                    if (custom !== null) {
+                      return (
+                        <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">
+                          {custom}
+                        </TableCell>
+                      );
+                    }
+                  }
                   // 先頭列はカスタム描画優先
                   if (fi === 0 && firstColRenderer) {
                     const custom = firstColRenderer(row, f);
@@ -106,11 +123,7 @@ export function DynamicListTable<T extends Record<string, unknown>>({
                       // 表全体は <div className="overflow-x-auto"> で横スクロール可能。
                       className="whitespace-nowrap py-2 text-sm"
                     >
-                      {isPhone && formatted ? (
-                        <PhoneLink value={formatted} />
-                      ) : (
-                        formatted
-                      )}
+                      {isPhone && formatted ? <PhoneLink value={formatted} /> : formatted}
                     </TableCell>
                   );
                 })}

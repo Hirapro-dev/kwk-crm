@@ -154,6 +154,29 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
     ],
   },
 
+  // 記事反応リスト(article_reactions)は専用ハンドラ(lib/domain/import_article_reactions.ts)で取込む。
+  // 反応ID(KH…)で突合。会員ID(K-)は既存会員にあれば紐付け、無ければ member_id は null。
+  // ここの fields はテンプレCSVのヘッダー生成にのみ使用(実CSVの日本語ヘッダーに一致)。
+  article_reactions: {
+    object: 'article_reactions',
+    table: 'article_reactions',
+    label: '記事反応リスト',
+    idField: 'id',
+    note: '元の記事反応CSVをそのまま使えます。反応ID(KH…)で突合。会員ID(K-)で会員に紐付け(未登録会員はnull)、「会員氏名」列の旧SalesforceID/「会員氏名（漢字）」の氏名はそのまま保持します。',
+    fields: [
+      { field: 'id', label: 'ID', type: 'text', required: true },
+      { field: 'reacted_date', label: '日付', type: 'date' },
+      { field: 'media', label: '配信媒体', type: 'text' },
+      { field: 'tool', label: '配信ツール', type: 'text' },
+      { field: 'reaction_type', label: '種類', type: 'text' },
+      { field: 'form_name', label: 'フォーム名', type: 'text' },
+      { field: 'member_name', label: '会員氏名（漢字）', type: 'text' },
+      { field: 'member_legacy_sf_id', label: '会員氏名', type: 'text' },
+      { field: 'member_id', label: '会員ID', type: 'text' },
+      { field: 'detail', label: '詳細', type: 'text' },
+    ],
+  },
+
   // 従業員(users)は専用ハンドラ(lib/domain/import_users.ts)で取込む。
   // email で突合(legacy_sf_id があれば優先)、新規は UUID 採番。ここの fields はテンプレ生成用。
   users: {
