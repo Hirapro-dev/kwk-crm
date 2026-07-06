@@ -44,6 +44,26 @@ export const MEMBER_LINK_ID_ALIAS = 'm_link_id';
 export const DEFAULT_ROW_LIMIT = 10_000;
 export const MAX_EXCEL_ROW_LIMIT = 50_000;
 
+/**
+ * 明示的な sort が未指定のときに適用する「既定の並び順」列(レポートタイプ別)。
+ * オブジェクト一覧と同様に「日付が最新のものを上から」表示するため、
+ * 各レポートタイプの主軸日付列を降順(DESC NULLS LAST)で並べる。
+ *
+ * 集計レポート(RT02 会員サマリ / RT08 マトリクス / RT10 案件別実績)は
+ * 行を畳むため日付列での並び替えが GROUP BY と不整合になる。よって既定ソートは持たない
+ * (実際の適用は「GROUP BY / 集計列が無い行レベル出力のとき」に限定する)。
+ * ソース文字列は各レポートタイプの baseAlias に対応(schema_all.ts 参照)。
+ */
+const DEFAULT_SORT_SOURCE: Partial<Record<ReportTypeId, string>> = {
+  RT01: 'm.registered_at', // 会員一覧
+  RT03: 'a.application_date', // 会員と申込
+  RT04: 'act.registered_datetime', // 会員と対応歴
+  RT05: 'inq.registered_at', // 会員と問合せ
+  RT06: 'a.application_date', // 申込一覧
+  RT07: 'act.registered_datetime', // 対応歴一覧
+  RT09: 'inq.registered_at', // 問合せ一覧
+};
+
 const AGG_SQL: Record<AggregateFunction, (col: string) => string> = {
   sum: (c) => `SUM(${c})`,
   avg: (c) => `AVG(${c})`,
@@ -381,6 +401,15 @@ export function buildReportQuery(
       const dir = s.direction === 'asc' ? 'ASC' : 'DESC';
       orderParts.push(`${sourceSql(s.field)} ${dir} NULLS LAST`);
       usedSources.add(s.field);
+    }
+  }
+  // 明示的な sort が無い行レベル出力は、既定で日付の降順(最新が上)にする。
+  // GROUP BY / 集計列がある場合は行を畳むため適用しない(SQL 不整合を避ける)。
+  if (orderParts.length === 0 && groupByCols.length === 0) {
+    const defaultSort = DEFAULT_SORT_SOURCE[reportType];
+    if (defaultSort && findColumn(reportType, defaultSort)) {
+      orderParts.push(`${sourceSql(defaultSort)} DESC NULLS LAST`);
+      usedSources.add(defaultSort);
     }
   }
 
