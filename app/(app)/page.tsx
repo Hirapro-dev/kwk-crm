@@ -10,6 +10,7 @@
 
 import { ActivityTimeline } from '@/components/activities/ActivityTimeline';
 import { PanelHeader } from '@/components/layout/PanelHeader';
+import { PhoneLink } from '@/components/layout/PhoneLink';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -24,6 +25,7 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import {
   getMyDashboardStats,
   getMyLatestActivities,
+  getMyRegularContactSection,
   getProtectExpiringSoon,
 } from '@/lib/domain/dashboard';
 import { getFavoriteReportList } from '@/lib/domain/dashboard_widgets';
@@ -32,9 +34,10 @@ import Link from 'next/link';
 
 export default async function DashboardPage() {
   const me = await getCurrentUser();
-  const [stats, protectExpiring, recent, favorites] = await Promise.all([
+  const [stats, protectExpiring, regularContacts, recent, favorites] = await Promise.all([
     getMyDashboardStats(me.id),
     getProtectExpiringSoon(me.id),
+    getMyRegularContactSection(me.id, 20),
     getMyLatestActivities(me.id, 20),
     getFavoriteReportList(me.id),
   ]);
@@ -200,6 +203,65 @@ export default async function DashboardPage() {
                       </TableRow>
                     );
                   })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 定期連絡者(自分が定期連絡担当の会員) */}
+      <Card>
+        <CardHeader className="border-b py-3">
+          <CardTitle className="flex items-center justify-between text-sm">
+            <span>定期連絡者</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-normal text-muted-foreground">
+                自分が担当 · {regularContacts.totalCount}件
+                {regularContacts.totalCount > 20 ? '（上位20件）' : ''}
+              </span>
+              <Link
+                href="/members/regular-contacts"
+                className="text-xs font-normal text-primary hover:underline"
+              >
+                全て表示 →
+              </Link>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {regularContacts.rows.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground">定期連絡担当の会員はいません</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50 hover:bg-gray-50">
+                    <TableHead className="h-9 whitespace-nowrap">会員ID</TableHead>
+                    <TableHead className="h-9 whitespace-nowrap">会員名</TableHead>
+                    <TableHead className="h-9 whitespace-nowrap">電話</TableHead>
+                    <TableHead className="h-9 whitespace-nowrap">住所</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {regularContacts.rows.map((m) => (
+                    <TableRow key={m.id} className="sf-row-hover">
+                      <TableCell className="whitespace-nowrap py-2 font-mono text-xs">
+                        <Link href={`/members/${m.id}`} className="text-primary hover:underline">
+                          {m.id}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap py-2 text-sm">
+                        {m.name ?? '-'}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap py-2 text-sm">
+                        {m.phone1 ? <PhoneLink value={m.phone1} /> : '-'}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap py-2 text-sm">
+                        {m.address ?? '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>

@@ -18,6 +18,7 @@ import { HighlightPanel } from '@/components/layout/HighlightPanel';
 import { renderHighlightFieldValue } from '@/components/members/HighlightFieldValue';
 import { MemberDeleteButton } from '@/components/members/MemberDeleteButton';
 import { MemberEditDialog } from '@/components/members/MemberEditDialog';
+import { RegularContactButton } from '@/components/members/RegularContactButton';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,6 +79,9 @@ export default async function MemberDetailPage({ params }: PageProps) {
     // 記事反応履歴 (member_id で紐付け、最大100件)
     getReactionsByMember(id, 100),
   ]);
+
+  // 定期連絡者を自分に割り当て可能なロール (viewer 以外)
+  const canAssignRegularContact = ['admin', 'manager', 'sales', 'support'].includes(me.role);
 
   // プロテクト者の選択肢 (admin のみ。プロテクト編集UIで使用)
   const protectUsers =
@@ -166,6 +170,17 @@ export default async function MemberDetailPage({ params }: PageProps) {
                 record={member as unknown as Record<string, unknown>}
                 fields={detailFields}
                 fieldOverrides={{
+                  regular_contact_id: canAssignRegularContact ? (
+                    <RegularContactButton
+                      memberId={member.id}
+                      currentName={member.regular_contact?.full_name ?? null}
+                      isSelf={member.regular_contact_id === me.id}
+                    />
+                  ) : (
+                    <span className={member.regular_contact ? '' : 'text-muted-foreground'}>
+                      {member.regular_contact?.full_name ?? '未設定'}
+                    </span>
+                  ),
                   protect_by_user_id: member.protect_by_user_id ? (
                     <span>
                       {member.protect_by_user?.full_name ?? 'free'}

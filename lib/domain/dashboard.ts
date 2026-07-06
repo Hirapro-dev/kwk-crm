@@ -270,6 +270,78 @@ export async function getAllActiveProtects(userId?: string): Promise<ProtectExpi
   return out;
 }
 
+// ---- 定期連絡者(regular_contact) セクション ----
+
+export interface RegularContactMember {
+  id: string;
+  name: string | null;
+  phone1: string | null;
+  address: string | null;
+}
+
+export interface RegularContactSection {
+  rows: RegularContactMember[];
+  totalCount: number;
+}
+
+const REGULAR_CONTACT_SELECT = 'id, name, phone1, address';
+
+/**
+ * ダッシュボード用: ログインユーザーが定期連絡担当の会員を最大 limit 件 + 総件数で返す。
+ * プロテクトと同様、同名アカウント(有効/無効)分も合算する。
+ */
+export async function getMyRegularContactSection(
+  userId: string,
+  limit = 20,
+): Promise<RegularContactSection> {
+  const supabase = await createClient();
+  const ids = await getSameNameUserIds(supabase, userId);
+
+  const [listRes, countRes] = await Promise.all([
+    supabase
+      .from('members')
+      .select(REGULAR_CONTACT_SELECT)
+      .is('deleted_at', null)
+      .in('regular_contact_id', ids)
+      .order('name', { ascending: true, nullsFirst: false })
+      .limit(limit),
+    supabase
+      .from('members')
+      .select('id', { count: 'exact', head: true })
+      .is('deleted_at', null)
+      .in('regular_contact_id', ids),
+  ]);
+
+  const rows = (listRes.data ?? []) as unknown as RegularContactMember[];
+  return { rows, totalCount: countRes.count ?? rows.length };
+}
+
+/**
+ * 定期連絡担当の会員を全件(同名アカウント合算)返す。全一覧ページ用。
+ * 1000件ずつページングして取りこぼしを防ぐ(安全上限10,000件)。
+ */
+export async function getAllMyRegularContacts(userId: string): Promise<RegularContactMember[]> {
+  const supabase = await createClient();
+  const ids = await getSameNameUserIds(supabase, userId);
+  const PAGE = 1000;
+  const MAX = 10_000;
+  const out: RegularContactMember[] = [];
+  for (let offset = 0; offset < MAX; offset += PAGE) {
+    const { data, error } = await supabase
+      .from('members')
+      .select(REGULAR_CONTACT_SELECT)
+      .is('deleted_at', null)
+      .in('regular_contact_id', ids)
+      .order('name', { ascending: true, nullsFirst: false })
+      .range(offset, offset + PAGE - 1);
+    if (error) break;
+    const rows = (data ?? []) as unknown as RegularContactMember[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 /** 過去 N 日間の自分の対応歴を返す(対応歴一覧ページ用、日付グルーピング表示)。 */
 export async function getRecentActivitiesNDays(
   userId: string,

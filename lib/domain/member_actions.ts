@@ -87,6 +87,40 @@ export async function updateMember(input: UpdateMemberInput): Promise<{ error?: 
   return {};
 }
 
+/** 定期連絡者を自分に割り当てられるロール(viewer は不可)。 */
+const REGULAR_CONTACT_ASSIGNABLE_ROLES = ['admin', 'manager', 'sales', 'support'];
+
+/**
+ * 定期連絡者を「自分」にトグル設定する。
+ * - 既に自分が担当 → 解除、そうでなければ自分を担当に設定(引き継ぎ)。
+ * - RLS(members_update) は自分所有の会員しか更新できないため、
+ *   SECURITY DEFINER 関数 toggle_regular_contact_self 経由で更新する(migration 53)。
+ * @returns assigned: 設定後に自分が担当なら true / 解除なら false
+ */
+export async function toggleRegularContactSelf(
+  memberId: string,
+): Promise<{ error?: string; assigned?: boolean }> {
+  const me = await getCurrentUser();
+  if (!REGULAR_CONTACT_ASSIGNABLE_ROLES.includes(me.role)) {
+    return { error: '定期連絡者の割り当て権限がありません' };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('toggle_regular_contact_self', {
+    p_member_id: memberId,
+  });
+
+  if (error) {
+    // migration 53 未適用(関数なし)などのケース
+    return { error: `定期連絡者の更新に失敗しました: ${error.message}` };
+  }
+
+  revalidatePath(`/members/${memberId}`);
+  revalidatePath('/members');
+  revalidatePath('/');
+  return { assigned: (data as string | null) === me.id };
+}
+
 /**
  * 会員を論理削除する (admin のみ / 物理削除はしない)。
  * 紐づく申込・対応歴の記録はそのまま残る。
