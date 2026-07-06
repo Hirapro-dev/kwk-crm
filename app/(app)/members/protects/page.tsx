@@ -53,27 +53,31 @@ function groupBadgeVariant(key: number): 'destructive' | 'outline' {
 }
 
 interface PageProps {
-  searchParams: Promise<{ user?: string; name?: string }>;
+  searchParams: Promise<{ user?: string; name?: string; all?: string }>;
 }
 
 export default async function ProtectsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const me = await getCurrentUser();
 
-  // 他ユーザーのプロテクト閲覧は admin/manager のみ許可。
-  // それ以外はクエリを無視して自分の設定分のみ表示する。
+  // all=1: 全プロテクトを表示(全ロールが会員をSELECT可能な RLS 前提)
+  // user=<uid>: 指定保持者のプロテクト(admin/manager のみ。それ以外は自分にフォールバック)
+  // 既定: 自分の設定分
+  const showAll = sp.all === '1';
   const canViewOthers = me.role === 'admin' || me.role === 'manager';
-  const targetUserId = sp.user && canViewOthers ? sp.user : me.id;
-  const isOther = targetUserId !== me.id;
+  const targetUserId = showAll ? undefined : sp.user && canViewOthers ? sp.user : me.id;
+  const isOther = !showAll && targetUserId !== me.id;
 
   const members = await getAllActiveProtects(targetUserId);
 
-  // 表示名: 他ユーザー時はクエリの name(表示用) or 実データの保持者名から導出
+  // 表示名: 全件 / 他ユーザー / 自分 で切り替え
   const holderName =
     (isOther && sp.name ? sp.name : members[0]?.protect_by_user?.full_name) ?? null;
-  const viewName = isOther
-    ? `${holderName ?? '指定ユーザー'} のプロテクト会員一覧`
-    : '自分のプロテクト会員一覧';
+  const viewName = showAll
+    ? '全プロテクト会員一覧'
+    : isOther
+      ? `${holderName ?? '指定ユーザー'} のプロテクト会員一覧`
+      : '自分のプロテクト会員一覧';
 
   // 残り日数でグルーピング
   const groups = new Map<number, ProtectExpiringMember[]>();

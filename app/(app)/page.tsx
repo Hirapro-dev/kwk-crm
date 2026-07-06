@@ -33,8 +33,8 @@ import Link from 'next/link';
 export default async function DashboardPage() {
   const me = await getCurrentUser();
   const [stats, protectExpiring, recent, favorites] = await Promise.all([
-    getMyDashboardStats(me.id, me.role, me.full_name),
-    getProtectExpiringSoon(me.id, me.role, me.full_name),
+    getMyDashboardStats(me.id),
+    getProtectExpiringSoon(me.id),
     getMyLatestActivities(me.id, 20),
     getFavoriteReportList(me.id),
   ]);
@@ -136,7 +136,7 @@ export default async function DashboardPage() {
                   : `全プロテクト · ${protectExpiring.totalCount}件${protectExpiring.totalCount > 20 ? '（上位20件）' : ''}`}
               </span>
               <Link
-                href="/members/protects"
+                href="/members/protects?all=1"
                 className="text-xs font-normal text-primary hover:underline"
               >
                 全て表示 →
