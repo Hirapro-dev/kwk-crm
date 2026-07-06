@@ -23,6 +23,7 @@ import { getActivitySummaryByOwner } from '@/lib/domain/activity_summary';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { getNewCustomerSummary, listInfoAcquiredPoints } from '@/lib/domain/customer_summary';
 import { getFormSummary, listFormsForSummary } from '@/lib/domain/form_summary';
+import { getProtectSummary } from '@/lib/domain/protect_summary';
 import { getSalesSummary, listProjectsForFilter } from '@/lib/domain/sales_summary';
 import { listSummaryFavorites } from '@/lib/domain/summary_favorites';
 import { cn } from '@/lib/utils/cn';
@@ -33,6 +34,7 @@ import { Suspense } from 'react';
 import { ActivitySummaryFilterBar } from './ActivitySummaryFilterBar';
 import { CustomerSummaryFilterBar } from './CustomerSummaryFilterBar';
 import { FormSummaryFilterBar } from './FormSummaryFilterBar';
+import { ProtectSummaryFilterBar } from './ProtectSummaryFilterBar';
 import { SalesBarChart } from './SalesBarChart';
 import { SaveFavoriteButton } from './SaveFavoriteButton';
 import { SummaryFavoritesButton } from './SummaryFavoritesButton';
@@ -49,6 +51,7 @@ const TABS = [
   { key: 'customers', label: '新規顧客取得' },
   { key: 'forms', label: 'フォーム集計' },
   { key: 'activities', label: '対応歴' },
+  { key: 'protect', label: 'プロテクト' },
 ] as const;
 
 export default async function SummaryPage({ searchParams }: PageProps) {
@@ -60,7 +63,9 @@ export default async function SummaryPage({ searchParams }: PageProps) {
         ? 'forms'
         : sp.tab === 'activities'
           ? 'activities'
-          : 'payment';
+          : sp.tab === 'protect'
+            ? 'protect'
+            : 'payment';
 
   const [me, favorites] = await Promise.all([getCurrentUser(), listSummaryFavorites()]);
 
@@ -101,6 +106,8 @@ export default async function SummaryPage({ searchParams }: PageProps) {
         <FormTab sp={sp} />
       ) : tab === 'activities' ? (
         <ActivityTab sp={sp} />
+      ) : tab === 'protect' ? (
+        <ProtectTab sp={sp} />
       ) : (
         <PaymentTab sp={sp} />
       )}
@@ -568,6 +575,103 @@ async function ActivityTab({ sp }: { sp: SP }) {
                 </TableCell>
                 <TableCell className="py-2 text-right tabular-nums">
                   {(r.rate * 100).toFixed(1)} %
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </>
+  );
+}
+
+/* ===================== プロテクトタブ ===================== */
+async function ProtectTab({ sp }: { sp: SP }) {
+  const rawActive = sp.pactive ?? 'all';
+  const activeFilter: 'all' | 'active' | 'inactive' =
+    rawActive === 'active' || rawActive === 'inactive' ? rawActive : 'all';
+
+  const summary = await getProtectSummary({ activeFilter });
+
+  const chartData = {
+    data: summary.rows.map((r) => ({ name: r.user_name, value: r.protect_count })),
+    categoryLabel: 'プロテクト保持者',
+    valueLabel: 'プロテクト件数',
+  };
+
+  return (
+    <>
+      <PanelHeader
+        iconLabel="PRT"
+        iconColor="#00C896"
+        viewName="プロテクトサマリ(保持者別)"
+        totalCount={summary.holderCount}
+      />
+
+      <PanelFilterBar>
+        <Suspense>
+          <ProtectSummaryFilterBar initialActive={activeFilter} />
+        </Suspense>
+      </PanelFilterBar>
+
+      {/* 集計カード */}
+      <div className="grid gap-3 border-b p-4 md:grid-cols-2">
+        <SummaryCard
+          label="有効プロテクト 合計"
+          value={`${summary.totalCount.toLocaleString()} 件`}
+        />
+        <SummaryCard label="保持者数" value={`${summary.holderCount.toLocaleString()} 名`} />
+      </div>
+
+      <div className="border-b px-4 py-3">
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          保持者別 プロテクト件数
+        </div>
+        {summary.rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            該当するプロテクトがありません
+          </p>
+        ) : (
+          <ScrollableChart count={summary.rows.length} chartData={chartData} />
+        )}
+      </div>
+
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-gray-50 hover:bg-gray-50">
+            <TableHead className="h-9">プロテクト保持者</TableHead>
+            <TableHead className="h-9">状態</TableHead>
+            <TableHead className="h-9 text-right">プロテクト件数</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {summary.rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
+                該当データがありません
+              </TableCell>
+            </TableRow>
+          ) : (
+            summary.rows.map((r) => (
+              <TableRow key={r.user_id ?? '(未割当)'} className="sf-row-hover">
+                <TableCell className="py-2 font-medium">
+                  {r.user_id ? (
+                    <Link href={`/settings/users/${r.user_id}`} className="sf-link">
+                      {r.user_name}
+                    </Link>
+                  ) : (
+                    r.user_name
+                  )}
+                </TableCell>
+                <TableCell className="py-2 text-sm">
+                  {r.is_active ? (
+                    <span className="text-foreground">有効</span>
+                  ) : (
+                    <span className="text-muted-foreground">無効</span>
+                  )}
+                </TableCell>
+                <TableCell className="py-2 text-right tabular-nums">
+                  {r.protect_count.toLocaleString()}
                 </TableCell>
               </TableRow>
             ))
