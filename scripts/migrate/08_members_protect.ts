@@ -90,12 +90,24 @@ async function main() {
   const normalExpiresAt = await fetchNormalExpiresAt(supabase);
   console.log(`通常プロテクト期限: ${normalExpiresAt ?? '(フロールールなし)'}`);
 
-  const { data: memberInfoRows } = await supabase
-    .from('members')
-    .select('id, info_acquired_points')
-    .is('deleted_at', null);
+  // 会員情報(info_acquired_points)を全件キャッシュ。
+  // Supabase の既定行数上限(1000)に当たると固定プロテクト判定が漏れるため、ページングで全件取得する。
   const infoMap = new Map<string, string | null>();
-  for (const m of memberInfoRows ?? []) infoMap.set(m.id, m.info_acquired_points ?? null);
+  {
+    let offset = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data } = await supabase
+        .from('members')
+        .select('id, info_acquired_points')
+        .is('deleted_at', null)
+        .range(offset, offset + PAGE - 1);
+      if (!data || data.length === 0) break;
+      for (const m of data) infoMap.set(m.id, m.info_acquired_points ?? null);
+      offset += PAGE;
+      if (data.length < PAGE) break;
+    }
+  }
   console.log(`会員情報キャッシュ: ${infoMap.size} 件\n`);
 
   const rows = parseCsv(fs.readFileSync(csvPath, 'utf-8'));
