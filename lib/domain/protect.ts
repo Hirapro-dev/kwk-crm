@@ -79,6 +79,7 @@ export async function applyProtect(
           owner_name_raw: userFullName,
           protect_expires_at: expiresAt,
           protect_by_user_id: userId,
+          protect_released_at: null, // 再プロテクトで解除マーカーをクリア
           updated_at: new Date().toISOString(),
         })
         .eq('id', memberId)
@@ -102,17 +103,31 @@ export async function applyProtect(
 export async function expireProtects(supabase: SupabaseClient): Promise<number> {
   const now = new Date().toISOString();
 
-  const { data, error } = await supabase
+  const baseUpdate = {
+    owner_name_raw: 'free',
+    protect_expires_at: null,
+    protect_by_user_id: null,
+    updated_at: now,
+  };
+
+  // 解除日時を記録して解除(解除後経過日数の算出に使う)。
+  // migration 55 未適用(protect_released_at 列なし)の場合は列を外して再実行し、
+  // cron が止まらないようにする(解除自体は継続、記録のみスキップ)。
+  let { data, error } = await supabase
     .from('members')
-    .update({
-      owner_name_raw: 'free',
-      protect_expires_at: null,
-      protect_by_user_id: null,
-      updated_at: now,
-    })
+    .update({ ...baseUpdate, protect_released_at: now })
     .lt('protect_expires_at', now)
     .is('deleted_at', null)
     .select('id');
+
+  if (error && /protect_released_at/.test(error.message)) {
+    ({ data, error } = await supabase
+      .from('members')
+      .update(baseUpdate)
+      .lt('protect_expires_at', now)
+      .is('deleted_at', null)
+      .select('id'));
+  }
 
   if (error) {
     console.error('[protect] expireProtects failed:', error.message);

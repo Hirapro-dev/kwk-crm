@@ -143,6 +143,23 @@ const MEMBER_COLUMNS = (alias: string): AllowedColumnDef[] => [
     groupable: true,
   },
   {
+    source: `${alias}.protect_released_at`,
+    label: 'プロテクト解除日時',
+    dataType: 'datetime',
+    filterable: true,
+    sortable: true,
+    groupable: true,
+  },
+  {
+    // 計算カラム: 現在プロテクト中でない会員の「解除からの経過日数」。
+    // SQL 展開は expandExtraSource の __days_since_protect_release__ で行う。
+    source: `${alias}.__days_since_protect_release__`,
+    label: 'プロテクト解除後経過日数',
+    dataType: 'number',
+    filterable: true,
+    sortable: true,
+  },
+  {
     source: `${alias}.first_contact_date`,
     label: '初回接触日',
     dataType: 'date',
@@ -1050,6 +1067,14 @@ export function isSafeIdentifier(source: string): boolean {
  * シングルクォートのエスケープは念のため2重で行う(防御的)。
  */
 export function expandExtraSource(source: string): string {
+  // 計算カラム: プロテクト解除後経過日数(現在プロテクト中は NULL)
+  const dsr = source.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\.__days_since_protect_release__$/);
+  if (dsr) {
+    const a = dsr[1]!;
+    return `CASE WHEN ${a}.protect_released_at IS NOT NULL
+      AND (${a}.protect_expires_at IS NULL OR ${a}.protect_expires_at <= now())
+      THEN (now()::date - ${a}.protect_released_at::date) ELSE NULL END`;
+  }
   const m = source.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\.extra:(.+)$/);
   if (!m) return source; // 通常カラムはそのまま返す
   const alias = m[1]!;

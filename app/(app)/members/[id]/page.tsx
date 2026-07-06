@@ -170,6 +170,29 @@ export default async function MemberDetailPage({ params }: PageProps) {
                 record={member as unknown as Record<string, unknown>}
                 fields={detailFields}
                 fieldOverrides={{
+                  // プロテクト解除後経過日数(現在プロテクト中は「—」)
+                  protect_released_at: (() => {
+                    const exp = member.protect_expires_at;
+                    const isProtected = !!exp && new Date(exp).getTime() > Date.now();
+                    if (isProtected) {
+                      return <span className="text-muted-foreground">プロテクト中</span>;
+                    }
+                    if (!member.protect_released_at) {
+                      return <span className="text-muted-foreground">—</span>;
+                    }
+                    const days = Math.floor(
+                      (Date.now() - new Date(member.protect_released_at).getTime()) /
+                        (1000 * 60 * 60 * 24),
+                    );
+                    return (
+                      <span>
+                        解除後 {days}日
+                        <span className="ml-1.5 text-xs text-muted-foreground">
+                          ({formatDate(member.protect_released_at)} 解除)
+                        </span>
+                      </span>
+                    );
+                  })(),
                   regular_contact_id: canAssignRegularContact ? (
                     <RegularContactButton
                       memberId={member.id}

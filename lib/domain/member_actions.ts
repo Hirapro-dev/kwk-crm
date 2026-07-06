@@ -50,7 +50,7 @@ export async function updateMember(input: UpdateMemberInput): Promise<{ error?: 
     if ('protect_by_user_id' in input) {
       const uid = protect_by_user_id?.trim() ? protect_by_user_id.trim() : null;
       if (uid) {
-        // プロテクト者を設定 → owner_name_raw も担当者名で同期
+        // プロテクト者を設定 → owner_name_raw も担当者名で同期。解除マーカーはクリア。
         const { data: u } = await supabase
           .from('users')
           .select('full_name')
@@ -59,11 +59,13 @@ export async function updateMember(input: UpdateMemberInput): Promise<{ error?: 
           .maybeSingle();
         cleaned.protect_by_user_id = uid;
         cleaned.owner_name_raw = (u?.full_name as string | null) ?? null;
+        cleaned.protect_released_at = null;
       } else {
-        // プロテクト解除 → owner_name_raw を free に戻し、期限もクリア
+        // プロテクト解除 → owner_name_raw を free に戻し、期限もクリア。解除日時を記録。
         cleaned.protect_by_user_id = null;
         cleaned.owner_name_raw = 'free';
         cleaned.protect_expires_at = null;
+        cleaned.protect_released_at = new Date().toISOString();
         cleared = true;
       }
     }

@@ -32,6 +32,8 @@ export interface Member {
   regular_contact_id: string | null;
   protect_by_user_id: string | null;
   protect_expires_at: string | null;
+  /** プロテクトが解除された日時 (migration 55)。解除後経過日数の算出に使う */
+  protect_released_at: string | null;
   total_amount: number | null;
   total_paid_amount: number | null;
   total_used_amount: number | null;
