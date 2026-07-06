@@ -43,17 +43,18 @@ function monthStartIso(): string {
 
 /**
  * プロテクト集計の対象ユーザーID群を返す。
- * - admin/manager: null(=全社の有効プロテクトを対象、絞り込みなし)
- * - それ以外: 自分 + 同名の「無効」アカウント(重複)を合算対象にする
+ * ダッシュボードは「ログインユーザー自身の現状」を表示するため、
+ * ロールに関わらず常に自分の保持分に絞る(admin/manager も自分が設定した分のみ)。
+ * - 自分 + 同名の「無効」アカウント(重複)を合算対象にする
  *   (重複アカウントに残る保持分もログインユーザーに計上する)
+ * これにより「全て表示 → /members/protects」の一覧(自分の設定分)と件数・内容が一致する。
  */
 async function protectScopeUserIds(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  role: string | undefined,
+  _role: string | undefined,
   fullName: string | null | undefined,
-): Promise<string[] | null> {
-  if (role === 'admin' || role === 'manager') return null;
+): Promise<string[]> {
   const ids = [userId];
   if (fullName) {
     const { data } = await supabase
@@ -78,8 +79,7 @@ export async function getMyDashboardStats(
   const today = todayStartIso();
   const monthStart = monthStartIso();
   const now = new Date().toISOString();
-  // admin/manager は全社累計、それ以外は自分+同名無効アカウント合算
-  const companyWide = role === 'admin' || role === 'manager';
+  // ダッシュボードは常に自分の保持分(自分+同名無効アカウント合算)
   const protectIds = await protectScopeUserIds(supabase, userId, role, fullName);
 
   const monthEnd = new Date();
@@ -104,16 +104,13 @@ export async function getMyDashboardStats(
       .eq('owner_id', userId)
       .gte('registered_datetime', monthStart),
     // 有効プロテクト数(admin/manager は全社累計、それ以外は自分+同名無効アカウント合算)
-    (() => {
-      let q = supabase
-        .from('members')
-        .select('id', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .not('protect_expires_at', 'is', null)
-        .gt('protect_expires_at', now);
-      if (protectIds) q = q.in('protect_by_user_id', protectIds);
-      return q;
-    })(),
+    supabase
+      .from('members')
+      .select('id', { count: 'exact', head: true })
+      .is('deleted_at', null)
+      .not('protect_expires_at', 'is', null)
+      .gt('protect_expires_at', now)
+      .in('protect_by_user_id', protectIds),
     // 今月の入金件数・入金額(acquirer_id ベース)
     supabase
       .from('applications')
@@ -134,7 +131,7 @@ export async function getMyDashboardStats(
     todayActivities: todayCount.count ?? 0,
     monthActivities: monthCount.count ?? 0,
     protectCount: protectCount.count ?? 0,
-    protectCompanyWide: companyWide,
+    protectCompanyWide: false,
     monthPaymentCount,
     monthPaymentAmount,
   };
@@ -162,21 +159,20 @@ export async function getProtectExpiringSoon(
   const supabase = await createClient();
   const now = new Date().toISOString();
   const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
-  // admin/manager は全社、それ以外は自分+同名無効アカウント合算(カウントと一覧を一致)
+  // ダッシュボードは常に自分の保持分(自分+同名無効アカウント合算。カウントと一覧を一致)
   const protectIds = await protectScopeUserIds(supabase, userId, role, fullName);
 
   const SELECT = `id, name, address, protect_expires_at,
      protect_by_user:users!members_protect_by_user_id_fkey(id, full_name)`;
 
   // 3日以内に解除されるものを取得
-  let soonQuery = supabase
+  const { data: soonData, error: soonErr } = await supabase
     .from('members')
     .select(SELECT)
     .is('deleted_at', null)
     .gt('protect_expires_at', now)
-    .lte('protect_expires_at', in3Days);
-  if (protectIds) soonQuery = soonQuery.in('protect_by_user_id', protectIds);
-  const { data: soonData, error: soonErr } = await soonQuery
+    .lte('protect_expires_at', in3Days)
+    .in('protect_by_user_id', protectIds)
     .order('protect_expires_at', { ascending: true })
     .limit(50);
 
@@ -186,14 +182,13 @@ export async function getProtectExpiringSoon(
 
   if (soonRows.length > 0) {
     // 全件カウントも取得
-    let totalQuery = supabase
+    const { count: total } = await supabase
       .from('members')
       .select('id', { count: 'exact', head: true })
       .is('deleted_at', null)
       .not('protect_expires_at', 'is', null)
-      .gt('protect_expires_at', now);
-    if (protectIds) totalQuery = totalQuery.in('protect_by_user_id', protectIds);
-    const { count: total } = await totalQuery;
+      .gt('protect_expires_at', now)
+      .in('protect_by_user_id', protectIds);
 
     return {
       rows: soonRows,
@@ -202,15 +197,14 @@ export async function getProtectExpiringSoon(
     };
   }
 
-  // 該当なし → 全有効プロテクトを最大20件返す
-  let allQuery = supabase
+  // 該当なし → 自分の有効プロテクトを最大20件返す
+  const { data: allData, error: allErr } = await supabase
     .from('members')
     .select(SELECT)
     .is('deleted_at', null)
     .not('protect_expires_at', 'is', null)
-    .gt('protect_expires_at', now);
-  if (protectIds) allQuery = allQuery.in('protect_by_user_id', protectIds);
-  const { data: allData, error: allErr } = await allQuery
+    .gt('protect_expires_at', now)
+    .in('protect_by_user_id', protectIds)
     .order('protect_expires_at', { ascending: true })
     .limit(20);
 
