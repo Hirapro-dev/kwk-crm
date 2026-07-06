@@ -55,7 +55,7 @@ export const MAX_EXCEL_ROW_LIMIT = 50_000;
  * ソース文字列は各レポートタイプの baseAlias に対応(schema_all.ts 参照)。
  */
 const DEFAULT_SORT_SOURCE: Partial<Record<ReportTypeId, string>> = {
-  RT01: 'm.registered_at', // 会員一覧
+  RT01: 'm.info_acquired_date', // 会員一覧(顧客情報取得日。会員一覧画面と揃える)
   RT03: 'a.application_date', // 会員と申込
   RT04: 'act.registered_datetime', // 会員と対応歴
   RT05: 'inq.registered_at', // 会員と問合せ

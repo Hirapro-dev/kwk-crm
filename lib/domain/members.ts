@@ -17,6 +17,7 @@ const MEMBER_SORTABLE = new Set<string>([
   'id', 'name', 'name_kana', 'email1', 'phone1', 'do_not_call',
   'postal_code', 'address', 'customer_type', 'owner_id', 'owner_name_raw',
   'gender', 'birthdate', 'first_contact_date', 'registered_at',
+  'info_acquired_date', 'mailmag_registered_at',
   'total_amount', 'total_paid_amount', 'total_used_amount',
   'created_at', 'updated_at',
 ]);
@@ -51,14 +52,16 @@ export async function listMembers(params: MemberListParams = {}): Promise<Member
     )
     .is('deleted_at', null);
 
-  // ソート(ホワイトリスト)→ 既定は登録日時の降順をタイブレークに付与
+  // ソート(ホワイトリスト)。ユーザー指定があればそれを主キーに。
   if (params.sort && MEMBER_SORTABLE.has(params.sort)) {
     query = query.order(params.sort, {
       ascending: params.dir !== 'desc',
       nullsFirst: false,
     });
   }
+  // 既定: 顧客情報取得日の降順(最新が上)。同日内は登録日時の降順をタイブレークに付与。
   query = query
+    .order('info_acquired_date', { ascending: false, nullsFirst: false })
     .order('registered_at', { ascending: false, nullsFirst: false })
     .range(from, to);
 
