@@ -587,11 +587,14 @@ async function ActivityTab({ sp }: { sp: SP }) {
 
 /* ===================== プロテクトタブ ===================== */
 async function ProtectTab({ sp }: { sp: SP }) {
-  const rawActive = sp.pactive ?? 'all';
+  // デフォルトは「有効 / sales」。未指定時はこの既定値を使う。
+  const rawActive = sp.pactive ?? 'active';
   const activeFilter: 'all' | 'active' | 'inactive' =
-    rawActive === 'active' || rawActive === 'inactive' ? rawActive : 'all';
+    rawActive === 'all' || rawActive === 'inactive' ? rawActive : 'active';
+  const VALID_ROLES = ['all', 'admin', 'manager', 'sales', 'support', 'viewer'];
+  const roleFilter = VALID_ROLES.includes(sp.prole ?? '') ? (sp.prole as string) : 'sales';
 
-  const summary = await getProtectSummary({ activeFilter });
+  const summary = await getProtectSummary({ activeFilter, roleFilter });
 
   const chartData = {
     data: summary.rows.map((r) => ({ name: r.user_name, value: r.protect_count })),
@@ -610,7 +613,7 @@ async function ProtectTab({ sp }: { sp: SP }) {
 
       <PanelFilterBar>
         <Suspense>
-          <ProtectSummaryFilterBar initialActive={activeFilter} />
+          <ProtectSummaryFilterBar initialActive={activeFilter} initialRole={roleFilter} />
         </Suspense>
       </PanelFilterBar>
 
@@ -640,6 +643,7 @@ async function ProtectTab({ sp }: { sp: SP }) {
         <TableHeader>
           <TableRow className="bg-gray-50 hover:bg-gray-50">
             <TableHead className="h-9">プロテクト保持者</TableHead>
+            <TableHead className="h-9">ロール</TableHead>
             <TableHead className="h-9">状態</TableHead>
             <TableHead className="h-9 text-right">プロテクト件数</TableHead>
           </TableRow>
@@ -647,7 +651,7 @@ async function ProtectTab({ sp }: { sp: SP }) {
         <TableBody>
           {summary.rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
+              <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
                 該当データがありません
               </TableCell>
             </TableRow>
@@ -662,6 +666,9 @@ async function ProtectTab({ sp }: { sp: SP }) {
                   ) : (
                     r.user_name
                   )}
+                </TableCell>
+                <TableCell className="py-2 text-sm text-muted-foreground">
+                  {r.role ?? '-'}
                 </TableCell>
                 <TableCell className="py-2 text-sm">
                   {r.is_active ? (

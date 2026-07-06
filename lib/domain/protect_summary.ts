@@ -27,6 +27,8 @@ export interface ProtectSummaryRow {
   user_name: string;
   /** 保持者ユーザーが有効(在籍中)かどうか */
   is_active: boolean;
+  /** 保持者ユーザーのロール(admin/manager/sales/viewer/support)。逆引き不能時は null */
+  role: string | null;
   /** 現在有効なプロテクト件数 */
   protect_count: number;
 }
@@ -53,6 +55,8 @@ const NO_HOLDER_KEY = '(未割当)';
  */
 export async function getProtectSummary(filter: {
   activeFilter: ProtectActiveFilter;
+  /** ロール絞り込み。'all'=全ロール。それ以外は該当ロールの保持者のみ */
+  roleFilter: string;
 }): Promise<ProtectSummaryResult> {
   const supabase = await createClient();
   const now = new Date().toISOString();
@@ -81,12 +85,12 @@ export async function getProtectSummary(filter: {
   const userIds = Array.from(counts.keys()).filter((k) => k !== NO_HOLDER_KEY);
   const userMap = new Map<
     string,
-    { full_name: string | null; email: string; is_active: boolean }
+    { full_name: string | null; email: string; is_active: boolean; role: string | null }
   >();
   if (userIds.length > 0) {
     const { data: users, error } = await supabase
       .from('users')
-      .select('id, full_name, email, is_active')
+      .select('id, full_name, email, is_active, role')
       .in('id', userIds);
     if (error) throw new Error(`ユーザー取得に失敗: ${error.message}`);
     for (const u of users ?? []) {
@@ -94,6 +98,7 @@ export async function getProtectSummary(filter: {
         full_name: u.full_name as string | null,
         email: u.email as string,
         is_active: u.is_active as boolean,
+        role: (u.role as string | null) ?? null,
       });
     }
   }
@@ -107,12 +112,15 @@ export async function getProtectSummary(filter: {
         // 担当なし / 逆引き不能はいずれも「無効」側として扱う
         user_name: uid === NO_HOLDER_KEY ? '(担当なし)' : u ? (u.full_name ?? u.email) : '(不明)',
         is_active: u?.is_active ?? false,
+        role: u?.role ?? null,
         protect_count: count,
       };
     })
     .filter((r) => {
-      if (filter.activeFilter === 'active') return r.is_active;
-      if (filter.activeFilter === 'inactive') return !r.is_active;
+      if (filter.activeFilter === 'active' && !r.is_active) return false;
+      if (filter.activeFilter === 'inactive' && r.is_active) return false;
+      // ロール絞り込み(特定ロール選択時は該当ロールの保持者のみ)
+      if (filter.roleFilter !== 'all' && r.role !== filter.roleFilter) return false;
       return true;
     })
     .sort((a, b) => b.protect_count - a.protect_count);
