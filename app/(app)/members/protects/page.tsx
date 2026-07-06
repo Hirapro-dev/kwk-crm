@@ -52,10 +52,28 @@ function groupBadgeVariant(key: number): 'destructive' | 'outline' {
   return key !== -1 && key <= 3 ? 'destructive' : 'outline';
 }
 
-export default async function ProtectsPage() {
-  // ログインユーザーが設定したプロテクトのみ表示
+interface PageProps {
+  searchParams: Promise<{ user?: string; name?: string }>;
+}
+
+export default async function ProtectsPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
   const me = await getCurrentUser();
-  const members = await getAllActiveProtects(me.id);
+
+  // 他ユーザーのプロテクト閲覧は admin/manager のみ許可。
+  // それ以外はクエリを無視して自分の設定分のみ表示する。
+  const canViewOthers = me.role === 'admin' || me.role === 'manager';
+  const targetUserId = sp.user && canViewOthers ? sp.user : me.id;
+  const isOther = targetUserId !== me.id;
+
+  const members = await getAllActiveProtects(targetUserId);
+
+  // 表示名: 他ユーザー時はクエリの name(表示用) or 実データの保持者名から導出
+  const holderName =
+    (isOther && sp.name ? sp.name : members[0]?.protect_by_user?.full_name) ?? null;
+  const viewName = isOther
+    ? `${holderName ?? '指定ユーザー'} のプロテクト会員一覧`
+    : '自分のプロテクト会員一覧';
 
   // 残り日数でグルーピング
   const groups = new Map<number, ProtectExpiringMember[]>();
@@ -78,7 +96,7 @@ export default async function ProtectsPage() {
         <PanelHeader
           iconLabel="MEM"
           iconColor="#1589ee"
-          viewName="自分のプロテクト会員一覧"
+          viewName={viewName}
           actions={
             <Link href="/members" className="text-xs text-muted-foreground hover:underline">
               ← 会員一覧へ

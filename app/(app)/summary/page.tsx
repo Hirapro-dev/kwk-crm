@@ -660,7 +660,10 @@ async function ProtectTab({ sp }: { sp: SP }) {
               <TableRow key={r.user_id ?? '(未割当)'} className="sf-row-hover">
                 <TableCell className="py-2 font-medium">
                   {r.user_id ? (
-                    <Link href={`/settings/users/${r.user_id}`} className="sf-link">
+                    <Link
+                      href={`/members/protects?user=${r.user_id}&name=${encodeURIComponent(r.user_name)}`}
+                      className="sf-link"
+                    >
                       {r.user_name}
                     </Link>
                   ) : (
