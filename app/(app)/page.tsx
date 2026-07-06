@@ -139,7 +139,7 @@ export default async function DashboardPage() {
                   : `全プロテクト · ${protectExpiring.totalCount}件${protectExpiring.totalCount > 20 ? '（上位20件）' : ''}`}
               </span>
               <Link
-                href="/members/protects?all=1"
+                href="/members/protects"
                 className="text-xs font-normal text-primary hover:underline"
               >
                 全て表示 →
