@@ -83,7 +83,12 @@ export async function listInquiries(params: InquiryListParams = {}): Promise<Inq
       nullsFirst: false,
     });
   }
-  query = query.order('registered_at', { ascending: false }).range(from, to);
+  // 既定: 登録日時の降順(最新が上)。ブランク(NULL)は末尾に回し、先頭に来ないようにする。
+  // 同値/ブランク同士は作成日時(取込日時)の降順で補助ソートする。
+  query = query
+    .order('registered_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false, nullsFirst: false })
+    .range(from, to);
 
   if (params.q && params.q.trim()) {
     const q = params.q.trim().replace(/[%_]/g, '\\$&');
