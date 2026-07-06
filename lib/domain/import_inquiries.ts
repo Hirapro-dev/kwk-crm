@@ -229,22 +229,28 @@ export async function commitInquiriesCsv(
     };
   }
 
-  // 更新のみモード: 既存の問合せIDだけに絞る(新規IDはスキップ)
-  let targetRecords = records;
-  let skippedCount = 0;
-  if (updateOnly) {
+  // 新規/更新の内訳を出すため、常に既存の問合せIDを照会する
+  const existing = new Set<string>();
+  {
     const ids = records.map((r) => r.id);
-    const existing = new Set<string>();
     for (let i = 0; i < ids.length; i += BATCH) {
       const chunk = ids.slice(i, i + BATCH);
       if (chunk.length === 0) continue;
       const { data } = await supabase.from('inquiries').select('id').in('id', chunk);
       for (const r of (data ?? []) as Array<{ id: string }>) existing.add(String(r.id));
     }
+  }
+
+  // 更新のみモード: 既存の問合せIDだけに絞る(新規IDはスキップ)
+  let targetRecords = records;
+  let skippedCount = 0;
+  if (updateOnly) {
     const before = targetRecords.length;
     targetRecords = targetRecords.filter((r) => existing.has(r.id));
     skippedCount = before - targetRecords.length;
   }
+  const newCount = targetRecords.filter((r) => !existing.has(r.id)).length;
+  const updateCount = targetRecords.length - newCount;
 
   // 3) inquiries upsert(問合せIDで突合)
   let upserted = 0;
@@ -276,6 +282,8 @@ export async function commitInquiriesCsv(
   return {
     ok: true,
     upserted,
+    newCount,
+    updateCount,
     skippedCount,
     errorCount: errors.length,
     errors: errors.slice(0, 50),

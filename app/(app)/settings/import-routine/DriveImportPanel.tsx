@@ -8,21 +8,29 @@
  * まとめて取り込みボタンで有効オブジェクトを順次処理。
  */
 
-import { CheckCircle2, CloudDownload, Loader2, Play, PlayCircle, Save, XCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import type { ImportSource } from '@/lib/domain/import_sources';
+import type { CommitResult, PreviewResult } from '@/lib/domain/import_actions';
 import {
   previewDriveImport,
   runDriveImport,
   saveImportSource,
 } from '@/lib/domain/import_drive_actions';
-import type { CommitResult, PreviewResult } from '@/lib/domain/import_actions';
+import type { ImportSource } from '@/lib/domain/import_sources';
 import { IMPORT_OBJECTS } from '@/lib/import/schema';
 import { formatDateTime } from '@/lib/utils/date';
+import {
+  CheckCircle2,
+  CloudDownload,
+  Loader2,
+  Play,
+  PlayCircle,
+  Save,
+  XCircle,
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState, useTransition } from 'react';
 
 interface Props {
   sources: ImportSource[];
@@ -68,9 +76,10 @@ function BulkImportSection({
 
   // 残り時間の推定
   const doneSteps = steps.filter((s) => s.elapsedMs !== undefined);
-  const avgMs = doneSteps.length > 0
-    ? doneSteps.reduce((sum, s) => sum + (s.elapsedMs ?? 0), 0) / doneSteps.length
-    : null;
+  const avgMs =
+    doneSteps.length > 0
+      ? doneSteps.reduce((sum, s) => sum + (s.elapsedMs ?? 0), 0) / doneSteps.length
+      : null;
   const remainingSteps = totalCount - doneCount;
   const estimatedRemainMs = avgMs !== null ? avgMs * remainingSteps : null;
 
@@ -147,13 +156,15 @@ function BulkImportSection({
         {(running || finished) && totalCount > 0 && (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{doneCount} / {totalCount} 完了</span>
+              <span>
+                {doneCount} / {totalCount} 完了
+              </span>
               <span>
                 {running && estimatedRemainMs !== null
                   ? `残り約 ${formatMs(estimatedRemainMs)}`
                   : finished
-                  ? '完了'
-                  : ''}
+                    ? '完了'
+                    : ''}
               </span>
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -179,17 +190,31 @@ function BulkImportSection({
                   {step.status === 'error' && (
                     <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
                   )}
-                  <span className={
-                    step.status === 'running' ? 'font-medium' :
-                    step.status === 'done' ? 'text-green-700' :
-                    step.status === 'error' ? 'text-destructive' :
-                    'text-muted-foreground'
-                  }>
+                  <span
+                    className={
+                      step.status === 'running'
+                        ? 'font-medium'
+                        : step.status === 'done'
+                          ? 'text-green-700'
+                          : step.status === 'error'
+                            ? 'text-destructive'
+                            : 'text-muted-foreground'
+                    }
+                  >
                     {step.label}
                     {step.status === 'running' && ' を取込中...'}
                     {step.status === 'done' && step.result?.ok && (
                       <span className="ml-1 text-muted-foreground">
                         {step.result.upserted?.toLocaleString()}件
+                        {step.result.newCount != null && step.result.updateCount != null && (
+                          <span className="ml-1">
+                            (新規 {step.result.newCount.toLocaleString()} / 更新{' '}
+                            {step.result.updateCount.toLocaleString()})
+                          </span>
+                        )}
+                        {step.result.skippedCount
+                          ? ` / スキップ ${step.result.skippedCount.toLocaleString()}`
+                          : ''}
                         {step.elapsedMs ? ` (${formatMs(step.elapsedMs)})` : ''}
                       </span>
                     )}
@@ -214,12 +239,11 @@ export function DriveImportPanel({ sources, configured }: Props) {
       {!configured && (
         <Card className="border-amber-300 bg-amber-50">
           <CardContent className="space-y-1 p-4 text-sm">
-            <p className="font-bold text-amber-800">
-              Google サービスアカウントが未設定です
-            </p>
+            <p className="font-bold text-amber-800">Google サービスアカウントが未設定です</p>
             <p className="text-amber-700">
               サーバーの環境変数 <code className="font-mono">GOOGLE_SERVICE_ACCOUNT_JSON</code>{' '}
-              にサービスアカウントキー(JSON)を設定し、取込対象のファイル/フォルダを そのSAのメールアドレスに
+              にサービスアカウントキー(JSON)を設定し、取込対象のファイル/フォルダを
+              そのSAのメールアドレスに
               「閲覧者」で共有してください。設定後にこの画面の取込が有効になります。
             </p>
           </CardContent>
@@ -291,7 +315,10 @@ function DriveSourceCard({
       try {
         const res = await previewDriveImport(source.object);
         setPreview(
-          res ?? { ok: false, error: '結果を取得できませんでした。ページを再読み込みしてください。' },
+          res ?? {
+            ok: false,
+            error: '結果を取得できませんでした。ページを再読み込みしてください。',
+          },
         );
       } catch (e) {
         setPreview({ ok: false, error: e instanceof Error ? e.message : '取得に失敗しました' });
@@ -307,7 +334,10 @@ function DriveSourceCard({
       try {
         const res = await runDriveImport(source.object);
         setCommitted(
-          res ?? { ok: false, error: '結果を取得できませんでした。ページを再読み込みしてください。' },
+          res ?? {
+            ok: false,
+            error: '結果を取得できませんでした。ページを再読み込みしてください。',
+          },
         );
         if (res?.ok) router.refresh();
       } catch (e) {
@@ -327,9 +357,7 @@ function DriveSourceCard({
             最終実行: {formatDateTime(source.last_run_at)} ·{' '}
             <span
               className={
-                source.last_run_status === 'success'
-                  ? 'text-green-700'
-                  : 'text-destructive'
+                source.last_run_status === 'success' ? 'text-green-700' : 'text-destructive'
               }
             >
               {source.last_run_message ?? source.last_run_status}
@@ -359,7 +387,10 @@ function DriveSourceCard({
             />
             有効
           </label>
-          <label className="flex items-center gap-1 text-xs" title="既存IDの更新のみ・新規レコードは作成しない">
+          <label
+            className="flex items-center gap-1 text-xs"
+            title="既存IDの更新のみ・新規レコードは作成しない"
+          >
             <input
               type="checkbox"
               checked={updateOnly}
@@ -391,7 +422,8 @@ function DriveSourceCard({
               className="h-8 text-sm"
             />
             <p className="text-[10px] text-muted-foreground">
-              2フォームのCSVを統合し、問合せID(TA-)で突合します。共通列はカラム、フォーム固有列は extra に格納されます。
+              2フォームのCSVを統合し、問合せID(TA-)で突合します。共通列はカラム、フォーム固有列は
+              extra に格納されます。
             </p>
           </div>
         )}
@@ -463,6 +495,9 @@ function DriveSourceCard({
         {committed?.ok && (
           <p role="status" className="text-sm text-green-700">
             {committed.upserted?.toLocaleString()} 件を取り込みました。
+            {committed.newCount != null &&
+              committed.updateCount != null &&
+              ` (新規 ${committed.newCount.toLocaleString()} / 更新 ${committed.updateCount.toLocaleString()})`}
             {(committed.skippedCount ?? 0) > 0 &&
               ` (新規ID ${committed.skippedCount} 件はスキップ)`}
             {(committed.errorCount ?? 0) > 0 && ` (エラー ${committed.errorCount} 件は除外)`}

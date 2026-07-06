@@ -189,17 +189,21 @@ export async function commitMembersCsv(
     };
   }
 
+  // 新規/更新の内訳を出すため、常に既存IDを照会する
+  const existing = await existingIds(
+    supabase,
+    records.map((r) => r.id),
+  );
+
   let targetRecords = records;
   let skippedCount = 0;
   if (updateOnly) {
-    const existing = await existingIds(
-      supabase,
-      records.map((r) => r.id),
-    );
     const before = targetRecords.length;
     targetRecords = targetRecords.filter((r) => existing.has(r.id));
     skippedCount = before - targetRecords.length;
   }
+  const newCount = targetRecords.filter((r) => !existing.has(r.id)).length;
+  const updateCount = targetRecords.length - newCount;
 
   let upserted = 0;
   for (let i = 0; i < targetRecords.length; i += BATCH) {
@@ -231,6 +235,8 @@ export async function commitMembersCsv(
   return {
     ok: true,
     upserted,
+    newCount,
+    updateCount,
     skippedCount,
     errorCount: errors.length,
     errors: errors.slice(0, 50),
