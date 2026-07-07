@@ -17,6 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useEffect, useRef, useState } from 'react';
+import { getMainScroller, readScroll, scrollStorageKey, writeScroll } from './scroll_restore';
 
 export interface InfiniteCol {
   header: string;
@@ -55,12 +56,23 @@ export function InfiniteTable<T>({
   const loadMoreRef = useRef(loadMore);
   loadMoreRef.current = loadMore;
 
+  // スクロール位置復元用に最新値を参照するための ref
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const doneRef = useRef(done);
+  doneRef.current = done;
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  const restoringRef = useRef(false);
+  const storageKeyRef = useRef('');
+
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el || done) return;
     const io = new IntersectionObserver(
       (entries) => {
-        if (!entries[0]?.isIntersecting || loadingRef.current || done) return;
+        if (!entries[0]?.isIntersecting || loadingRef.current || done || restoringRef.current)
+          return;
         loadingRef.current = true;
         setLoading(true);
         void (async () => {
@@ -85,6 +97,82 @@ export function InfiniteTable<T>({
     io.observe(el);
     return () => io.disconnect();
   }, [page, done, total, pageSize]);
+
+  // マウント時: 保存済みのスクロール位置を復元。読込済み件数に満たなければ補充してから位置合わせ。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 初回マウント時のみ実行する
+  useEffect(() => {
+    const main = getMainScroller();
+    if (!main) return;
+    const key = scrollStorageKey();
+    storageKeyRef.current = key;
+    const saved = readScroll(key);
+    if (!saved || saved.top <= 0) return;
+
+    // 高さ確定のタイミング差を吸収するため二重 rAF で位置合わせ
+    const applyTop = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          main.scrollTop = saved.top;
+        });
+      });
+    };
+
+    if (saved.count > rowsRef.current.length && !doneRef.current) {
+      restoringRef.current = true;
+      setLoading(true);
+      void (async () => {
+        let curRows = rowsRef.current;
+        let curPage = pageRef.current;
+        let curDone = doneRef.current;
+        // 必要ページ数まで補充(+2 の余裕、暴走防止に上限を設ける)
+        const maxPages = Math.ceil(saved.count / pageSize) + 2;
+        let guard = 0;
+        try {
+          while (curRows.length < saved.count && !curDone && guard < maxPages) {
+            const next = await loadMoreRef.current(curPage + 1);
+            curPage += 1;
+            curRows = [...curRows, ...next];
+            if (next.length < pageSize || curRows.length >= total) curDone = true;
+            guard += 1;
+          }
+          setRows(curRows);
+          setPage(curPage);
+          if (curDone) setDone(true);
+        } catch {
+          // 失敗しても現状の行で位置合わせを試みる
+        } finally {
+          restoringRef.current = false;
+          setLoading(false);
+          applyTop();
+        }
+      })();
+    } else {
+      applyTop();
+    }
+  }, []);
+
+  // <main> スクロールのたびに現在位置+読込済み件数を保存する(初回マウント時のみ登録)
+  useEffect(() => {
+    const main = getMainScroller();
+    if (!main) return;
+    if (!storageKeyRef.current) storageKeyRef.current = scrollStorageKey();
+    let raf = 0;
+    const onScroll = () => {
+      if (restoringRef.current) return;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        writeScroll(storageKeyRef.current, {
+          top: main.scrollTop,
+          count: rowsRef.current.length,
+        });
+      });
+    };
+    main.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      main.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
   return (
     <div>

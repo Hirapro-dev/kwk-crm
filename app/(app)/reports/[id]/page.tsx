@@ -6,25 +6,22 @@
  * - グラフは Phase 7 で(現状は表のみ)
  */
 
-import type { ReactNode } from 'react';
-import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
+import { ScrollRestorer } from '@/components/layout/ScrollRestorer';
 import { ReportResultView } from '@/components/reports/ReportResultView';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
-import { getReport } from '@/lib/domain/reports';
 import { logReportRun } from '@/lib/domain/report_actions';
+import { getReport } from '@/lib/domain/reports';
 import { executeReport } from '@/lib/reports/execute_v2';
-import {
-  SUMMARY_AGG_LABEL,
-  aggregateColumn,
-  formatSummaryValue,
-} from '@/lib/reports/summary';
+import { SUMMARY_AGG_LABEL, aggregateColumn, formatSummaryValue } from '@/lib/reports/summary';
 import { REPORT_TYPES } from '@/lib/reports/types';
 import { formatDateTime } from '@/lib/utils/date';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import type { ReactNode } from 'react';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -51,8 +48,7 @@ export default async function ReportRunPage({ params }: PageProps) {
     error_message: res.ok ? undefined : res.error,
   });
 
-  const typeMeta =
-    REPORT_TYPES[report.report_type as keyof typeof REPORT_TYPES] ?? null;
+  const typeMeta = REPORT_TYPES[report.report_type as keyof typeof REPORT_TYPES] ?? null;
   const canEdit = !report.is_standard || me.role === 'admin';
 
   // #画像1: サマリー指標が設定されていれば、ヘッダー帯を「件数 + 指定集計値」に置き換える。
@@ -66,10 +62,7 @@ export default async function ReportRunPage({ params }: PageProps) {
       if (!col) continue;
       panelFacts.push({
         label: `${col.label} の${SUMMARY_AGG_LABEL[s.aggregate]}`,
-        value: formatSummaryValue(
-          aggregateColumn(res.rows, col.alias, s.aggregate),
-          s.aggregate,
-        ),
+        value: formatSummaryValue(aggregateColumn(res.rows, col.alias, s.aggregate), s.aggregate),
       });
     }
   } else {
@@ -95,6 +88,8 @@ export default async function ReportRunPage({ params }: PageProps) {
 
   return (
     <div className="space-y-3">
+      {/* 会員詳細などへ遷移して戻った際、スクロール位置を復元する */}
+      <ScrollRestorer />
       {/* パンくず + 実行日時(右上) */}
       <div className="flex items-center justify-between gap-2">
         <Link href="/reports" className="sf-back-link text-xs">
