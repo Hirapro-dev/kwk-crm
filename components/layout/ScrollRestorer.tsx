@@ -40,7 +40,7 @@ export function ScrollRestorer() {
     let raf = 0;
     const unsubscribe = subscribeScroll(() => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => writeScroll(key, { top: currentScrollTop(), count: 0 }));
+      raf = requestAnimationFrame(() => writeScroll(key, { top: currentScrollTop() }));
     });
     return () => {
       unsubscribe();

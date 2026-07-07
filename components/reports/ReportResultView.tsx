@@ -365,7 +365,7 @@ export function ReportResultView({
           )}
         </CardHeader>
         <CardContent>
-          <div className="max-h-[640px] overflow-auto">
+          <div className="max-h-[640px] overflow-auto" data-scroll-container>
             <Table>
               <TableHeader>
                 <TableRow>
