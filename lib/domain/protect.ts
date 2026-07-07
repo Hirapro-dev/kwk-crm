@@ -73,10 +73,10 @@ export async function applyProtect(
         return;
       }
 
+      // owner_name_raw(永久担当) はプロテクトと独立のため更新しない(migration 59 と整合)。
       const { error } = await supabase
         .from('members')
         .update({
-          owner_name_raw: userFullName,
           protect_expires_at: expiresAt,
           protect_by_user_id: userId,
           protect_released_at: null, // 再プロテクトで解除マーカーをクリア
@@ -103,8 +103,8 @@ export async function applyProtect(
 export async function expireProtects(supabase: SupabaseClient): Promise<number> {
   const now = new Date().toISOString();
 
+  // owner_name_raw(永久担当) はプロテクトと独立のため、期限切れ解除でも更新しない(migration 59 と整合)。
   const baseUpdate = {
-    owner_name_raw: 'free',
     protect_expires_at: null,
     protect_by_user_id: null,
     updated_at: now,

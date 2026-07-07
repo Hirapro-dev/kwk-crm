@@ -27,6 +27,14 @@ export interface Member {
   address: string | null;
   postal_code: string | null;
   customer_type: string | null;
+  /** 実質名義人 (§5.4) */
+  real_name: string | null;
+  /** 性別 */
+  gender: string | null;
+  /** 生年月日 (YYYY-MM-DD) */
+  birthdate: string | null;
+  /** 紹介者氏名 */
+  referrer_name: string | null;
   owner_id: string | null;
   owner_name_raw: string | null;
   regular_contact_id: string | null;

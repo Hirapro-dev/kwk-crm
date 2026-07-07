@@ -49,12 +49,16 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
   const [form, setForm] = useState({
     name: member.name ?? '',
     name_kana: member.name_kana ?? '',
+    real_name: member.real_name ?? '',
     email1: member.email1 ?? '',
     email2: ((member as unknown as Record<string, unknown>).email2 as string) ?? '',
     email3: ((member as unknown as Record<string, unknown>).email3 as string) ?? '',
     phone1: member.phone1 ?? '',
     postal_code: member.postal_code ?? '',
     address: ((member as unknown as Record<string, unknown>).address as string) ?? '',
+    gender: member.gender ?? '',
+    birthdate: toDateInput(member.birthdate),
+    referrer_name: member.referrer_name ?? '',
     do_not_call: member.do_not_call ?? false,
   });
 
@@ -124,6 +128,9 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
             <Field label="氏名（カナ）">
               <Input value={form.name_kana} onChange={set('name_kana')} />
             </Field>
+            <Field label="実質名義人">
+              <Input value={form.real_name} onChange={set('real_name')} />
+            </Field>
             <Field label="電話">
               <Input value={form.phone1} onChange={set('phone1')} type="tel" />
             </Field>
@@ -141,6 +148,26 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
             </Field>
             <Field label="住所">
               <Input value={form.address} onChange={set('address')} />
+            </Field>
+            <Field label="性別">
+              <select
+                value={form.gender}
+                onChange={(e) => setForm((prev) => ({ ...prev, gender: e.target.value }))}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">未設定</option>
+                <option value="男">男</option>
+                <option value="女">女</option>
+                {form.gender !== '' && form.gender !== '男' && form.gender !== '女' && (
+                  <option value={form.gender}>{form.gender}</option>
+                )}
+              </select>
+            </Field>
+            <Field label="生年月日">
+              <Input type="date" value={form.birthdate} onChange={set('birthdate')} />
+            </Field>
+            <Field label="紹介者氏名">
+              <Input value={form.referrer_name} onChange={set('referrer_name')} />
             </Field>
             <div className="flex items-center gap-2">
               <input

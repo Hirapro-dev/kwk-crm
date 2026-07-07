@@ -15,6 +15,14 @@ export interface UpdateMemberInput {
   postal_code?: string;
   address?: string;
   customer_type?: string;
+  /** 実質名義人 */
+  real_name?: string;
+  /** 性別 */
+  gender?: string;
+  /** 生年月日 (YYYY-MM-DD)。空文字で解除 */
+  birthdate?: string;
+  /** 紹介者氏名 */
+  referrer_name?: string;
   do_not_call?: boolean;
   /** 定期連絡者の users.id。空文字/null で解除。 */
   regular_contact_id?: string | null;
@@ -49,21 +57,14 @@ export async function updateMember(input: UpdateMemberInput): Promise<{ error?: 
     let cleared = false;
     if ('protect_by_user_id' in input) {
       const uid = protect_by_user_id?.trim() ? protect_by_user_id.trim() : null;
+      // owner_name_raw(永久担当) はプロテクトと独立のため触らない(migration 59 と整合)。
       if (uid) {
-        // プロテクト者を設定 → owner_name_raw も担当者名で同期。解除マーカーはクリア。
-        const { data: u } = await supabase
-          .from('users')
-          .select('full_name')
-          .eq('id', uid)
-          .is('deleted_at', null)
-          .maybeSingle();
+        // プロテクト者を設定 → 解除マーカーはクリア。
         cleaned.protect_by_user_id = uid;
-        cleaned.owner_name_raw = (u?.full_name as string | null) ?? null;
         cleaned.protect_released_at = null;
       } else {
-        // プロテクト解除 → owner_name_raw を free に戻し、期限もクリア。解除日時を記録。
+        // プロテクト解除 → 期限をクリアし解除日時を記録。
         cleaned.protect_by_user_id = null;
-        cleaned.owner_name_raw = 'free';
         cleaned.protect_expires_at = null;
         cleaned.protect_released_at = new Date().toISOString();
         cleared = true;
