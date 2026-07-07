@@ -17,7 +17,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useEffect, useRef, useState } from 'react';
-import { getMainScroller, readScroll, scrollStorageKey, writeScroll } from './scroll_restore';
+import {
+  applyScrollTop,
+  currentScrollTop,
+  readScroll,
+  scrollStorageKey,
+  subscribeScroll,
+  writeScroll,
+} from './scroll_restore';
 
 export interface InfiniteCol {
   header: string;
@@ -101,8 +108,6 @@ export function InfiniteTable<T>({
   // マウント時: 保存済みのスクロール位置を復元。読込済み件数に満たなければ補充してから位置合わせ。
   // biome-ignore lint/correctness/useExhaustiveDependencies: 初回マウント時のみ実行する
   useEffect(() => {
-    const main = getMainScroller();
-    if (!main) return;
     const key = scrollStorageKey();
     storageKeyRef.current = key;
     const saved = readScroll(key);
@@ -112,7 +117,7 @@ export function InfiniteTable<T>({
     const applyTop = () => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          main.scrollTop = saved.top;
+          applyScrollTop(saved.top);
         });
       });
     };
@@ -151,25 +156,22 @@ export function InfiniteTable<T>({
     }
   }, []);
 
-  // <main> スクロールのたびに現在位置+読込済み件数を保存する(初回マウント時のみ登録)
+  // スクロールのたびに現在位置+読込済み件数を保存する(初回マウント時のみ登録)
   useEffect(() => {
-    const main = getMainScroller();
-    if (!main) return;
     if (!storageKeyRef.current) storageKeyRef.current = scrollStorageKey();
     let raf = 0;
-    const onScroll = () => {
+    const unsubscribe = subscribeScroll(() => {
       if (restoringRef.current) return;
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         writeScroll(storageKeyRef.current, {
-          top: main.scrollTop,
+          top: currentScrollTop(),
           count: rowsRef.current.length,
         });
       });
-    };
-    main.addEventListener('scroll', onScroll, { passive: true });
+    });
     return () => {
-      main.removeEventListener('scroll', onScroll);
+      unsubscribe();
       cancelAnimationFrame(raf);
     };
   }, []);

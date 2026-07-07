@@ -1,19 +1,14 @@
 /**
  * 一覧のスクロール位置復元の共通ヘルパ (Client 専用)。
  *
- * 背景: アプリのスクロールコンテナは layout.tsx の <main overflow-y-auto>。
- * ブラウザ標準のスクロール復元は window にしか効かないため、内部スクロールする
- * <main> の位置を自前で sessionStorage に保存・復元する。
+ * 背景: このアプリは body/html に高さ制限が無く、レイアウトの親が min-h-screen のため、
+ * 実際にスクロールするのは <main> ではなく window(ページ全体) になる。
+ * ただし環境やページによって <main overflow-y-auto> 自体がスクロールするケースもあり得るため、
+ * window と main の「両方」を対象に読み書き・購読して取りこぼしを防ぐ。
  *
  * キーは「パス + クエリ」単位。詳細ページへ遷移して戻ると同じ一覧キーで復元される。
  * フィルタ/ソートで query が変われば別キー扱い(=別の位置)になる。
  */
-
-/** アプリの実スクロール要素 (<main>) を返す。 */
-export function getMainScroller(): HTMLElement | null {
-  if (typeof document === 'undefined') return null;
-  return document.querySelector('main');
-}
 
 /** 現在の URL(パス+クエリ)からストレージキーを生成。 */
 export function scrollStorageKey(): string {
@@ -22,7 +17,7 @@ export function scrollStorageKey(): string {
 }
 
 export interface SavedScroll {
-  /** main.scrollTop */
+  /** スクロール量(px) */
   top: number;
   /** 無限スクロールで読み込み済みの行数(全行描画の一覧では 0) */
   count: number;
@@ -46,4 +41,33 @@ export function writeScroll(key: string, v: SavedScroll): void {
   } catch {
     // sessionStorage 不可(プライベートモード等)でも致命的でないため無視
   }
+}
+
+/** 実際にスクロールしている量。window と <main> の大きい方を採用する。 */
+export function currentScrollTop(): number {
+  if (typeof window === 'undefined') return 0;
+  const main = document.querySelector('main');
+  const mainTop = main ? main.scrollTop : 0;
+  const winTop = window.scrollY || document.documentElement.scrollTop || 0;
+  return mainTop > winTop ? mainTop : winTop;
+}
+
+/** window と <main> の両方に位置を適用する(スクロールしない方はクランプされ無害)。 */
+export function applyScrollTop(top: number): void {
+  if (typeof window === 'undefined') return;
+  const main = document.querySelector('main');
+  if (main) main.scrollTop = top;
+  window.scrollTo(0, top);
+}
+
+/** window と <main> の両方の scroll イベントを購読する。解除関数を返す。 */
+export function subscribeScroll(cb: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const main = document.querySelector('main');
+  window.addEventListener('scroll', cb, { passive: true });
+  main?.addEventListener('scroll', cb, { passive: true });
+  return () => {
+    window.removeEventListener('scroll', cb);
+    main?.removeEventListener('scroll', cb);
+  };
 }
