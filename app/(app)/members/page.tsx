@@ -104,8 +104,8 @@ export default async function MembersPage({ searchParams }: PageProps) {
                 />
               </Suspense>
             </PanelFilterBar>
-            {/* InfiniteTable 自体が内部スクロール(h-full)するため、親では overflow を付けない */}
-            <div className="min-h-0 flex-1">
+            {/* InfiniteTable(fillParent) が内側でスクロールするため、ここは flex-col で高さを渡すだけ */}
+            <div className="flex min-h-0 flex-1 flex-col">
               <MembersInfinite
                 key={listKey}
                 initialRows={result.rows}

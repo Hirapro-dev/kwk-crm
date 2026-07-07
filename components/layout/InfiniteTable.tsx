@@ -39,7 +39,7 @@ export function InfiniteTable<T>({
   getKey,
   emptyMessage,
   rowClassName,
-  scrollAreaClassName,
+  fillParent,
 }: {
   initialRows: T[];
   total: number;
@@ -53,8 +53,11 @@ export function InfiniteTable<T>({
   emptyMessage: string;
   /** 行ごとの追加クラス(分割ビューの選択行ハイライト等)。省略時は既定のみ。 */
   rowClassName?: (row: T, index: number) => string | undefined;
-  /** スクロール領域(sticky ヘッダー用)の高さクラス上書き。分割ビューでは 'h-full' 等を渡す。 */
-  scrollAreaClassName?: string;
+  /**
+   * 親の高さいっぱいをスクロール領域にする(分割ビュー等、親が固定高さのとき)。
+   * true のとき: 親は flex-col で高さを持たせること。既定(false)は DEFAULT_SCROLL_AREA の高さ。
+   */
+  fillParent?: boolean;
 }) {
   const [rows, setRows] = useState<T[]>(initialRows);
   const [page, setPage] = useState(1);
@@ -100,12 +103,13 @@ export function InfiniteTable<T>({
   }, [page, done, total, pageSize]);
 
   return (
-    <div>
+    // fillParent 時は親(flex-col・固定高さ)いっぱいを占め、内側でスクロールさせる
+    <div className={cn(fillParent && 'flex min-h-0 flex-1 flex-col')}>
       {/* 一覧自体をスクロール領域にして、ヘッダー行を sticky で固定する。
           wrapperClassName=overflow-visible で内側に二重スクロールを作らない。 */}
       <div
         ref={scrollRef}
-        className={cn('overflow-auto', scrollAreaClassName ?? DEFAULT_SCROLL_AREA)}
+        className={cn('overflow-auto', fillParent ? 'min-h-0 flex-1' : DEFAULT_SCROLL_AREA)}
       >
         <Table wrapperClassName="overflow-visible">
           <TableHeader>
