@@ -12,6 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { updateMember } from '@/lib/domain/member_actions';
+import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import type { MemberWithOwner } from '@/lib/domain/types';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
@@ -22,50 +23,91 @@ export interface ProtectUserOption {
   full_name: string | null;
 }
 
+/**
+ * 専用UIを持つ / 編集不可(PK・システム・計算列)のため、動的フォームの汎用ループから除外するフィールド。
+ * - protect_by_user_id / protect_expires_at → 下部「プロテクト設定(管理者のみ)」で編集
+ * - regular_contact_id                      → 下部「定期連絡者」コンボボックスで編集
+ * - protect_released_at                     → 計算表示(経過日数)のため編集不可
+ */
+const SPECIAL_OR_READONLY_FIELDS = new Set<string>([
+  'id',
+  'owner_id',
+  'protect_by_user_id',
+  'protect_expires_at',
+  'protect_released_at',
+  'regular_contact_id',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+  'legacy_sf_id',
+]);
+
 interface Props {
   member: MemberWithOwner;
   /** 現在のログインユーザーのロール。'admin' のときのみプロテクト編集UIを表示 */
   currentUserRole?: string;
   /** プロテクト者・定期連絡者の候補一覧 (ユーザー全員) */
   protectUsers?: ProtectUserOption[];
+  /** 詳細フィールド定義 (is_visible_detail=true, sort_order_detail 順)。動的編集フォームの元。 */
+  detailFields?: FieldDefinition[];
 }
 
 /** ISO/タイムスタンプ文字列を input[type=date] 用の YYYY-MM-DD に変換 */
-function toDateInput(value: string | null): string {
+function toDateInput(value: unknown): string {
   if (!value) return '';
-  return value.slice(0, 10);
+  return String(value).slice(0, 10);
 }
 
-export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }: Props) {
+/** ISO/タイムスタンプ文字列を input[type=datetime-local] 用の YYYY-MM-DDTHH:mm に変換 */
+function toDateTimeLocal(value: unknown): string {
+  if (!value) return '';
+  return String(value).slice(0, 16);
+}
+
+/** レコード値をフォーム入力用の初期値に変換 */
+function initValue(dataType: FieldDefinition['data_type'], raw: unknown): string | boolean {
+  if (dataType === 'boolean') return raw === true;
+  if (dataType === 'date') return toDateInput(raw);
+  if (dataType === 'datetime') return toDateTimeLocal(raw);
+  return raw == null ? '' : String(raw);
+}
+
+export function MemberEditDialog({
+  member,
+  currentUserRole,
+  protectUsers = [],
+  detailFields = [],
+}: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const isAdmin = currentUserRole === 'admin';
 
+  // 動的編集対象: 実DBカラム(is_in_db)のみ。空白セル/専用UI/計算列/extra(jsonb)は除外。
+  const editableFields = detailFields.filter(
+    (f) => f.is_in_db && !f.is_placeholder && !SPECIAL_OR_READONLY_FIELDS.has(f.field_name),
+  );
+
   // プロテクト期限が 2099 以降なら「無期限(固定)」扱い
   const initialUnlimited = (member.protect_expires_at ?? '') >= '2099-01-01';
 
-  const [form, setForm] = useState({
-    name: member.name ?? '',
-    name_kana: member.name_kana ?? '',
-    real_name: member.real_name ?? '',
-    email1: member.email1 ?? '',
-    email2: ((member as unknown as Record<string, unknown>).email2 as string) ?? '',
-    email3: ((member as unknown as Record<string, unknown>).email3 as string) ?? '',
-    phone1: member.phone1 ?? '',
-    postal_code: member.postal_code ?? '',
-    address: ((member as unknown as Record<string, unknown>).address as string) ?? '',
-    gender: member.gender ?? '',
-    birthdate: toDateInput(member.birthdate),
-    referrer_name: member.referrer_name ?? '',
-    do_not_call: member.do_not_call ?? false,
+  const record = member as unknown as Record<string, unknown>;
+  const [form, setForm] = useState<Record<string, string | boolean>>(() => {
+    const o: Record<string, string | boolean> = {};
+    for (const f of editableFields) {
+      o[f.field_name] = initValue(f.data_type, record[f.field_name]);
+    }
+    return o;
   });
 
   // 定期連絡者 (ユーザー検索コンボボックス)
   const [regularContactId, setRegularContactId] = useState<string | null>(
     member.regular_contact_id ?? null,
   );
+
+  // 架電NG (do_not_call は詳細フィールドに含まれないため個別に扱う)
+  const [doNotCall, setDoNotCall] = useState(member.do_not_call ?? false);
 
   // プロテクト編集用 state (admin のみ)
   const [protectUserId, setProtectUserId] = useState(member.protect_by_user_id ?? '');
@@ -74,11 +116,8 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
   );
   const [protectUnlimited, setProtectUnlimited] = useState(initialUnlimited);
 
-  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((prev) => ({
-      ...prev,
-      [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value,
-    }));
+  const setField = (key: string, value: string | boolean) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSubmit = () => {
     setError(null);
@@ -97,6 +136,7 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
       const result = await updateMember({
         id: member.id,
         ...form,
+        do_not_call: doNotCall,
         regular_contact_id: regularContactId,
         ...protectPayload,
       });
@@ -108,6 +148,15 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
       router.refresh();
     });
   };
+
+  // 連続する同じ section_name をまとめて見出し表示する
+  const groups: { name: string | null; fields: FieldDefinition[] }[] = [];
+  for (const f of editableFields) {
+    const name = f.section_name ?? null;
+    const last = groups[groups.length - 1];
+    if (last && last.name === name) last.fields.push(f);
+    else groups.push({ name, fields: [f] });
+  }
 
   return (
     <>
@@ -121,73 +170,47 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
             <DialogTitle>会員情報の編集</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
-            <Field label="氏名">
-              <Input value={form.name} onChange={set('name')} />
-            </Field>
-            <Field label="氏名（カナ）">
-              <Input value={form.name_kana} onChange={set('name_kana')} />
-            </Field>
-            <Field label="実質名義人">
-              <Input value={form.real_name} onChange={set('real_name')} />
-            </Field>
-            <Field label="電話">
-              <Input value={form.phone1} onChange={set('phone1')} type="tel" />
-            </Field>
-            <Field label="メール1">
-              <Input value={form.email1} onChange={set('email1')} type="email" />
-            </Field>
-            <Field label="メール2">
-              <Input value={form.email2} onChange={set('email2')} type="email" />
-            </Field>
-            <Field label="メール3">
-              <Input value={form.email3} onChange={set('email3')} type="email" />
-            </Field>
-            <Field label="郵便番号">
-              <Input value={form.postal_code} onChange={set('postal_code')} />
-            </Field>
-            <Field label="住所">
-              <Input value={form.address} onChange={set('address')} />
-            </Field>
-            <Field label="性別">
-              <select
-                value={form.gender}
-                onChange={(e) => setForm((prev) => ({ ...prev, gender: e.target.value }))}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="">未設定</option>
-                <option value="男">男</option>
-                <option value="女">女</option>
-                {form.gender !== '' && form.gender !== '男' && form.gender !== '女' && (
-                  <option value={form.gender}>{form.gender}</option>
+          <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+            {groups.map((group, gi) => (
+              <div key={group.name ?? `g${gi}`} className="space-y-3">
+                {group.name && (
+                  <p className="border-b pb-1 text-xs font-semibold text-slate-600">{group.name}</p>
                 )}
-              </select>
-            </Field>
-            <Field label="生年月日">
-              <Input type="date" value={form.birthdate} onChange={set('birthdate')} />
-            </Field>
-            <Field label="紹介者氏名">
-              <Input value={form.referrer_name} onChange={set('referrer_name')} />
-            </Field>
+                {group.fields.map((f) => (
+                  <FieldInput
+                    key={f.field_name}
+                    field={f}
+                    value={form[f.field_name]}
+                    onChange={(v) => setField(f.field_name, v)}
+                  />
+                ))}
+              </div>
+            ))}
+
+            {/* 架電NG (詳細フィールド外だが編集可能に保持) */}
             <div className="flex items-center gap-2">
               <input
                 id="do_not_call"
                 type="checkbox"
-                checked={form.do_not_call}
-                onChange={set('do_not_call')}
+                checked={doNotCall}
+                onChange={(e) => setDoNotCall(e.target.checked)}
                 className="h-4 w-4"
               />
               <Label htmlFor="do_not_call">架電NG</Label>
             </div>
 
-            <Field label="定期連絡者">
-              <UserCombobox
-                users={protectUsers}
-                value={regularContactId}
-                onChange={setRegularContactId}
-                placeholder="名前で検索（空欄で全員表示）"
-              />
-            </Field>
+            {/* 定期連絡者 (専用コンボボックス) */}
+            <div className="space-y-3">
+              <p className="border-b pb-1 text-xs font-semibold text-slate-600">担当者</p>
+              <Field label="定期連絡者">
+                <UserCombobox
+                  users={protectUsers}
+                  value={regularContactId}
+                  onChange={setRegularContactId}
+                  placeholder="名前で検索（空欄で全員表示）"
+                />
+              </Field>
+            </div>
 
             {/* プロテクト編集 (admin のみ) */}
             {isAdmin && (
@@ -237,6 +260,53 @@ export function MemberEditDialog({ member, currentUserRole, protectUsers = [] }:
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** データ型に応じた入力欄を描画する */
+function FieldInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: FieldDefinition;
+  value: string | boolean | undefined;
+  onChange: (v: string | boolean) => void;
+}) {
+  const label = field.label ?? field.field_name;
+
+  if (field.data_type === 'boolean') {
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          id={`f_${field.field_name}`}
+          type="checkbox"
+          checked={value === true}
+          onChange={(e) => onChange(e.target.checked)}
+          className="h-4 w-4"
+        />
+        <Label htmlFor={`f_${field.field_name}`}>{label}</Label>
+      </div>
+    );
+  }
+
+  const inputType =
+    field.data_type === 'date'
+      ? 'date'
+      : field.data_type === 'datetime'
+        ? 'datetime-local'
+        : field.data_type === 'number'
+          ? 'number'
+          : 'text';
+
+  return (
+    <Field label={label}>
+      <Input
+        type={inputType}
+        value={typeof value === 'string' ? value : ''}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </Field>
   );
 }
 

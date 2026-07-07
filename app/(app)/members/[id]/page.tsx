@@ -150,6 +150,7 @@ export default async function MemberDetailPage({ params, searchParams }: PagePro
                 member={member}
                 currentUserRole={me.role}
                 protectUsers={protectUsers}
+                detailFields={detailFields}
               />
               <MemberDeleteButton memberId={member.id} memberName={member.name ?? member.id} />
             </>

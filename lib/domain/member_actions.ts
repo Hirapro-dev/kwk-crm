@@ -4,32 +4,57 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
+/**
+ * 会員詳細で編集を許可する DB カラムのホワイトリスト。
+ * 動的編集フォーム(詳細フィールド全項目)から任意カラムが送られても、
+ * ここに無いカラムは無視する(id / owner_id / protect_* / 監査系 / extra は対象外)。
+ * ※ extra jsonb(累計入金額・各案件利用額など CSV取込管理項目)は本フォーム対象外。
+ */
+const EDITABLE_MEMBER_COLUMNS = new Set<string>([
+  'name',
+  'name_kana',
+  'real_name',
+  'email1',
+  'email2',
+  'email3',
+  'phone1',
+  'do_not_call',
+  'address',
+  'postal_code',
+  'customer_type',
+  'owner_name_raw',
+  'gender',
+  'birthdate',
+  'referrer_name',
+  'ad_id',
+  'ad_medium',
+  'info_acquired_points',
+  'info_acquired_date',
+  'first_contact_date',
+  'mailmag_registered_at',
+  'registered_at',
+  'affiliate_id',
+  'affiliate_name',
+  'total_amount',
+  'total_paid_amount',
+  'total_used_amount',
+  'xels_insider_joined_at',
+  'sct_insider_joined_at',
+  'regular_contact_id',
+]);
+
+/**
+ * 会員情報を更新する。
+ * fields は詳細フィールド由来の任意カラムを受け取るが、EDITABLE_MEMBER_COLUMNS のみ反映する。
+ */
 export interface UpdateMemberInput {
   id: string;
-  name?: string;
-  name_kana?: string;
-  email1?: string;
-  email2?: string;
-  email3?: string;
-  phone1?: string;
-  postal_code?: string;
-  address?: string;
-  customer_type?: string;
-  /** 実質名義人 */
-  real_name?: string;
-  /** 性別 */
-  gender?: string;
-  /** 生年月日 (YYYY-MM-DD)。空文字で解除 */
-  birthdate?: string;
-  /** 紹介者氏名 */
-  referrer_name?: string;
-  do_not_call?: boolean;
-  /** 定期連絡者の users.id。空文字/null で解除。 */
-  regular_contact_id?: string | null;
   /** プロテクト者(担当)の users.id。空文字/null で解除。admin のみ変更可。 */
   protect_by_user_id?: string | null;
   /** プロテクト期限 (YYYY-MM-DD または ISO)。空文字/null で無期限解除。admin のみ変更可。 */
   protect_expires_at?: string | null;
+  /** その他の会員カラム(ホワイトリストで検証)。 */
+  [key: string]: unknown;
 }
 
 export async function updateMember(input: UpdateMemberInput): Promise<{ error?: string }> {
@@ -37,9 +62,10 @@ export async function updateMember(input: UpdateMemberInput): Promise<{ error?: 
   const { id, protect_by_user_id, protect_expires_at, ...fields } = input;
   const hasProtectFields = 'protect_by_user_id' in input || 'protect_expires_at' in input;
 
-  // 空文字は null に変換 (通常フィールド)
+  // ホワイトリストのカラムのみ反映。空文字は null に変換。
   const cleaned: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(fields)) {
+    if (!EDITABLE_MEMBER_COLUMNS.has(k)) continue; // 許可外カラムは無視
     if (typeof v === 'string') {
       cleaned[k] = v.trim() === '' ? null : v.trim();
     } else {
