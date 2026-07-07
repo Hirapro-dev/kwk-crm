@@ -73,6 +73,28 @@ export async function createSummaryFavorite(input: {
   }
 }
 
+/** お気に入りの名前・公開範囲を更新する(作成者 or admin。RLSで強制)。 */
+export async function updateSummaryFavorite(input: {
+  id: string;
+  name: string;
+  visibility: 'private' | 'public';
+}): Promise<{ error?: string }> {
+  const name = input.name.trim();
+  if (!name) return { error: '名前を入力してください' };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from('summary_favorites')
+      .update({ name, visibility: input.visibility, updated_at: new Date().toISOString() })
+      .eq('id', input.id)
+      .is('deleted_at', null);
+    if (error) return { error: error.message };
+    return {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : '更新に失敗しました' };
+  }
+}
+
 /** お気に入りを論理削除する(作成者 or admin)。 */
 export async function deleteSummaryFavorite(id: string): Promise<{ error?: string }> {
   try {
