@@ -12,6 +12,7 @@
  * 集計はすべて取得済みの結果行に対して行う(追加 SQL なし)。
  */
 
+import { ColumnResizeHandle, useColumnResize } from '@/components/layout/useColumnResize';
 import { ReportChart } from '@/components/reports/ReportChart';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -30,7 +31,7 @@ import type { ReportChartConfig, ReportDisplayConfig } from '@/lib/reports/types
 import { cn } from '@/lib/utils/cn';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export interface ReportColumnView {
   id: string;
@@ -93,6 +94,31 @@ export function ReportResultView({
     return `${pathname}?${p.toString()}`;
   };
   const [selected, setSelected] = useState<string | null>(null);
+
+  // --- 列幅ドラッグ調整 ---
+  const colKeys = columns.map((c, i) => c.source || c.id || String(i));
+  const {
+    widths: colWidths,
+    allSeeded,
+    onResizeStart,
+    seedMissing,
+  } = useColumnResize(`crm.colw.report:${colKeys.join('|')}`);
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 列構成が変わったときだけ再計測
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table) return;
+    const ths = table.querySelectorAll('thead th');
+    const m: Record<string, number> = {};
+    ths.forEach((th, i) => {
+      const k = colKeys[i];
+      if (k) m[k] = (th as HTMLElement).offsetWidth;
+    });
+    seedMissing(m);
+  }, [colKeys.join('|'), seedMissing]);
+  const colFixed = allSeeded(colKeys);
+  const colTotalWidth = colFixed ? colKeys.reduce((s, k) => s + (colWidths[k] ?? 0), 0) : undefined;
+
   // 列ヘッダークリックによる昇順/降順ソート(グラフの並びも連動)
   const [sort, setSort] = useState<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
   // 下部トグル(画像3): 行数 / 詳細行 / 小計 / 総計
@@ -402,16 +428,29 @@ export function ReportResultView({
           <div className="max-h-[640px] overflow-auto" data-scroll-container>
             {/* wrapperClassName=overflow-visible: 内側に二重のスクロール領域を作らず、
                 この外側 div を唯一のスクロール領域にして sticky ヘッダーを効かせる */}
-            <Table wrapperClassName="overflow-visible">
+            <Table
+              ref={tableRef}
+              wrapperClassName="overflow-visible"
+              className={cn(
+                colFixed && '[&_td]:overflow-hidden [&_td]:text-ellipsis [&_th]:overflow-hidden',
+              )}
+              style={colFixed ? { tableLayout: 'fixed', width: colTotalWidth } : undefined}
+            >
+              <colgroup>
+                {colKeys.map((k) => (
+                  <col key={k} style={{ width: colWidths[k] }} />
+                ))}
+              </colgroup>
               <TableHeader>
                 <TableRow>
-                  {columns.map((c) => {
+                  {columns.map((c, i) => {
                     const active = sort?.colId === c.id;
                     const arrow = active ? (sort?.dir === 'asc' ? ' ▲' : ' ▼') : '';
+                    const k = colKeys[i] ?? String(i);
                     return (
                       <TableHead
                         key={c.alias}
-                        className="sticky top-0 z-20 whitespace-nowrap border-b bg-card text-xs"
+                        className="sticky top-0 z-20 whitespace-nowrap border-b bg-card text-xs relative"
                       >
                         <button
                           type="button"
@@ -430,6 +469,7 @@ export function ReportResultView({
                           {c.label}
                           <span className="text-primary">{arrow}</span>
                         </button>
+                        <ColumnResizeHandle onStart={(w, e) => onResizeStart(k, w, e)} />
                       </TableHead>
                     );
                   })}

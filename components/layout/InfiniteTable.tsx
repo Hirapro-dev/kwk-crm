@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils/cn';
 import { useEffect, useRef, useState } from 'react';
+import { ColumnResizeHandle, useColumnResize } from './useColumnResize';
 
 /** 内部スクロール領域の既定の高さ(sticky ヘッダーを効かせるため一覧自体をスクロール領域にする) */
 const DEFAULT_SCROLL_AREA = 'max-h-[calc(100dvh-13.5rem)]';
@@ -70,6 +71,28 @@ export function InfiniteTable<T>({
   const loadMoreRef = useRef(loadMore);
   loadMoreRef.current = loadMore;
 
+  // --- 列幅ドラッグ調整 ---
+  // 列キー(ラベル/フィールド名)で識別。storageKey は列構成で一意(オブジェクトごとに別).
+  const colKeys = columns.map((c, i) => c.sortField ?? c.header ?? String(i));
+  const { widths, allSeeded, onResizeStart, seedMissing } = useColumnResize(
+    `crm.colw.list:${colKeys.join('|')}`,
+  );
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 列構成が変わったときだけ再計測
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table) return;
+    const ths = table.querySelectorAll('thead th');
+    const m: Record<string, number> = {};
+    ths.forEach((th, i) => {
+      const k = colKeys[i];
+      if (k) m[k] = (th as HTMLElement).offsetWidth;
+    });
+    seedMissing(m);
+  }, [colKeys.join('|'), seedMissing]);
+  const fixed = allSeeded(colKeys);
+  const totalWidth = fixed ? colKeys.reduce((s, k) => s + (widths[k] ?? 0), 0) : undefined;
+
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el || done) return;
@@ -111,20 +134,37 @@ export function InfiniteTable<T>({
         ref={scrollRef}
         className={cn('overflow-auto', fillParent ? 'min-h-0 flex-1' : DEFAULT_SCROLL_AREA)}
       >
-        <Table wrapperClassName="overflow-visible">
+        <Table
+          ref={tableRef}
+          wrapperClassName="overflow-visible"
+          className={cn(
+            // fixed レイアウト時は各セルをはみ出さず省略表示(…)にする
+            fixed && '[&_td]:overflow-hidden [&_td]:text-ellipsis [&_th]:overflow-hidden',
+          )}
+          style={fixed ? { tableLayout: 'fixed', width: totalWidth } : undefined}
+        >
+          <colgroup>
+            {colKeys.map((k) => (
+              <col key={k} style={{ width: widths[k] }} />
+            ))}
+          </colgroup>
           <TableHeader>
             <TableRow className="bg-gray-50 hover:bg-gray-50">
-              {columns.map((c) => (
-                <TableHead
-                  key={c.header}
-                  className={cn(
-                    'sticky top-0 z-20 bg-gray-50',
-                    c.headClassName ?? 'h-9 whitespace-nowrap',
-                  )}
-                >
-                  {c.sortField ? <SortHeader field={c.sortField} label={c.header} /> : c.header}
-                </TableHead>
-              ))}
+              {columns.map((c, i) => {
+                const k = colKeys[i] ?? String(i);
+                return (
+                  <TableHead
+                    key={c.header}
+                    className={cn(
+                      'sticky top-0 z-20 bg-gray-50 relative',
+                      c.headClassName ?? 'h-9 whitespace-nowrap',
+                    )}
+                  >
+                    {c.sortField ? <SortHeader field={c.sortField} label={c.header} /> : c.header}
+                    <ColumnResizeHandle onStart={(w, e) => onResizeStart(k, w, e)} />
+                  </TableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
