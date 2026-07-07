@@ -137,6 +137,8 @@ export function MembersInfinite({
       renderRow={renderRow}
       getKey={(m) => String((m as unknown as Record<string, unknown>).id)}
       emptyMessage="該当する会員がいません"
+      // 分割ビューでは左ペインの高さいっぱいをスクロール領域にする(通常時は既定の高さ)
+      scrollAreaClassName={splitMode ? 'h-full' : undefined}
       rowClassName={(m) =>
         splitMode &&
         selectedId &&

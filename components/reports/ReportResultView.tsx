@@ -400,14 +400,19 @@ export function ReportResultView({
         </CardHeader>
         <CardContent>
           <div className="max-h-[640px] overflow-auto" data-scroll-container>
-            <Table>
+            {/* wrapperClassName=overflow-visible: 内側に二重のスクロール領域を作らず、
+                この外側 div を唯一のスクロール領域にして sticky ヘッダーを効かせる */}
+            <Table wrapperClassName="overflow-visible">
               <TableHeader>
                 <TableRow>
                   {columns.map((c) => {
                     const active = sort?.colId === c.id;
                     const arrow = active ? (sort?.dir === 'asc' ? ' ▲' : ' ▼') : '';
                     return (
-                      <TableHead key={c.alias} className="whitespace-nowrap text-xs">
+                      <TableHead
+                        key={c.alias}
+                        className="sticky top-0 z-20 whitespace-nowrap border-b bg-card text-xs"
+                      >
                         <button
                           type="button"
                           onClick={() =>

@@ -16,7 +16,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { cn } from '@/lib/utils/cn';
 import { useEffect, useRef, useState } from 'react';
+
+/** 内部スクロール領域の既定の高さ(sticky ヘッダーを効かせるため一覧自体をスクロール領域にする) */
+const DEFAULT_SCROLL_AREA = 'max-h-[calc(100dvh-13.5rem)]';
 
 export interface InfiniteCol {
   header: string;
@@ -35,6 +39,7 @@ export function InfiniteTable<T>({
   getKey,
   emptyMessage,
   rowClassName,
+  scrollAreaClassName,
 }: {
   initialRows: T[];
   total: number;
@@ -48,12 +53,16 @@ export function InfiniteTable<T>({
   emptyMessage: string;
   /** 行ごとの追加クラス(分割ビューの選択行ハイライト等)。省略時は既定のみ。 */
   rowClassName?: (row: T, index: number) => string | undefined;
+  /** スクロール領域(sticky ヘッダー用)の高さクラス上書き。分割ビューでは 'h-full' 等を渡す。 */
+  scrollAreaClassName?: string;
 }) {
   const [rows, setRows] = useState<T[]>(initialRows);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(initialRows.length >= total);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  // 一覧自体をスクロール領域にし、その中で sticky ヘッダーと無限スクロール監視を行う
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const loadingRef = useRef(false);
   const loadMoreRef = useRef(loadMore);
   loadMoreRef.current = loadMore;
@@ -83,20 +92,32 @@ export function InfiniteTable<T>({
           }
         })();
       },
-      { rootMargin: '300px' },
+      { root: scrollRef.current, rootMargin: '300px' },
     );
     io.observe(el);
     return () => io.disconnect();
+    // root は scrollRef(スクロール領域)。マウント後に ref が入るため deps に含めない。
   }, [page, done, total, pageSize]);
 
   return (
     <div>
-      <div className="overflow-x-auto">
-        <Table>
+      {/* 一覧自体をスクロール領域にして、ヘッダー行を sticky で固定する。
+          wrapperClassName=overflow-visible で内側に二重スクロールを作らない。 */}
+      <div
+        ref={scrollRef}
+        className={cn('overflow-auto', scrollAreaClassName ?? DEFAULT_SCROLL_AREA)}
+      >
+        <Table wrapperClassName="overflow-visible">
           <TableHeader>
             <TableRow className="bg-gray-50 hover:bg-gray-50">
               {columns.map((c) => (
-                <TableHead key={c.header} className={c.headClassName ?? 'h-9 whitespace-nowrap'}>
+                <TableHead
+                  key={c.header}
+                  className={cn(
+                    'sticky top-0 z-20 bg-gray-50',
+                    c.headClassName ?? 'h-9 whitespace-nowrap',
+                  )}
+                >
                   {c.sortField ? <SortHeader field={c.sortField} label={c.header} /> : c.header}
                 </TableHead>
               ))}
@@ -124,8 +145,9 @@ export function InfiniteTable<T>({
             )}
           </TableBody>
         </Table>
+        {/* センチネルはスクロール領域の内側に置く(監視ルート=scrollRef のため) */}
+        <div ref={sentinelRef} aria-hidden="true" />
       </div>
-      <div ref={sentinelRef} aria-hidden="true" />
       {rows.length > 0 && (
         <div className="py-3 text-center text-xs text-muted-foreground">
           {loading
