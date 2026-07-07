@@ -45,10 +45,17 @@ import { MemberTabs } from './MemberTabs';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }
 
-export default async function MemberDetailPage({ params }: PageProps) {
+export default async function MemberDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const { from } = await searchParams;
+  // 遷移元(from)が内部パスのときだけ戻り先に使う(オープンリダイレクト防止に "//" は除外)。
+  // レポートから来た場合はレポート結果画面へ戻す。それ以外/未指定は従来どおり会員一覧へ。
+  const isInternalFrom = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//');
+  const backTo = isInternalFrom ? from : '/members';
+  const backLabel = backTo.startsWith('/reports') ? 'レポートへ戻る' : '会員一覧へ';
   const member = await getMember(id);
   if (!member) {
     notFound();
@@ -123,8 +130,8 @@ export default async function MemberDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-3">
       {/* パンくず */}
-      <Link href="/members" className="sf-back-link text-xs">
-        ← 会員一覧へ
+      <Link href={backTo} className="sf-back-link text-xs">
+        ← {backLabel}
       </Link>
 
       {/* Highlight Panel */}

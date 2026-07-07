@@ -29,6 +29,7 @@ import { SUMMARY_AGG_LABEL, aggregateColumn, formatSummaryValue } from '@/lib/re
 import type { ReportChartConfig, ReportDisplayConfig } from '@/lib/reports/types';
 import { cn } from '@/lib/utils/cn';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 export interface ReportColumnView {
@@ -74,6 +75,8 @@ export function ReportResultView({
   display,
   showSummaryChips = true,
 }: Props) {
+  // 会員詳細へ渡す遷移元(戻り先)。会員詳細の「戻る」がレポートへ戻れるようにする。
+  const pathname = usePathname();
   const [selected, setSelected] = useState<string | null>(null);
   // 列ヘッダークリックによる昇順/降順ソート(グラフの並びも連動)
   const [sort, setSort] = useState<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
@@ -226,7 +229,7 @@ export function ReportResultView({
       >
         {linkable ? (
           <Link
-            href={`/members/${encodeURIComponent(String(memberId))}`}
+            href={`/members/${encodeURIComponent(String(memberId))}?from=${encodeURIComponent(pathname)}`}
             className="text-primary hover:underline"
           >
             {text}
