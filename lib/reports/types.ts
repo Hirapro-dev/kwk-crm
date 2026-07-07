@@ -15,7 +15,8 @@ export type ReportTypeId =
   | 'RT07'
   | 'RT08'
   | 'RT09'
-  | 'RT10';
+  | 'RT10'
+  | 'RT11';
 
 export interface ReportTypeMeta {
   id: ReportTypeId;
@@ -99,6 +100,13 @@ export const REPORT_TYPES: Record<ReportTypeId, ReportTypeMeta> = {
     baseTable: 'applications',
     description: '案件ごとの申込数・合計入金額の集計',
     unit: '1案件=1行(集計済)',
+  },
+  RT11: {
+    id: 'RT11',
+    name: '記事反応一覧',
+    baseTable: 'article_reactions',
+    description: '記事反応リスト(会員紐付け・担当者含む)の一覧',
+    unit: '1反応=1行',
   },
 };
 
@@ -195,13 +203,7 @@ export interface ReportChartConfig {
  *     こちらの display は SQL は変えず、取得済みの結果行を「表示上」グループ化し、
  *     小計・総計・サマリー指標を計算するための設定。
  */
-export type SummaryAggregate =
-  | 'sum'
-  | 'avg'
-  | 'count'
-  | 'count_distinct'
-  | 'min'
-  | 'max';
+export type SummaryAggregate = 'sum' | 'avg' | 'count' | 'count_distinct' | 'min' | 'max';
 
 export interface ReportSummaryField {
   /** 集計対象の列。definition.columns[].id を参照 */

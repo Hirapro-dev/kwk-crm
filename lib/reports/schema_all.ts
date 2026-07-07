@@ -783,6 +783,86 @@ const INQUIRY_COLUMNS = (alias: string): AllowedColumnDef[] => [
   },
 ];
 
+/** 記事反応(article_reactions) カラム(alias='ar'で使う) */
+const ARTICLE_REACTION_COLUMNS = (alias: string): AllowedColumnDef[] => [
+  {
+    source: `${alias}.id`,
+    label: '反応ID',
+    dataType: 'text',
+    filterable: true,
+    sortable: true,
+    aggregatable: true,
+  },
+  {
+    source: `${alias}.reacted_date`,
+    label: '日付',
+    dataType: 'date',
+    filterable: true,
+    sortable: true,
+    groupable: true,
+  },
+  {
+    source: `${alias}.member_id`,
+    label: '会員ID',
+    dataType: 'text',
+    filterable: true,
+    groupable: true,
+  },
+  { source: `${alias}.member_name`, label: '会員氏名', dataType: 'text', filterable: true },
+  {
+    source: `${alias}.media`,
+    label: '配信媒体',
+    dataType: 'text',
+    filterable: true,
+    groupable: true,
+    sortable: true,
+  },
+  {
+    source: `${alias}.tool`,
+    label: '配信ツール',
+    dataType: 'text',
+    filterable: true,
+    groupable: true,
+    sortable: true,
+  },
+  {
+    source: `${alias}.reaction_type`,
+    label: '種類',
+    dataType: 'text',
+    filterable: true,
+    groupable: true,
+    sortable: true,
+  },
+  {
+    source: `${alias}.form_name`,
+    label: 'フォーム名',
+    dataType: 'text',
+    filterable: true,
+    groupable: true,
+  },
+  { source: `${alias}.detail`, label: '詳細', dataType: 'text', filterable: true },
+  {
+    source: `${alias}.member_legacy_sf_id`,
+    label: '旧SF会員ID',
+    dataType: 'text',
+    filterable: true,
+  },
+  {
+    source: `${alias}.created_at`,
+    label: '作成日時',
+    dataType: 'datetime',
+    filterable: true,
+    sortable: true,
+  },
+  {
+    source: `${alias}.updated_at`,
+    label: '更新日時',
+    dataType: 'datetime',
+    filterable: true,
+    sortable: true,
+  },
+];
+
 // ============================================================================
 // 結合定義(共通)
 // ============================================================================
@@ -850,9 +930,16 @@ const JOIN_INQ_TO_MEMBER: AllowedJoinDef = {
   type: 'left',
   on: 'm.id = inq.member_id AND m.deleted_at IS NULL',
 };
+// 記事反応 → 会員(スナップショットではなく最新の会員情報を結合したい場合に使う)
+const JOIN_AR_TO_MEMBER: AllowedJoinDef = {
+  alias: 'm',
+  table: 'members',
+  type: 'left',
+  on: 'm.id = ar.member_id AND m.deleted_at IS NULL',
+};
 
 // ============================================================================
-// RT01-RT10 定義
+// RT01-RT11 定義
 // ============================================================================
 
 export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
@@ -1083,6 +1170,27 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
       },
     ],
   },
+
+  // RT11: 記事反応一覧 — 1反応=1行
+  RT11: {
+    reportType: 'RT11',
+    baseTable: 'article_reactions',
+    baseAlias: 'ar',
+    baseWhere: ['ar.deleted_at IS NULL'],
+    allowedJoins: [
+      JOIN_AR_TO_MEMBER,
+      JOIN_MEMBER_TO_OWNER,
+      JOIN_MEMBER_TO_REGULAR_CONTACT,
+      JOIN_MEMBER_TO_PROTECT,
+    ],
+    allowedColumns: [
+      ...ARTICLE_REACTION_COLUMNS('ar'),
+      ...MEMBER_COLUMNS('m'),
+      ...USER_COLUMNS('owner'),
+      ...REGULAR_CONTACT_COLUMNS('rc'),
+      ...PROTECT_USER_COLUMNS('pu'),
+    ],
+  },
 };
 
 /**
@@ -1162,6 +1270,7 @@ export const REPORT_BASE_OBJECT: Record<ReportTypeId, string> = {
   RT08: 'activities',
   RT09: 'inquiries',
   RT10: 'applications',
+  RT11: 'article_reactions',
 };
 
 /**

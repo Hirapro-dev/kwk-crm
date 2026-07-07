@@ -87,16 +87,21 @@ export const BASE_OBJECTS: BaseObjectDef[] = [
       { key: 'members', label: '会員', type: 'RT09' },
     ],
   },
+  {
+    key: 'article_reactions',
+    label: '記事反応リスト',
+    iconLabel: 'ART',
+    soloType: 'RT11',
+    soloDescription: '記事反応リスト(会員紐付け・担当者含む)の一覧',
+    relations: [{ key: 'members', label: '会員', type: 'RT11' }],
+  },
 ];
 
 /**
  * 主軸 + (任意)結合 から レポートタイプを解決する。
  * 解決できない組み合わせは null。
  */
-export function resolveReportType(
-  baseKey: string,
-  relatedKey?: string,
-): ReportTypeId | null {
+export function resolveReportType(baseKey: string, relatedKey?: string): ReportTypeId | null {
   const base = BASE_OBJECTS.find((b) => b.key === baseKey);
   if (!base) return null;
   if (!relatedKey) return base.soloType;

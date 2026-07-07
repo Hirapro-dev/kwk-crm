@@ -34,6 +34,7 @@ const EXTRA_OBJECT_ALIASES: { objectId: string; alias: string }[] = [
   { objectId: 'inquiries', alias: 'inq' },
   { objectId: 'applications', alias: 'a' },
   { objectId: 'activities', alias: 'act' },
+  { objectId: 'article_reactions', alias: 'ar' },
 ];
 
 /**
@@ -58,12 +59,12 @@ export async function loadExtraColumnsForReportType(
   const supabase = await createClient();
   const objectIds = targets.map((t) => t.objectId);
 
-  // 全対象オブジェクトの extra フィールドを一括取得
+  // 全対象オブジェクトのフィールドを一括取得(extra jsonb + 実DBカラム両方)。
+  // is_placeholder(空白セル)は除外する。
   const { data, error } = await supabase
     .from('field_definitions')
     .select('object_id, field_name, label, data_type, is_in_db, is_placeholder')
     .in('object_id', objectIds)
-    .eq('is_in_db', false)
     .eq('is_placeholder', false)
     .order('sort_order_detail', { ascending: true })
     .order('field_name', { ascending: true });
@@ -74,6 +75,9 @@ export async function loadExtraColumnsForReportType(
     return [];
   }
 
+  // 既にハードコードのホワイトリスト(schema_all.ts)に存在する source は重複追加しない。
+  const existingSources = new Set(schema.allowedColumns.map((c) => c.source));
+
   const aliasByObject = new Map(targets.map((t) => [t.objectId, t.alias]));
   const results: AllowedColumnDef[] = [];
   for (const row of data ?? []) {
@@ -82,23 +86,39 @@ export async function loadExtraColumnsForReportType(
     if (!alias) continue;
     const fieldName = row.field_name as string;
     const label = (row.label as string | null) ?? fieldName;
-    const source = `${alias}.extra:${fieldName}`;
-    // 防御: 不正な識別子は除外(SQL Builder のホワイトリスト検証と二重ガード)
-    if (!isSafeIdentifier(source)) continue;
-    // SQL 上は ->> が text を返すため dataType='text'(フィルタ/SQLはtext)だが、
-    // 表示整形(カンマ/日付)用に field_definitions の実型を displayType に持たせる。
-    const realType = row.data_type as DataType | null;
-    results.push({
-      source,
-      label,
-      dataType: 'text', // ->> は常に text
-      displayType: realType ?? 'text',
-      isExtra: true,
-      filterable: true,
-      sortable: true,
-      groupable: true,
-      aggregatable: false, // 数値集計は CAST が必要なので将来課題
-    });
+    const realType = (row.data_type as DataType | null) ?? 'text';
+
+    if (row.is_in_db) {
+      // 実DBカラム。ハードコード未登録のものだけ「そのままのカラム」として追加。
+      // (xels_insider_joined_at 等、後から追加された列もレポートで選べるようにする)
+      const source = `${alias}.${fieldName}`;
+      if (existingSources.has(source)) continue; // 既にホワイトリスト済み
+      if (!isSafeIdentifier(source)) continue;
+      results.push({
+        source,
+        label,
+        dataType: realType, // 実型(date/number/text 等)をそのまま使う
+        filterable: true,
+        sortable: true,
+        groupable: true,
+        aggregatable: false,
+      });
+    } else {
+      // extra jsonb キー。source は alias.extra:key 形式。
+      const source = `${alias}.extra:${fieldName}`;
+      if (!isSafeIdentifier(source)) continue;
+      results.push({
+        source,
+        label,
+        dataType: 'text', // ->> は常に text
+        displayType: realType, // 表示整形用に実型を持たせる
+        isExtra: true,
+        filterable: true,
+        sortable: true,
+        groupable: true,
+        aggregatable: false, // 数値集計は CAST が必要なので将来課題
+      });
+    }
   }
   return results;
 }
