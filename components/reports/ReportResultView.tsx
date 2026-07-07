@@ -451,7 +451,9 @@ export function ReportResultView({
                     return (
                       <TableHead
                         key={c.alias}
-                        className="sticky top-0 z-20 whitespace-nowrap border-b bg-card text-xs relative"
+                        // sticky 自体が absolute な子(リサイズハンドル)の基準になるため relative は不要
+                        // (relative を付けると position が競合して sticky が無効化される)
+                        className="sticky top-0 z-20 whitespace-nowrap border-b bg-card text-xs"
                       >
                         <button
                           type="button"

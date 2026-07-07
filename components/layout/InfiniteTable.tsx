@@ -156,8 +156,10 @@ export function InfiniteTable<T>({
                 return (
                   <TableHead
                     key={c.header}
+                    // sticky 自体が absolute な子(リサイズハンドル)の基準になるため relative は付けない
+                    // (relative を付けると position が競合して sticky が無効化される)
                     className={cn(
-                      'sticky top-0 z-20 bg-gray-50 relative',
+                      'sticky top-0 z-20 bg-gray-50',
                       c.headClassName ?? 'h-9 whitespace-nowrap',
                     )}
                   >
