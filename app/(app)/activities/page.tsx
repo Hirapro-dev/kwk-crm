@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { getDBunruiList, listActivities } from '@/lib/domain/activities';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
+import { listAllUsers } from '@/lib/domain/users_admin';
 import { ActivitiesFilterBar } from './ActivitiesFilterBar';
 import { ActivitiesInfinite } from './ActivitiesInfinite';
 
@@ -40,10 +41,14 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
     to: sp.to ? `${sp.to}T23:59:59+09:00` : undefined,
   } as const;
 
-  const [result, bunruiList] = await Promise.all([
+  const [result, bunruiList, users] = await Promise.all([
     listActivities({ ...activityParams, page: 1, pageSize: LIST_PAGE_SIZE }),
     getDBunruiList(),
+    // 担当者フィルタ用の対応者候補(有効ユーザー全ロール)。結果は実行ユーザーの RLS で自然に絞られる。
+    listAllUsers({ activeOnly: true }),
   ]);
+
+  const ownerOptions = users.map((u) => ({ id: u.id, name: u.full_name ?? u.email }));
 
   return (
     <div className="space-y-3">
@@ -66,6 +71,7 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
             initialOwner={sp.owner ?? 'all'}
             bunruiList={bunruiList}
             currentUserId={me.id}
+            ownerOptions={ownerOptions}
           />
         </PanelFilterBar>
 

@@ -17,6 +17,7 @@ export function ActivitiesFilterBar({
   bunruiList,
   currentUserId,
   initialOwner,
+  ownerOptions,
 }: {
   initialMemberId: string;
   initialDBunrui: string;
@@ -27,6 +28,8 @@ export function ActivitiesFilterBar({
   bunruiList: string[];
   currentUserId: string;
   initialOwner: string;
+  /** 担当者フィルタの選択肢(対応者候補) */
+  ownerOptions: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -103,6 +106,13 @@ export function ActivitiesFilterBar({
       >
         <option value="all">担当: すべて</option>
         <option value="me">自分の対応</option>
+        {ownerOptions
+          .filter((u) => u.id !== currentUserId)
+          .map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
       </Select>
       <div className="flex items-center gap-1">
         <Input
