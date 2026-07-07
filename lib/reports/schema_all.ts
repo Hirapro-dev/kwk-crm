@@ -129,8 +129,10 @@ const MEMBER_COLUMNS = (alias: string): AllowedColumnDef[] => [
     groupable: true,
   },
   {
+    // owner_name_raw は CSV「永久担当」列由来の生テキスト。
+    // 現在のプロテクト状態は protect_by_user_id(→ users)で管理するため別列にする(migration 30/31)。
     source: `${alias}.owner_name_raw`,
-    label: 'プロテクト',
+    label: '永久担当',
     dataType: 'text',
     filterable: true,
     groupable: true,
@@ -638,6 +640,29 @@ const REGULAR_CONTACT_COLUMNS = (alias: string): AllowedColumnDef[] => [
   { source: `${alias}.email`, label: '定期連絡者メール', dataType: 'text', filterable: true },
 ];
 
+/**
+ * プロテクト(現在の担当プロテクト) JOIN 用カラム(alias='pu'で使う)。
+ * members.protect_by_user_id → users を結合し、会員一覧と同じ「現在のプロテクト」を表示する。
+ * (旧 owner_name_raw=永久担当 は取込で更新されず乖離するため、こちらを正とする)
+ */
+const PROTECT_USER_COLUMNS = (alias: string): AllowedColumnDef[] => [
+  {
+    source: `${alias}.id`,
+    label: 'プロテクトID',
+    dataType: 'text',
+    filterable: true,
+    groupable: true,
+  },
+  {
+    source: `${alias}.full_name`,
+    label: 'プロテクト',
+    dataType: 'text',
+    filterable: true,
+    sortable: true,
+    groupable: true,
+  },
+];
+
 const PROJECT_COLUMNS = (alias: string): AllowedColumnDef[] => [
   {
     source: `${alias}.id`,
@@ -774,6 +799,15 @@ const JOIN_MEMBER_TO_REGULAR_CONTACT: AllowedJoinDef = {
   type: 'left',
   on: 'rc.id = m.regular_contact_id',
 };
+// 現在のプロテクト担当(会員一覧の「プロテクト」列と同じ解決)。
+// ※ 'm' エイリアス(members)が結合済みであることが前提。allowedJoins では
+//   members 結合の直後に置き、detectRequiredJoins の順序で m→pu になるようにする。
+const JOIN_MEMBER_TO_PROTECT: AllowedJoinDef = {
+  alias: 'pu',
+  table: 'users',
+  type: 'left',
+  on: 'pu.id = m.protect_by_user_id',
+};
 const JOIN_APP_TO_MEMBER: AllowedJoinDef = {
   alias: 'm',
   table: 'members',
@@ -828,11 +862,12 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseTable: 'members',
     baseAlias: 'm',
     baseWhere: ['m.deleted_at IS NULL'],
-    allowedJoins: [JOIN_MEMBER_TO_OWNER, JOIN_MEMBER_TO_REGULAR_CONTACT],
+    allowedJoins: [JOIN_MEMBER_TO_OWNER, JOIN_MEMBER_TO_REGULAR_CONTACT, JOIN_MEMBER_TO_PROTECT],
     allowedColumns: [
       ...MEMBER_COLUMNS('m'),
       ...USER_COLUMNS('owner'),
       ...REGULAR_CONTACT_COLUMNS('rc'),
+      ...PROTECT_USER_COLUMNS('pu'),
     ],
   },
 
@@ -845,6 +880,7 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     allowedJoins: [
       JOIN_MEMBER_TO_OWNER,
       JOIN_MEMBER_TO_REGULAR_CONTACT,
+      JOIN_MEMBER_TO_PROTECT,
       {
         alias: 'apps',
         table: 'applications',
@@ -862,6 +898,7 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
       ...MEMBER_COLUMNS('m'),
       ...USER_COLUMNS('owner'),
       ...REGULAR_CONTACT_COLUMNS('rc'),
+      ...PROTECT_USER_COLUMNS('pu'),
       { source: 'apps.id', label: '申込件数', dataType: 'text', aggregatable: true },
       {
         source: 'apps.payment_amount',
@@ -895,6 +932,7 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
       JOIN_APP_TO_PROJECT,
       JOIN_APP_TO_OWNER,
       JOIN_MEMBER_TO_REGULAR_CONTACT,
+      JOIN_MEMBER_TO_PROTECT,
     ],
     allowedColumns: [
       ...APP_COLUMNS('a'),
@@ -902,6 +940,7 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
       ...PROJECT_COLUMNS('p'),
       ...USER_COLUMNS('owner'),
       ...REGULAR_CONTACT_COLUMNS('rc'),
+      ...PROTECT_USER_COLUMNS('pu'),
     ],
   },
 
@@ -911,12 +950,18 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseTable: 'activities',
     baseAlias: 'act',
     baseWhere: ['act.deleted_at IS NULL'],
-    allowedJoins: [JOIN_ACT_TO_MEMBER, JOIN_ACT_TO_OWNER, JOIN_MEMBER_TO_REGULAR_CONTACT],
+    allowedJoins: [
+      JOIN_ACT_TO_MEMBER,
+      JOIN_ACT_TO_OWNER,
+      JOIN_MEMBER_TO_REGULAR_CONTACT,
+      JOIN_MEMBER_TO_PROTECT,
+    ],
     allowedColumns: [
       ...ACTIVITY_COLUMNS('act'),
       ...MEMBER_COLUMNS('m'),
       ...USER_COLUMNS('owner'),
       ...REGULAR_CONTACT_COLUMNS('rc'),
+      ...PROTECT_USER_COLUMNS('pu'),
     ],
   },
 
@@ -926,12 +971,18 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseTable: 'inquiries',
     baseAlias: 'inq',
     baseWhere: ['inq.deleted_at IS NULL'],
-    allowedJoins: [JOIN_INQ_TO_FORM, JOIN_INQ_TO_MEMBER, JOIN_MEMBER_TO_REGULAR_CONTACT],
+    allowedJoins: [
+      JOIN_INQ_TO_FORM,
+      JOIN_INQ_TO_MEMBER,
+      JOIN_MEMBER_TO_REGULAR_CONTACT,
+      JOIN_MEMBER_TO_PROTECT,
+    ],
     allowedColumns: [
       ...INQUIRY_COLUMNS('inq'),
       ...FORM_COLUMNS('f'),
       ...MEMBER_COLUMNS('m'),
       ...REGULAR_CONTACT_COLUMNS('rc'),
+      ...PROTECT_USER_COLUMNS('pu'),
     ],
   },
 
@@ -946,6 +997,7 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
       JOIN_APP_TO_PROJECT,
       JOIN_APP_TO_OWNER,
       JOIN_MEMBER_TO_REGULAR_CONTACT,
+      JOIN_MEMBER_TO_PROTECT,
     ],
     allowedColumns: [
       ...APP_COLUMNS('a'),
@@ -953,6 +1005,7 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
       ...PROJECT_COLUMNS('p'),
       ...USER_COLUMNS('owner'),
       ...REGULAR_CONTACT_COLUMNS('rc'),
+      ...PROTECT_USER_COLUMNS('pu'),
     ],
   },
 
@@ -962,12 +1015,18 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseTable: 'activities',
     baseAlias: 'act',
     baseWhere: ['act.deleted_at IS NULL'],
-    allowedJoins: [JOIN_ACT_TO_OWNER, JOIN_ACT_TO_MEMBER, JOIN_MEMBER_TO_REGULAR_CONTACT],
+    allowedJoins: [
+      JOIN_ACT_TO_OWNER,
+      JOIN_ACT_TO_MEMBER,
+      JOIN_MEMBER_TO_REGULAR_CONTACT,
+      JOIN_MEMBER_TO_PROTECT,
+    ],
     allowedColumns: [
       ...ACTIVITY_COLUMNS('act'),
       ...USER_COLUMNS('owner'),
       ...MEMBER_COLUMNS('m'),
       ...REGULAR_CONTACT_COLUMNS('rc'),
+      ...PROTECT_USER_COLUMNS('pu'),
     ],
   },
 
@@ -987,12 +1046,18 @@ export const REPORT_SCHEMAS: Record<ReportTypeId, ReportTypeSchemaDef> = {
     baseTable: 'inquiries',
     baseAlias: 'inq',
     baseWhere: ['inq.deleted_at IS NULL'],
-    allowedJoins: [JOIN_INQ_TO_FORM, JOIN_INQ_TO_MEMBER, JOIN_MEMBER_TO_REGULAR_CONTACT],
+    allowedJoins: [
+      JOIN_INQ_TO_FORM,
+      JOIN_INQ_TO_MEMBER,
+      JOIN_MEMBER_TO_REGULAR_CONTACT,
+      JOIN_MEMBER_TO_PROTECT,
+    ],
     allowedColumns: [
       ...INQUIRY_COLUMNS('inq'),
       ...FORM_COLUMNS('f'),
       ...MEMBER_COLUMNS('m'),
       ...REGULAR_CONTACT_COLUMNS('rc'),
+      ...PROTECT_USER_COLUMNS('pu'),
     ],
   },
 
