@@ -1,9 +1,17 @@
 import { createClient } from '@/lib/supabase/server';
 import type { Member, MemberWithOwner } from './types';
 
+/**
+ * 「free(担当なし)」を表すプロテクト担当ユーザーのID。
+ * migration 42 で新規会員は既定でこの free ユーザー(full_name='free')に紐付く。
+ * 担当フィルタの free 判定に使う。
+ */
+export const FREE_PROTECT_USER_ID = 'd6ab8478-da1e-491c-b76c-c58147c3b056';
+
 export interface MemberListParams {
   q?: string; // 名前 / kana / email / phone のあいまい検索
-  ownerId?: string; // 'me' / 'free' / uuid
+  /** 担当(プロテクト)フィルタ。'free' / uuid / 'all'。'me' は呼び出し側で uuid に解決すること */
+  ownerId?: string;
   customerType?: string;
   /** ソート列(ホワイトリストのみ) / 方向 */
   sort?: string;
@@ -74,10 +82,15 @@ export async function listMembers(params: MemberListParams = {}): Promise<Member
     );
   }
 
+  // 「担当」フィルタは現在の担当である protect_by_user_id(プロテクト)で絞る。
+  // owner_id(永久担当)は全件 NULL の旧項目のため、これで絞ると全件一致してしまい機能しない。
   if (params.ownerId === 'free') {
-    query = query.is('owner_id', null);
+    // 未担当 = free ユーザー or 未設定(NULL)
+    query = query.or(
+      `protect_by_user_id.is.null,protect_by_user_id.eq.${FREE_PROTECT_USER_ID}`,
+    );
   } else if (params.ownerId && params.ownerId !== 'all') {
-    query = query.eq('owner_id', params.ownerId);
+    query = query.eq('protect_by_user_id', params.ownerId);
   }
 
   if (params.customerType) {

@@ -41,7 +41,9 @@ export default async function MembersPage({ searchParams }: PageProps) {
   const me = await getCurrentUser();
 
   const dir = sp.dir === 'desc' ? 'desc' : 'asc';
-  const memberParams = { q: sp.q, ownerId: sp.owner, sort: sp.sort, dir } as const;
+  // 担当フィルタの 'me' は自分の UUID に解決してから渡す(protect_by_user_id で絞るため)
+  const resolvedOwner = sp.owner === 'me' ? me.id : sp.owner;
+  const memberParams = { q: sp.q, ownerId: resolvedOwner, sort: sp.sort, dir } as const;
   const isSplit = sp.view === 'split';
   const selected = sp.selected;
 
