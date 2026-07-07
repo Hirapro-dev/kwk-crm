@@ -1,6 +1,11 @@
 /**
  * 会員一覧画面(仕様書 §8.1)
  * Server Component。検索条件は URL クエリで管理。
+ *
+ * 表示モード:
+ *   - 通常(既定): 一覧のみ(無限スクロール)
+ *   - 分割(?view=split): 左=一覧 / 右=選択会員(?selected)の詳細ペイン
+ *     (Salesforce コンソールの分割ビュー相当)
  */
 
 import { PanelFilterBar, PanelHeader } from '@/components/layout/PanelHeader';
@@ -10,7 +15,9 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { listMembers } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
+import Link from 'next/link';
 import { Suspense } from 'react';
+import { MemberDetailPanel } from './MemberDetailPanel';
 import { MembersFilterBar } from './MembersFilterBar';
 import { MembersInfinite } from './MembersInfinite';
 
@@ -21,6 +28,10 @@ interface PageProps {
     sort?: string;
     dir?: string;
     page?: string;
+    /** 'split' で分割ビュー */
+    view?: string;
+    /** 分割ビューで右ペインに表示する会員ID */
+    selected?: string;
   }>;
 }
 
@@ -30,14 +41,91 @@ export default async function MembersPage({ searchParams }: PageProps) {
 
   const dir = sp.dir === 'desc' ? 'desc' : 'asc';
   const memberParams = { q: sp.q, ownerId: sp.owner, sort: sp.sort, dir } as const;
+  const isSplit = sp.view === 'split';
+  const selected = sp.selected;
 
   const [result, listFields] = await Promise.all([
-    // 無限スクロール: 初期は1ページ目のみ取得
     listMembers({ ...memberParams, page: 1, pageSize: LIST_PAGE_SIZE }),
-    // Phase 2: オブジェクト管理 (/settings/objects/members) の表示制御に従う
     getVisibleFields('members', 'list'),
   ]);
 
+  // 表示条件を維持したままモードだけ切り替えるリンクを作る
+  const baseParams = () => {
+    const p = new URLSearchParams();
+    if (sp.q) p.set('q', sp.q);
+    if (sp.owner) p.set('owner', sp.owner);
+    if (sp.sort) p.set('sort', sp.sort);
+    if (sp.dir) p.set('dir', sp.dir);
+    return p;
+  };
+  const toSplitHref = (() => {
+    const p = baseParams();
+    p.set('view', 'split');
+    return `/members?${p.toString()}`;
+  })();
+  const toListHref = (() => {
+    const qs = baseParams().toString();
+    return qs ? `/members?${qs}` : '/members';
+  })();
+
+  const listKey = `${sp.q ?? ''}|${sp.owner ?? ''}|${sp.sort ?? ''}|${dir}`;
+
+  // ---------- 分割ビュー ----------
+  if (isSplit) {
+    return (
+      <div className="flex h-[calc(100dvh-8.5rem)] min-h-[420px] gap-3">
+        {/* 左: 一覧(独立スクロール) */}
+        <Card className="flex w-[38%] min-w-[320px] max-w-[560px] flex-col overflow-hidden p-0 shadow-sm">
+          <PanelHeader
+            iconLabel="MEM"
+            iconColor="#00C896"
+            viewName="顧客情報一覧"
+            totalCount={result.total}
+            actions={
+              <Link href={toListHref}>
+                <Button variant="outline" size="sm">
+                  一覧表示
+                </Button>
+              </Link>
+            }
+          />
+          <PanelFilterBar>
+            <Suspense>
+              <MembersFilterBar
+                initialQ={sp.q ?? ''}
+                initialOwner={sp.owner ?? 'all'}
+                currentUserId={me.id}
+              />
+            </Suspense>
+          </PanelFilterBar>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <MembersInfinite
+              key={listKey}
+              initialRows={result.rows}
+              fields={listFields}
+              total={result.total}
+              params={memberParams}
+              splitMode
+              selectedId={selected}
+            />
+          </div>
+        </Card>
+
+        {/* 右: 選択会員の詳細(独立スクロール) */}
+        <div className="min-w-0 flex-1 overflow-y-auto rounded border bg-background p-3 shadow-sm">
+          {selected ? (
+            <MemberDetailPanel memberId={selected} embedded />
+          ) : (
+            <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
+              左の一覧から会員を選ぶと、ここに詳細が表示されます。
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- 通常(一覧のみ) ----------
   return (
     <div className="space-y-3">
       <Card className="overflow-hidden p-0 shadow-sm">
@@ -49,16 +137,29 @@ export default async function MembersPage({ searchParams }: PageProps) {
           actions={
             /* デスクトップ: ヘッダー右に全ボタン */
             <div className="hidden sm:flex items-center gap-2">
-              <Button variant="outline" size="sm">インポート</Button>
-              <Button variant="outline" size="sm">リスト編集</Button>
+              <Link href={toSplitHref}>
+                <Button variant="outline" size="sm">
+                  分割ビュー
+                </Button>
+              </Link>
+              <Button variant="outline" size="sm">
+                インポート
+              </Button>
+              <Button variant="outline" size="sm">
+                リスト編集
+              </Button>
               <Button size="sm">新規</Button>
             </div>
           }
         />
-        {/* モバイル: ボタンをヘッダー下段に表示 */}
+        {/* モバイル: ボタンをヘッダー下段に表示(分割ビューは横幅前提のため除外) */}
         <div className="flex gap-2 border-t px-4 py-2 sm:hidden">
-          <Button variant="outline" size="sm">インポート</Button>
-          <Button variant="outline" size="sm">リスト編集</Button>
+          <Button variant="outline" size="sm">
+            インポート
+          </Button>
+          <Button variant="outline" size="sm">
+            リスト編集
+          </Button>
           <Button size="sm">新規</Button>
         </div>
 
@@ -77,7 +178,7 @@ export default async function MembersPage({ searchParams }: PageProps) {
           フィルタ・ソート変更時は key で再マウントして初期化する。
         */}
         <MembersInfinite
-          key={`${sp.q ?? ''}|${sp.owner ?? ''}|${sp.sort ?? ''}|${dir}`}
+          key={listKey}
           initialRows={result.rows}
           fields={listFields}
           total={result.total}

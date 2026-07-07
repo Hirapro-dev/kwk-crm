@@ -9,15 +9,40 @@ import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import type { MemberWithOwner } from '@/lib/domain/types';
 import { formatFieldValue, getFieldValue } from '@/lib/utils/format_field';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 interface Props {
   initialRows: MemberWithOwner[];
   fields: FieldDefinition[];
   total: number;
   params: { q?: string; ownerId?: string; sort?: string; dir?: 'asc' | 'desc' };
+  /** 分割ビュー: 行クリックで詳細ページに遷移せず、右ペインに詳細を出す(URL の selected を差し替え) */
+  splitMode?: boolean;
+  /** 分割ビューで現在選択中の会員ID(選択行ハイライト用) */
+  selectedId?: string;
 }
 
-export function MembersInfinite({ initialRows, fields, total, params }: Props) {
+export function MembersInfinite({
+  initialRows,
+  fields,
+  total,
+  params,
+  splitMode,
+  selectedId,
+}: Props) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // 分割ビュー用: 現在のクエリを維持したまま selected を差し替えるリンク先を作る
+  const buildSelectHref = (id: string) => {
+    const p = new URLSearchParams(searchParams?.toString() ?? '');
+    p.set('view', 'split');
+    p.set('selected', id);
+    return `${pathname}?${p.toString()}`;
+  };
+  /** 会員詳細への遷移先。分割ビューでは selected 差し替え、通常はフルページ詳細。 */
+  const detailHref = (id: string) => (splitMode ? buildSelectHref(id) : `/members/${id}`);
+
   const columns: InfiniteCol[] = fields.map((f) => ({
     header: f.label ?? f.field_name,
     sortField: f.is_in_db ? f.field_name : undefined,
@@ -34,7 +59,12 @@ export function MembersInfinite({ initialRows, fields, total, params }: Props) {
         const name = rec.name as string | null | undefined;
         return (
           <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">
-            <Link href={`/members/${id}`} className={i === 0 ? 'sf-link font-medium' : 'sf-link'}>
+            <Link
+              href={detailHref(id)}
+              scroll={!splitMode}
+              replace={splitMode}
+              className={i === 0 ? 'sf-link font-medium' : 'sf-link'}
+            >
               {name ?? '-'}
             </Link>
           </TableCell>
@@ -65,7 +95,12 @@ export function MembersInfinite({ initialRows, fields, total, params }: Props) {
         const text = raw === null || raw === undefined || raw === '' ? id : String(raw);
         return (
           <TableCell key={f.id} className="whitespace-nowrap py-2">
-            <Link href={`/members/${id}`} className="sf-link font-medium">
+            <Link
+              href={detailHref(id)}
+              scroll={!splitMode}
+              replace={splitMode}
+              className="sf-link font-medium"
+            >
               {text}
             </Link>
           </TableCell>
@@ -102,6 +137,13 @@ export function MembersInfinite({ initialRows, fields, total, params }: Props) {
       renderRow={renderRow}
       getKey={(m) => String((m as unknown as Record<string, unknown>).id)}
       emptyMessage="該当する会員がいません"
+      rowClassName={(m) =>
+        splitMode &&
+        selectedId &&
+        String((m as unknown as Record<string, unknown>).id) === selectedId
+          ? 'bg-primary/10'
+          : undefined
+      }
     />
   );
 }

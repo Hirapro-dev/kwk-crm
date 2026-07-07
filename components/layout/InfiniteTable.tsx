@@ -34,6 +34,7 @@ export function InfiniteTable<T>({
   renderRow,
   getKey,
   emptyMessage,
+  rowClassName,
 }: {
   initialRows: T[];
   total: number;
@@ -45,6 +46,8 @@ export function InfiniteTable<T>({
   renderRow: (row: T) => React.ReactNode;
   getKey: (row: T, index: number) => string;
   emptyMessage: string;
+  /** 行ごとの追加クラス(分割ビューの選択行ハイライト等)。省略時は既定のみ。 */
+  rowClassName?: (row: T, index: number) => string | undefined;
 }) {
   const [rows, setRows] = useState<T[]>(initialRows);
   const [page, setPage] = useState(1);
@@ -111,7 +114,10 @@ export function InfiniteTable<T>({
               </TableRow>
             ) : (
               rows.map((r, i) => (
-                <TableRow key={getKey(r, i)} className="sf-row-hover">
+                <TableRow
+                  key={getKey(r, i)}
+                  className={`sf-row-hover ${rowClassName?.(r, i) ?? ''}`}
+                >
                   {renderRow(r)}
                 </TableRow>
               ))
