@@ -29,7 +29,7 @@ import { SUMMARY_AGG_LABEL, aggregateColumn, formatSummaryValue } from '@/lib/re
 import type { ReportChartConfig, ReportDisplayConfig } from '@/lib/reports/types';
 import { cn } from '@/lib/utils/cn';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 export interface ReportColumnView {
@@ -47,6 +47,10 @@ interface Props {
   display?: ReportDisplayConfig | null;
   /** サマリー指標チップを本体に表示するか(結果ページはヘッダーに出すため false) */
   showSummaryChips?: boolean;
+  /** 分割ビュー: 会員名クリックで会員詳細ページに遷移せず、右ペインに詳細を出す(URL の selected を差し替え) */
+  splitMode?: boolean;
+  /** 分割ビューで現在選択中の会員ID(選択セルのハイライト用) */
+  selectedMemberId?: string;
 }
 
 // セル整形は共通の formatReportCell を使用(テーブル/グラフ/グループで表示を一致)
@@ -74,9 +78,20 @@ export function ReportResultView({
   chart,
   display,
   showSummaryChips = true,
+  splitMode = false,
+  selectedMemberId,
 }: Props) {
   // 会員詳細へ渡す遷移元(戻り先)。会員詳細の「戻る」がレポートへ戻れるようにする。
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // 分割ビュー用: 現在のクエリを維持したまま selected を差し替えるリンク先を作る
+  const buildSelectHref = (memberId: string) => {
+    const p = new URLSearchParams(searchParams?.toString() ?? '');
+    p.set('view', 'split');
+    p.set('selected', memberId);
+    return `${pathname}?${p.toString()}`;
+  };
   const [selected, setSelected] = useState<string | null>(null);
   // 列ヘッダークリックによる昇順/降順ソート(グラフの並びも連動)
   const [sort, setSort] = useState<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
@@ -216,24 +231,40 @@ export function ReportResultView({
     const memberId = row[MEMBER_LINK_ID_ALIAS];
     const text = formatCell(row[c.alias], c.dataType);
     const linkable = c.source === 'm.name' && memberId != null && text !== '';
+    // 分割ビューで現在選択中の会員セルか
+    const isSelectedCell =
+      splitMode && linkable && selectedMemberId != null && String(memberId) === selectedMemberId;
     // 改行を含む値は元の改行を保持して表示(資産状況などの複数行テキスト)
     const multiline = text.includes('\n');
     return (
       <TableCell
         key={c.alias}
-        className={
+        className={cn(
           multiline
             ? 'whitespace-pre-wrap align-top text-xs min-w-[16rem]'
-            : 'whitespace-nowrap text-xs'
-        }
+            : 'whitespace-nowrap text-xs',
+          isSelectedCell && 'bg-primary/10',
+        )}
       >
         {linkable ? (
-          <Link
-            href={`/members/${encodeURIComponent(String(memberId))}?from=${encodeURIComponent(pathname)}`}
-            className="text-primary hover:underline"
-          >
-            {text}
-          </Link>
+          splitMode ? (
+            // 分割ビュー: 遷移せず右ペインに詳細を出す(URL の selected を差し替え)
+            <Link
+              href={buildSelectHref(String(memberId))}
+              replace
+              scroll={false}
+              className={cn('text-primary hover:underline', isSelectedCell && 'font-bold')}
+            >
+              {text}
+            </Link>
+          ) : (
+            <Link
+              href={`/members/${encodeURIComponent(String(memberId))}?from=${encodeURIComponent(pathname)}`}
+              className="text-primary hover:underline"
+            >
+              {text}
+            </Link>
+          )
         ) : (
           text
         )}

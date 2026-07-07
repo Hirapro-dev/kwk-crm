@@ -7,6 +7,7 @@
  */
 
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
+import { ResizableSplit } from '@/components/layout/ResizableSplit';
 import { ScrollRestorer } from '@/components/layout/ScrollRestorer';
 import { ReportResultView } from '@/components/reports/ReportResultView';
 import { Badge } from '@/components/ui/badge';
@@ -22,13 +23,17 @@ import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { MemberDetailPanel } from '../../members/MemberDetailPanel';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ view?: string; selected?: string }>;
 }
 
-export default async function ReportRunPage({ params }: PageProps) {
+export default async function ReportRunPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const { view, selected } = await searchParams;
+  const isSplit = view === 'split';
   const report = await getReport(id);
   if (!report) notFound();
   const me = await getCurrentUser();
@@ -39,14 +44,22 @@ export default async function ReportRunPage({ params }: PageProps) {
     me.id,
   );
 
-  // 実行履歴を記録(失敗してもページは表示)
-  await logReportRun({
-    report_id: report.id,
-    duration_ms: res.ok ? res.durationMs : 0,
-    row_count: res.ok ? res.rowCount : 0,
-    status: res.ok ? 'success' : 'error',
-    error_message: res.ok ? undefined : res.error,
-  });
+  // 実行履歴を記録(失敗してもページは表示)。
+  // 分割ビューの会員選択(selected)による再実行では重複記録しない。
+  if (!selected) {
+    await logReportRun({
+      report_id: report.id,
+      duration_ms: res.ok ? res.durationMs : 0,
+      row_count: res.ok ? res.rowCount : 0,
+      status: res.ok ? 'success' : 'error',
+      error_message: res.ok ? undefined : res.error,
+    });
+  }
+
+  // 会員詳細へリンクできるレポートか(会員氏名 m.name 列がある)。分割ビューの可否判定に使う。
+  const hasMemberLink = res.ok && res.columns.some((c) => c.source === 'm.name');
+  const toSplitHref = `/reports/${report.id}?view=split`;
+  const toNormalHref = `/reports/${report.id}`;
 
   const typeMeta = REPORT_TYPES[report.report_type as keyof typeof REPORT_TYPES] ?? null;
   const canEdit = !report.is_standard || me.role === 'admin';
@@ -117,6 +130,20 @@ export default async function ReportRunPage({ params }: PageProps) {
         facts={panelFacts}
         actions={
           <>
+            {hasMemberLink &&
+              (isSplit ? (
+                <Link href={toNormalHref}>
+                  <Button variant="outline" size="sm">
+                    通常表示
+                  </Button>
+                </Link>
+              ) : (
+                <Link href={toSplitHref}>
+                  <Button variant="outline" size="sm">
+                    分割ビュー
+                  </Button>
+                </Link>
+              ))}
             {canEdit && (
               <Link href={`/reports/${report.id}/edit`}>
                 <Button variant="outline" size="sm">
@@ -144,6 +171,36 @@ export default async function ReportRunPage({ params }: PageProps) {
             <p className="text-sm text-destructive">{res.error}</p>
           </CardContent>
         </Card>
+      ) : isSplit && hasMemberLink ? (
+        /* 分割ビュー: 左=レポート結果 / 右=選択会員の詳細 */
+        <ResizableSplit
+          className="h-[calc(100dvh-16rem)] min-h-[420px]"
+          storageKey="reports-split-left-pct"
+          left={
+            <div className="h-full overflow-y-auto pr-1">
+              <ReportResultView
+                columns={res.columns}
+                rows={res.rows}
+                chart={report.definition.chart}
+                display={report.definition.display}
+                showSummaryChips={false}
+                splitMode
+                selectedMemberId={selected}
+              />
+            </div>
+          }
+          right={
+            <div className="h-full overflow-y-auto rounded border bg-background p-3 shadow-sm">
+              {selected ? (
+                <MemberDetailPanel memberId={selected} embedded />
+              ) : (
+                <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
+                  会員氏名をクリックすると、ここに詳細が表示されます。
+                </div>
+              )}
+            </div>
+          }
+        />
       ) : (
         <>
           {/* グラフ・サマリー・グルーピング(クライアント側で描画)。
