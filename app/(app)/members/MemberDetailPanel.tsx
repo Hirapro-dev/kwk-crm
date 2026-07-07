@@ -163,7 +163,8 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
       <div className={gridClass}>
         <MemberTabs
           detailsContent={
-            <CollapsibleSection title="基本情報">
+            // 分割ビュー(embedded)では基本情報を既定で折りたたみ、対応歴をすぐ見えるようにする
+            <CollapsibleSection title="基本情報" defaultOpen={!embedded}>
               <DynamicDetailFields
                 record={member as unknown as Record<string, unknown>}
                 fields={detailFields}

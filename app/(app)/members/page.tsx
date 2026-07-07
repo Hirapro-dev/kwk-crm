@@ -9,6 +9,7 @@
  */
 
 import { PanelFilterBar, PanelHeader } from '@/components/layout/PanelHeader';
+import { ResizableSplit } from '@/components/layout/ResizableSplit';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
@@ -73,55 +74,60 @@ export default async function MembersPage({ searchParams }: PageProps) {
   // ---------- 分割ビュー ----------
   if (isSplit) {
     return (
-      <div className="flex h-[calc(100dvh-8.5rem)] min-h-[420px] gap-3">
-        {/* 左: 一覧(独立スクロール) */}
-        <Card className="flex w-[38%] min-w-[320px] max-w-[560px] flex-col overflow-hidden p-0 shadow-sm">
-          <PanelHeader
-            iconLabel="MEM"
-            iconColor="#00C896"
-            viewName="顧客情報一覧"
-            totalCount={result.total}
-            actions={
-              <Link href={toListHref}>
-                <Button variant="outline" size="sm">
-                  一覧表示
-                </Button>
-              </Link>
-            }
-          />
-          <PanelFilterBar>
-            <Suspense>
-              <MembersFilterBar
-                initialQ={sp.q ?? ''}
-                initialOwner={sp.owner ?? 'all'}
-                currentUserId={me.id}
-              />
-            </Suspense>
-          </PanelFilterBar>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <MembersInfinite
-              key={listKey}
-              initialRows={result.rows}
-              fields={listFields}
-              total={result.total}
-              params={memberParams}
-              splitMode
-              selectedId={selected}
+      <ResizableSplit
+        className="h-[calc(100dvh-8.5rem)] min-h-[420px]"
+        storageKey="members-split-left-pct"
+        left={
+          /* 左: 一覧(独立スクロール) */
+          <Card className="flex h-full flex-col overflow-hidden p-0 shadow-sm">
+            <PanelHeader
+              iconLabel="MEM"
+              iconColor="#00C896"
+              viewName="顧客情報一覧"
+              totalCount={result.total}
+              actions={
+                <Link href={toListHref}>
+                  <Button variant="outline" size="sm">
+                    一覧表示
+                  </Button>
+                </Link>
+              }
             />
-          </div>
-        </Card>
-
-        {/* 右: 選択会員の詳細(独立スクロール) */}
-        <div className="min-w-0 flex-1 overflow-y-auto rounded border bg-background p-3 shadow-sm">
-          {selected ? (
-            <MemberDetailPanel memberId={selected} embedded />
-          ) : (
-            <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
-              左の一覧から会員を選ぶと、ここに詳細が表示されます。
+            <PanelFilterBar>
+              <Suspense>
+                <MembersFilterBar
+                  initialQ={sp.q ?? ''}
+                  initialOwner={sp.owner ?? 'all'}
+                  currentUserId={me.id}
+                />
+              </Suspense>
+            </PanelFilterBar>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <MembersInfinite
+                key={listKey}
+                initialRows={result.rows}
+                fields={listFields}
+                total={result.total}
+                params={memberParams}
+                splitMode
+                selectedId={selected}
+              />
             </div>
-          )}
-        </div>
-      </div>
+          </Card>
+        }
+        right={
+          /* 右: 選択会員の詳細(独立スクロール) */
+          <div className="h-full overflow-y-auto rounded border bg-background p-3 shadow-sm">
+            {selected ? (
+              <MemberDetailPanel memberId={selected} embedded />
+            ) : (
+              <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
+                左の一覧から会員を選ぶと、ここに詳細が表示されます。
+              </div>
+            )}
+          </div>
+        }
+      />
     );
   }
 
