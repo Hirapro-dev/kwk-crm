@@ -13,6 +13,8 @@ interface Props {
 }
 
 const PRESET_BUTTONS: DatePresetKey[] = [
+  'today',
+  'yesterday',
   'this_month',
   'last_month',
   'last_3_months',

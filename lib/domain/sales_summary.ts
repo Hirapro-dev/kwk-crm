@@ -65,15 +65,13 @@ export interface SalesSummaryResult {
  *      ※ role は問わず。旧実装の role='sales' 限定は acquirer_id の実態と合わなかったため廃止
  *   4. 入金額降順にソートして返す
  */
-export async function getSalesSummary(
-  filter: SalesSummaryFilter,
-): Promise<SalesSummaryResult> {
+export async function getSalesSummary(filter: SalesSummaryFilter): Promise<SalesSummaryResult> {
   const supabase = await createClient();
 
   // 1) 期間・案件フィルタ付きで applications 取得
   let q = supabase
     .from('applications')
-    .select('acquirer_id, payment_amount')
+    .select('acquirer_id, acquirer_name_raw, payment_amount')
     .is('deleted_at', null)
     .not('payment_amount', 'is', null)
     .gt('payment_amount', 0);
@@ -85,50 +83,60 @@ export async function getSalesSummary(
   const { data: apps, error: aErr } = await q;
   if (aErr) throw new Error(`申込集計に失敗: ${aErr.message}`);
 
-  // 2) acquirer_id ごとに集計
-  const summaryMap = new Map<string, { sum: number; count: number }>();
+  // 2) acquirer_id ごとに集計 (acquirer_name_raw も控えておき、ユーザー未解決時のフォールバックに使う)
+  const summaryMap = new Map<string, { sum: number; count: number; nameRaw: string | null }>();
   let grandTotalAmount = 0;
   let grandTotalCount = 0;
   for (const row of apps ?? []) {
     if (!row.acquirer_id) continue;
     const amt = Number(row.payment_amount ?? 0);
     if (!Number.isFinite(amt) || amt <= 0) continue;
-    const cur = summaryMap.get(row.acquirer_id) ?? { sum: 0, count: 0 };
+    const cur = summaryMap.get(row.acquirer_id) ?? { sum: 0, count: 0, nameRaw: null };
     cur.sum += amt;
     cur.count += 1;
+    if (!cur.nameRaw && row.acquirer_name_raw) cur.nameRaw = row.acquirer_name_raw;
     summaryMap.set(row.acquirer_id, cur);
     grandTotalAmount += amt;
     grandTotalCount += 1;
   }
 
-  // 3) 集計に登場した acquirer_id のユーザー情報を取得 (role 不問)
+  // 3) 集計に登場した acquirer_id のユーザー情報を取得 (role 不問)。
+  //    退職者などの論理削除済みユーザーも氏名解決できるよう deleted_at では絞らない。
   const acquirerIds = Array.from(summaryMap.keys());
-  const userMap = new Map<string, { id: string; full_name: string | null; email: string; is_active: boolean }>();
+  const userMap = new Map<
+    string,
+    { id: string; full_name: string | null; email: string; is_active: boolean }
+  >();
 
   if (acquirerIds.length > 0) {
     const { data: users, error: uErr } = await supabase
       .from('users')
       .select('id, full_name, email, is_active')
-      .is('deleted_at', null)
       .in('id', acquirerIds);
     if (uErr) throw new Error(`ユーザー取得に失敗: ${uErr.message}`);
     for (const u of users ?? []) {
-      userMap.set(u.id, u as { id: string; full_name: string | null; email: string; is_active: boolean });
+      userMap.set(
+        u.id,
+        u as { id: string; full_name: string | null; email: string; is_active: boolean },
+      );
     }
   }
 
   // 4) rows 組み立て: 入金額降順ソート + activeFilter 適用
+  //    氏名は users(削除済み含む) → acquirer_name_raw → '(不明)' の順で解決する。
   const rows: SalesSummaryRow[] = acquirerIds
     .map((uid) => {
       const u = userMap.get(uid);
-      const s = summaryMap.get(uid) ?? { sum: 0, count: 0 };
+      const s = summaryMap.get(uid) ?? { sum: 0, count: 0, nameRaw: null };
+      const name = u?.full_name || u?.email || s.nameRaw || '(不明)';
       return {
         user_id: uid,
-        user_name: u ? (u.full_name ?? u.email) : '(不明)',
+        user_name: name,
         email: u?.email ?? '',
         total_payment_amount: s.sum,
         payment_count: s.count,
-        is_active: u?.is_active ?? true,
+        // 解決できたユーザーの有効フラグ。未解決(削除済みでもない不明ID)は無効扱い。
+        is_active: u?.is_active ?? false,
       };
     })
     .filter((r) => {
@@ -144,9 +152,7 @@ export async function getSalesSummary(
 /**
  * フィルタ用: 案件マスタ全件(is_active 問わず表示、ただし削除済みは除外)。
  */
-export async function listProjectsForFilter(): Promise<
-  { id: number; name: string }[]
-> {
+export async function listProjectsForFilter(): Promise<{ id: number; name: string }[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('projects')

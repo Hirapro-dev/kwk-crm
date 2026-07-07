@@ -8,6 +8,7 @@
 export type DatePresetKey =
   | 'all'
   | 'today'
+  | 'yesterday'
   | 'this_month'
   | 'last_month'
   | 'last_3_months'
@@ -20,6 +21,7 @@ export type DatePresetKey =
 export const DATE_PRESET_LABELS: Record<DatePresetKey, string> = {
   all: '累計',
   today: '今日',
+  yesterday: '昨日',
   this_month: '今月',
   last_month: '先月',
   last_3_months: '過去3ヶ月',
@@ -64,6 +66,10 @@ export function resolveDateRange(
     case 'today': {
       const t = fmt(now);
       return { from: t, to: t };
+    }
+    case 'yesterday': {
+      const yd = fmt(new Date(y, m, now.getDate() - 1));
+      return { from: yd, to: yd };
     }
     case 'this_month':
       return {
@@ -114,6 +120,7 @@ export function normalizePreset(value: string | undefined): DatePresetKey {
   const valid: DatePresetKey[] = [
     'all',
     'today',
+    'yesterday',
     'this_month',
     'last_month',
     'last_3_months',
