@@ -138,8 +138,9 @@ export function InfiniteTable<T>({
           ref={tableRef}
           wrapperClassName="overflow-visible"
           className={cn(
-            // fixed レイアウト時は各セルをはみ出さず省略表示(…)にする
-            fixed && '[&_td]:overflow-hidden [&_td]:text-ellipsis [&_th]:overflow-hidden',
+            // fixed レイアウト時は本文セルをはみ出さず省略表示(…)にする。
+            // ヘッダー(th)には overflow-hidden を付けない(sticky ヘッダーが無効化されるため)。
+            fixed && '[&_td]:overflow-hidden [&_td]:text-ellipsis',
           )}
           style={fixed ? { tableLayout: 'fixed', width: totalWidth } : undefined}
         >

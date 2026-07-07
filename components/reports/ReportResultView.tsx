@@ -432,7 +432,8 @@ export function ReportResultView({
               ref={tableRef}
               wrapperClassName="overflow-visible"
               className={cn(
-                colFixed && '[&_td]:overflow-hidden [&_td]:text-ellipsis [&_th]:overflow-hidden',
+                // 本文セルのみ省略表示。th には overflow-hidden を付けない(sticky ヘッダー無効化を防ぐ)。
+                colFixed && '[&_td]:overflow-hidden [&_td]:text-ellipsis',
               )}
               style={colFixed ? { tableLayout: 'fixed', width: colTotalWidth } : undefined}
             >
