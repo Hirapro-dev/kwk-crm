@@ -12,7 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { updateActivity } from '@/lib/domain/activity_actions';
+import { deleteActivity, updateActivity } from '@/lib/domain/activity_actions';
 import type { ActivityListItem } from '@/lib/domain/types';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
@@ -206,12 +206,28 @@ export function ActivityTimeline({
   currentUserRole,
   showMember = false,
 }: Props) {
+  const router = useRouter();
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [deleting, startDelete] = useTransition();
 
   const canEdit = (a: ActivityListItem) =>
     currentUserRole === 'admin' || a.created_by_id === currentUserId;
+  // 削除は管理者のみ(論理削除)。
+  const canDelete = currentUserRole === 'admin';
 
   const hasAnyEditable = activities.some(canEdit);
+
+  const onDelete = (id: number) => {
+    if (!window.confirm('この対応歴を削除します。よろしいですか？')) return;
+    startDelete(async () => {
+      const res = await deleteActivity(id);
+      if (!res.ok) {
+        window.alert(res.error ?? '削除に失敗しました');
+        return;
+      }
+      router.refresh();
+    });
+  };
 
   if (activities.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">対応歴はありません</p>;
@@ -274,15 +290,30 @@ export function ActivityTimeline({
                   </TableCell>
                   {hasAnyEditable && (
                     <TableCell className="py-2">
-                      {canEdit(a) && !editing && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 px-2 text-xs"
-                          onClick={() => setEditingId(a.id)}
-                        >
-                          編集
-                        </Button>
+                      {!editing && (
+                        <div className="flex gap-1">
+                          {canEdit(a) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => setEditingId(a.id)}
+                            >
+                              編集
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs text-destructive hover:bg-destructive/10"
+                              disabled={deleting}
+                              onClick={() => onDelete(a.id)}
+                            >
+                              削除
+                            </Button>
+                          )}
+                        </div>
                       )}
                     </TableCell>
                   )}

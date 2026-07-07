@@ -177,3 +177,27 @@ export async function updateActivity(
   revalidatePath('/');
   return { ok: true };
 }
+
+/**
+ * 対応歴の論理削除(deleted_at セット)。管理者のみ。
+ * 仕様書 §4.3: 物理削除禁止・論理削除のみ。RLS でも admin に限定される。
+ */
+export async function deleteActivity(id: number): Promise<ActivityUpdateResult> {
+  const me = await getCurrentUser();
+  if (me.role !== 'admin') {
+    return { ok: false, error: '削除は管理者のみ可能です' };
+  }
+
+  // RLS の想定外挙動で通常 UPDATE では deleted_at セットが拒否されるため、
+  // SECURITY DEFINER の RPC(soft_delete_activity)経由で確実に論理削除する(migration 58)。
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('soft_delete_activity', { p_id: id });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath('/activities');
+  revalidatePath('/');
+  return { ok: true };
+}
