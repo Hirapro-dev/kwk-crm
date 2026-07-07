@@ -336,6 +336,8 @@ erDiagram
 - `birthdate` date
 - `referrer_name`, `affiliate_id`, `affiliate_name` text
 - `total_amount`, `total_paid_amount`, `total_used_amount` numeric(18,2)
+- `xels_insider_joined_at` date nullable — XELSインサイダークラブ入会日 (2026-07 追加, migration 56。extract.csv から取込)
+- `sct_insider_joined_at` date nullable — SCTインサイダークラブ入会日 (2026-07 追加, migration 56。extract.csv から取込)
 - `extra` jsonb default `'{}'::jsonb` — 案件別利用額の参考保持(縦持ち化後は不要だが移行時の証跡として残す)
 - `created_at`, `updated_at`, `deleted_at` timestamptz
 

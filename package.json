@@ -36,7 +36,8 @@
     "import:projects": "tsx scripts/import/01_projects.ts",
     "import:members": "tsx scripts/import/02_members.ts",
     "import:inquiries": "tsx scripts/import/03_inquiries.ts",
-    "import:applications": "tsx scripts/import/04_applications.ts"
+    "import:applications": "tsx scripts/import/04_applications.ts",
+    "import:members:insider": "tsx scripts/import/05_members_insider_dates.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
