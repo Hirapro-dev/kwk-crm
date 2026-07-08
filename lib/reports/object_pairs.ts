@@ -51,6 +51,7 @@ export const BASE_OBJECTS: BaseObjectDef[] = [
       { key: 'applications', label: '申込', type: 'RT03' },
       { key: 'activities', label: '対応歴', type: 'RT04' },
       { key: 'inquiries', label: '問合せ', type: 'RT05' },
+      { key: 'article_reactions', label: '記事反応リスト', type: 'RT11' },
     ],
   },
   {

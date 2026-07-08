@@ -57,6 +57,17 @@ interface Props {
 // セル整形は共通の formatReportCell を使用(テーブル/グラフ/グループで表示を一致)
 const formatCell = formatReportCell;
 
+/**
+ * ID 列 → 詳細ページのパス対応。
+ * 値(ID)をそのまま `${base}/${id}` に付けて遷移する。
+ * 詳細ページを持つ会員/問合せ/申込のみ。案件/フォーム/記事反応/担当者(設定配下)は対象外。
+ */
+const ID_LINK_BASE: Record<string, string> = {
+  'm.id': '/members',
+  'inq.id': '/inquiries',
+  'a.id': '/applications',
+};
+
 /** ソート用に値を比較可能な形へ正規化する */
 function compareValues(a: unknown, b: unknown, dataType?: string): number {
   const an = a === null || a === undefined || a === '';
@@ -252,14 +263,22 @@ export function ReportResultView({
     </TableRow>
   );
 
-  // ----- 詳細セル1つ分(会員氏名はリンク) -----
+  // ----- 詳細セル1つ分(会員氏名・各ID はリンク) -----
   const renderDetailCell = (row: Record<string, unknown>, c: ReportColumnView) => {
     const memberId = row[MEMBER_LINK_ID_ALIAS];
     const text = formatCell(row[c.alias], c.dataType);
-    const linkable = c.source === 'm.name' && memberId != null && text !== '';
+    // 会員氏名: 会員詳細へ(分割ビュー対応)
+    const memberNameLinkable = c.source === 'm.name' && memberId != null && text !== '';
+    // ID 列(会員ID/問合せID/申込ID): そのIDの詳細ページへ
+    const idBase = ID_LINK_BASE[c.source];
+    const idVal = row[c.alias];
+    const idLinkable = !!idBase && idVal != null && String(idVal) !== '' && text !== '';
     // 分割ビューで現在選択中の会員セルか
     const isSelectedCell =
-      splitMode && linkable && selectedMemberId != null && String(memberId) === selectedMemberId;
+      splitMode &&
+      memberNameLinkable &&
+      selectedMemberId != null &&
+      String(memberId) === selectedMemberId;
     // 改行を含む値は元の改行を保持して表示(資産状況などの複数行テキスト)
     const multiline = text.includes('\n');
     return (
@@ -272,7 +291,7 @@ export function ReportResultView({
           isSelectedCell && 'bg-primary/10',
         )}
       >
-        {linkable ? (
+        {memberNameLinkable ? (
           splitMode ? (
             // 分割ビュー: 遷移せず右ペインに詳細を出す(URL の selected を差し替え)
             <Link
@@ -291,6 +310,13 @@ export function ReportResultView({
               {text}
             </Link>
           )
+        ) : idLinkable ? (
+          <Link
+            href={`${idBase}/${encodeURIComponent(String(idVal))}?from=${encodeURIComponent(pathname)}`}
+            className="text-primary hover:underline"
+          >
+            {text}
+          </Link>
         ) : (
           text
         )}
