@@ -49,12 +49,11 @@ export function TabsNav({ appName, appColor = '#00C896', tabs }: Props) {
   return (
     <div className="border-b bg-card">
       <div className="flex h-10 items-stretch">
-        {/* アプリアイコン + アプリ名 */}
-        <div className="flex items-center gap-2 border-r px-4">
+        {/* アプリアイコン(アプリ名はアイコンのみ表示にするため非表示) */}
+        <div className="flex items-center border-r px-4" title={appName}>
           <span className="sf-icon-chip" style={{ backgroundColor: appColor }} aria-hidden="true">
             CRM
           </span>
-          <span className="text-sm font-semibold text-foreground">{appName}</span>
         </div>
 
         {/* タブ。ホバープルダウンを下にはみ出して表示するため overflow は可視にする
