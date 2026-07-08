@@ -177,6 +177,52 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
     ],
   },
 
+  // 出金管理-親/子は専用ハンドラ(lib/domain/import_withdrawals.ts)で取込む。
+  // ID(SO-/SC-)で突合。会員ID(K-)・償還-親No は実在チェックして紐付け(無ければ null)。
+  // ここの fields はテンプレCSVのヘッダー生成にのみ使用(実CSVの日本語ヘッダーに一致)。
+  // ※ 定期取込の「まとめて取り込み」は定義順に実行されるため、親を子より先に置くこと。
+  withdrawal_parents: {
+    object: 'withdrawal_parents',
+    table: 'withdrawal_parents',
+    label: '出金管理-親',
+    idField: 'id',
+    note: '元の【親】取込用CSVをそのまま使えます。償還-親No(SO-)で突合。会員ID(K-)で会員に紐付け(未登録会員はnull)。',
+    fields: [
+      { field: 'id', label: '償還-親No', type: 'text', required: true },
+      { field: 'member_id', label: '会員ID', type: 'text' },
+      { field: 'member_name', label: '会員氏名', type: 'text' },
+      { field: 'project_name', label: '投資案件', type: 'text' },
+      { field: 'campaign', label: 'ｷｬﾝﾍﾟｰﾝ名', type: 'text' },
+      { field: 'principal', label: '元金', type: 'number' },
+      { field: 'profit', label: '利益', type: 'number' },
+      { field: 'total_amount', label: '元利合計', type: 'number' },
+      { field: 'management_label', label: '出金管理【親】', type: 'text' },
+      { field: 'member_legacy_sf_id', label: 'SFID', type: 'text' },
+    ],
+  },
+
+  withdrawal_children: {
+    object: 'withdrawal_children',
+    table: 'withdrawal_children',
+    label: '出金管理-子',
+    idField: 'id',
+    note: '元の【子】取込用CSVをそのまま使えます。償還-子No(SC-)で突合。償還-親No(SO-)で親に、会員ID(K-)で会員に紐付け(未登録はnull・原文は保持)。親を先に取り込んでください。',
+    fields: [
+      { field: 'id', label: '償還-子No', type: 'text', required: true },
+      { field: 'parent_no', label: '償還-親No', type: 'text' },
+      { field: 'member_id', label: '会員ID', type: 'text' },
+      { field: 'member_name', label: '会員氏名', type: 'text' },
+      { field: 'project_name', label: '投資案件', type: 'text' },
+      { field: 'campaign', label: 'ｷｬﾝﾍﾟｰﾝ名', type: 'text' },
+      { field: 'withdrawal_date', label: '出金日', type: 'date' },
+      { field: 'amount', label: '出金額', type: 'number' },
+      { field: 'management_label', label: '出金管理【子】', type: 'text' },
+      { field: 'member_legacy_sf_id', label: 'セールスフォースＩＤ', type: 'text' },
+      { field: 'legacy_parent_sf_id', label: '償還管理ID親', type: 'text' },
+      { field: 'legacy_sf_id', label: '償還管理ID子', type: 'text' },
+    ],
+  },
+
   // 従業員(users)は専用ハンドラ(lib/domain/import_users.ts)で取込む。
   // email で突合(legacy_sf_id があれば優先)、新規は UUID 採番。ここの fields はテンプレ生成用。
   users: {

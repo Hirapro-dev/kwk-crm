@@ -25,6 +25,12 @@ import { commitArticleReactionsCsv, previewArticleReactionsCsv } from './import_
 import { commitInquiriesCsv, previewInquiriesCsv } from './import_inquiries';
 import { commitMembersCsv, previewMembersCsv } from './import_members';
 import { commitUsersCsv, previewUsersCsv } from './import_users';
+import {
+  commitWithdrawalChildrenCsv,
+  commitWithdrawalParentsCsv,
+  previewWithdrawalChildrenCsv,
+  previewWithdrawalParentsCsv,
+} from './import_withdrawals';
 
 const MAX_ROWS = 60_000; // バルクUIの上限(会員約23,580件に余裕を持たせる。超過分はスクリプト/分割を案内)
 const BATCH = 500;
@@ -86,6 +92,10 @@ export async function previewImport(
     if (object === 'activities') return await previewActivitiesCsv([csvText], updateOnly);
     if (object === 'article_reactions')
       return await previewArticleReactionsCsv([csvText], updateOnly);
+    if (object === 'withdrawal_parents')
+      return await previewWithdrawalParentsCsv([csvText], updateOnly);
+    if (object === 'withdrawal_children')
+      return await previewWithdrawalChildrenCsv([csvText], updateOnly);
     if (object === 'users') return await previewUsersCsv([csvText], updateOnly);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -174,6 +184,10 @@ export async function commitImport(
     if (object === 'activities') return await commitActivitiesCsv([csvText], updateOnly);
     if (object === 'article_reactions')
       return await commitArticleReactionsCsv([csvText], updateOnly);
+    if (object === 'withdrawal_parents')
+      return await commitWithdrawalParentsCsv([csvText], updateOnly);
+    if (object === 'withdrawal_children')
+      return await commitWithdrawalChildrenCsv([csvText], updateOnly);
     if (object === 'users') return await commitUsersCsv([csvText], updateOnly);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
