@@ -14,12 +14,31 @@ export interface Project {
   updated_at: string;
 }
 
-export async function listProjects(): Promise<Project[]> {
+/** 並び替え可能な列(ホワイトリスト)。SortHeader の field と一致させる。 */
+const PROJECT_SORTABLE: Record<string, string> = {
+  id: 'id',
+  name: 'name',
+  description: 'description',
+  is_active: 'is_active',
+};
+
+export async function listProjects(opts?: {
+  sort?: string;
+  dir?: 'asc' | 'desc';
+}): Promise<Project[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  // 不正な列名は既定(案件名)にフォールバック。値の連結はせずホワイトリストのみ使用。
+  const col = (opts?.sort && PROJECT_SORTABLE[opts.sort]) || 'name';
+  const ascending = opts?.dir !== 'desc';
+
+  let query = supabase
     .from('projects')
     .select('id, name, description, is_active, created_at, updated_at')
-    .order('name', { ascending: true });
+    .order(col, { ascending });
+  // 案件名以外で並べたときは、同値の並びが安定するよう案件名を第2キーにする
+  if (col !== 'name') query = query.order('name', { ascending: true });
+
+  const { data, error } = await query;
   if (error) throw new Error(`案件マスタ取得に失敗: ${error.message}`);
   return (data ?? []) as Project[];
 }

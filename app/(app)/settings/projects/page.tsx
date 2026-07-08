@@ -9,6 +9,7 @@
  */
 
 import { PanelHeader } from '@/components/layout/PanelHeader';
+import { SortHeader } from '@/components/layout/SortHeader';
 import { Card } from '@/components/ui/card';
 import {
   Table,
@@ -22,8 +23,16 @@ import { listProjects } from '@/lib/domain/projects';
 import { NewProjectForm } from './NewProjectForm';
 import { ProjectRow } from './ProjectRow';
 
-export default async function SettingsProjectsPage() {
-  const projects = await listProjects();
+export default async function SettingsProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string; dir?: string }>;
+}) {
+  const sp = await searchParams;
+  const projects = await listProjects({
+    sort: sp.sort,
+    dir: sp.dir === 'desc' ? 'desc' : 'asc',
+  });
 
   return (
     <div className="space-y-3">
@@ -40,20 +49,25 @@ export default async function SettingsProjectsPage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50 hover:bg-gray-50">
-              <TableHead className="h-9 w-20">案件ID</TableHead>
-              <TableHead className="h-9">案件名</TableHead>
-              <TableHead className="h-9">説明</TableHead>
-              <TableHead className="h-9 w-16 text-center">有効</TableHead>
+              <TableHead className="h-9 w-20">
+                <SortHeader field="id" label="案件ID" />
+              </TableHead>
+              <TableHead className="h-9">
+                <SortHeader field="name" label="案件名" />
+              </TableHead>
+              <TableHead className="h-9">
+                <SortHeader field="description" label="説明" />
+              </TableHead>
+              <TableHead className="h-9 w-16 text-center">
+                <SortHeader field="is_active" label="有効" className="justify-center" />
+              </TableHead>
               <TableHead className="h-9 w-24 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {projects.length === 0 ? (
               <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="text-center text-sm text-muted-foreground"
-                >
+                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
                   案件マスタが登録されていません
                 </TableCell>
               </TableRow>
