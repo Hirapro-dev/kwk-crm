@@ -4,7 +4,6 @@
  * - お気に入り絞り込み・タイプ別フィルタ
  */
 
-import Link from 'next/link';
 import { PanelHeader } from '@/components/layout/PanelHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +20,8 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import { listReports } from '@/lib/domain/reports';
 import { REPORT_TYPES } from '@/lib/reports/types';
 import { formatDateTime } from '@/lib/utils/date';
+import Link from 'next/link';
+import { DeleteReportButton } from './DeleteReportButton';
 import { FavoriteButton } from './FavoriteButton';
 
 interface PageProps {
@@ -84,7 +85,9 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       {/* モバイル: 新規レポートボタンをカード間に表示 */}
       <div className="sm:hidden">
         <Link href="/reports/new">
-          <Button size="sm" className="w-full">+ 新規レポート</Button>
+          <Button size="sm" className="w-full">
+            + 新規レポート
+          </Button>
         </Link>
       </div>
 
@@ -127,12 +130,13 @@ function ReportTable({
               <TableHead className="whitespace-nowrap">作成者</TableHead>
               <TableHead className="whitespace-nowrap">最終実行</TableHead>
               <TableHead className="whitespace-nowrap text-right">最終件数</TableHead>
+              <TableHead className="w-10 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
                   レポートがありません
                 </TableCell>
               </TableRow>
@@ -168,12 +172,17 @@ function ReportTable({
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">{r.visibility}</TableCell>
-                    <TableCell className="whitespace-nowrap text-xs">{r.creator?.full_name ?? '-'}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">
+                      {r.creator?.full_name ?? '-'}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
                       {r.last_run_at ? formatDateTime(r.last_run_at) : '未実行'}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-right text-xs tabular-nums">
                       {r.last_run_row_count?.toLocaleString() ?? '-'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DeleteReportButton reportId={r.id} reportName={r.name} />
                     </TableCell>
                   </TableRow>
                 );
