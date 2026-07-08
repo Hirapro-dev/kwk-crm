@@ -106,6 +106,8 @@ export default async function InquiryDetailPage({ params }: PageProps) {
             record={inquiry as unknown as Record<string, unknown>}
             fields={detailFields}
             fieldOverrides={{
+              // フォーム: 生ID(form_id)ではなくフォーム名を表示(ハイライトと統一)
+              form_id: inquiry.form?.name ?? '-',
               name: inquiry.member ? (
                 <Link
                   href={`/members/${inquiry.member.id}`}
