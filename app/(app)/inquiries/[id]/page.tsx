@@ -105,6 +105,7 @@ export default async function InquiryDetailPage({ params }: PageProps) {
           <DynamicDetailFields
             record={inquiry as unknown as Record<string, unknown>}
             fields={detailFields}
+            columns={4}
             fieldOverrides={{
               // フォーム: 生ID(form_id)ではなくフォーム名を表示(ハイライトと統一)
               form_id: inquiry.form?.name ?? '-',
