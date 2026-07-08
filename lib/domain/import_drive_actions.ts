@@ -44,6 +44,7 @@ export async function saveImportSource(input: {
   object: string;
   drive_file_id: string;
   drive_file_id_2?: string;
+  drive_file_id_3?: string;
   enabled: boolean;
   update_only?: boolean;
 }): Promise<SimpleResult> {
@@ -53,12 +54,14 @@ export async function saveImportSource(input: {
 
   const fileId = input.drive_file_id ? extractDriveFileId(input.drive_file_id) : null;
   const fileId2 = input.drive_file_id_2 ? extractDriveFileId(input.drive_file_id_2) : null;
+  const fileId3 = input.drive_file_id_3 ? extractDriveFileId(input.drive_file_id_3) : null;
   const supabase = await createClient();
   const { error } = await supabase.from('import_sources').upsert(
     {
       object: input.object,
       drive_file_id: fileId,
       drive_file_id_2: fileId2,
+      drive_file_id_3: fileId3,
       enabled: input.enabled,
       update_only: input.update_only ?? false,
     },
@@ -80,24 +83,32 @@ async function loadUpdateOnly(object: string): Promise<boolean> {
   return Boolean((data as { update_only?: boolean } | null)?.update_only);
 }
 
-/** 保存済みの Drive ファイルID(1つ目/2つ目)を取得 */
+/** 保存済みの Drive ファイルID(1つ目/2つ目/3つ目)を取得 */
 async function loadFileIds(
   object: string,
-): Promise<{ file1: string | null; file2: string | null }> {
+): Promise<{ file1: string | null; file2: string | null; file3: string | null }> {
   const supabase = await createClient();
   const { data } = await supabase
     .from('import_sources')
-    .select('drive_file_id,drive_file_id_2')
+    .select('drive_file_id,drive_file_id_2,drive_file_id_3')
     .eq('object', object)
     .maybeSingle();
-  const row = data as { drive_file_id?: string | null; drive_file_id_2?: string | null } | null;
-  return { file1: row?.drive_file_id ?? null, file2: row?.drive_file_id_2 ?? null };
+  const row = data as {
+    drive_file_id?: string | null;
+    drive_file_id_2?: string | null;
+    drive_file_id_3?: string | null;
+  } | null;
+  return {
+    file1: row?.drive_file_id ?? null,
+    file2: row?.drive_file_id_2 ?? null,
+    file3: row?.drive_file_id_3 ?? null,
+  };
 }
 
 /** 設定済みファイルを Drive から取得して CSV テキスト配列にする */
 async function fetchConfiguredCsvs(object: string): Promise<string[]> {
-  const { file1, file2 } = await loadFileIds(object);
-  const ids = [file1, file2].filter((v): v is string => !!v);
+  const { file1, file2, file3 } = await loadFileIds(object);
+  const ids = [file1, file2, file3].filter((v): v is string => !!v);
   const texts: string[] = [];
   for (const id of ids) texts.push(await fetchDriveFileCsv(id));
   return texts;

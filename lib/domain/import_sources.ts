@@ -9,8 +9,10 @@ import { ROUTINE_OBJECT_KEYS } from '@/lib/import/schema';
 export interface ImportSource {
   object: string;
   drive_file_id: string | null;
-  /** 2つ目のファイル(問合せの2フォーム統合用。他オブジェクトは未使用) */
+  /** 2つ目のファイル(問合せの複数フォーム統合用。他オブジェクトは未使用) */
   drive_file_id_2: string | null;
+  /** 3つ目のファイル(問合せの複数フォーム統合用。他オブジェクトは未使用) */
+  drive_file_id_3: string | null;
   enabled: boolean;
   /** 更新のみ(既存IDの更新だけ・新規は作成しない) */
   update_only: boolean;
@@ -25,6 +27,7 @@ function blank(object: string): ImportSource {
     object,
     drive_file_id: null,
     drive_file_id_2: null,
+    drive_file_id_3: null,
     enabled: false,
     update_only: false,
     note: null,
@@ -39,7 +42,7 @@ function defaults(): ImportSource[] {
 }
 
 const COLS =
-  'object,drive_file_id,drive_file_id_2,enabled,update_only,note,last_run_at,last_run_status,last_run_message';
+  'object,drive_file_id,drive_file_id_2,drive_file_id_3,enabled,update_only,note,last_run_at,last_run_status,last_run_message';
 
 export async function getImportSources(): Promise<ImportSource[]> {
   try {

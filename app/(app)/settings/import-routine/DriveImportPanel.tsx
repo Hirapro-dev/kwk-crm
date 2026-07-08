@@ -275,6 +275,7 @@ function DriveSourceCard({
   const def = IMPORT_OBJECTS[source.object];
   const [fileId, setFileId] = useState(source.drive_file_id ?? '');
   const [fileId2, setFileId2] = useState(source.drive_file_id_2 ?? '');
+  const [fileId3, setFileId3] = useState(source.drive_file_id_3 ?? '');
   const [enabled, setEnabled] = useState(source.enabled);
   const [updateOnly, setUpdateOnly] = useState(source.update_only);
   const isInquiries = source.object === 'inquiries';
@@ -295,6 +296,7 @@ function DriveSourceCard({
           object: source.object,
           drive_file_id: fileId,
           drive_file_id_2: isInquiries ? fileId2 || undefined : undefined,
+          drive_file_id_3: isInquiries ? fileId3 || undefined : undefined,
           enabled,
           update_only: updateOnly,
         });
@@ -408,7 +410,7 @@ function DriveSourceCard({
           </Button>
         </div>
 
-        {/* 問合せは2フォーム(KAWARA版 / 機密保持・CP)を統合取込するため2ファイル目を指定可能 */}
+        {/* 問合せは複数フォーム(KAWARA版 / 機密保持・CP / 総合問合せ 等)を統合取込するため2〜3ファイル目を指定可能 */}
         {isInquiries && (
           <div className="space-y-1">
             <label className="text-[11px] text-muted-foreground" htmlFor={`f2-${source.object}`}>
@@ -421,8 +423,21 @@ function DriveSourceCard({
               placeholder="例: 機密保持・CP のCSVファイルID / 共有URL"
               className="h-8 text-sm"
             />
+            <label
+              className="text-[11px] text-muted-foreground pt-1 block"
+              htmlFor={`f3-${source.object}`}
+            >
+              3つ目のファイル(任意・問合せの別フォーム由来CSV)
+            </label>
+            <Input
+              id={`f3-${source.object}`}
+              value={fileId3}
+              onChange={(e) => setFileId3(e.target.value)}
+              placeholder="例: 総合問合せ のCSVファイルID / 共有URL"
+              className="h-8 text-sm"
+            />
             <p className="text-[10px] text-muted-foreground">
-              2フォームのCSVを統合し、問合せID(TA-)で突合します。共通列はカラム、フォーム固有列は
+              最大3ファイルのCSVを統合し、問合せID(TA-)で突合します。共通列はカラム、フォーム固有列は
               extra に格納されます。
             </p>
           </div>

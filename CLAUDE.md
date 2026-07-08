@@ -480,6 +480,8 @@ Google Drive 上の指定CSVを各オブジェクトに紐づけ、ボタン1つ
 
 - `object` text PK — `members` / `applications` / `inquiries` / `projects`
 - `drive_file_id` text — Google Drive のファイルID(URLからも可、保存時にID抽出)
+- `drive_file_id_2` text — 2つ目のファイル(問合せの複数フォーム統合用。migration 16)
+- `drive_file_id_3` text — 3つ目のファイル(問合せの複数フォーム統合用。migration 60。総合問合せCSV等)
 - `enabled` boolean NOT NULL DEFAULT false
 - `note` text
 - `last_run_at` timestamptz / `last_run_status` text / `last_run_message` text
