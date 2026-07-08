@@ -11,6 +11,7 @@ import { listArticleReactions } from './article_reactions';
 import { listInquiries } from './inquiries';
 import { LIST_PAGE_SIZE } from './list_constants';
 import { listMembers } from './members';
+import { listWithdrawalChildren, listWithdrawalParents } from './withdrawals';
 
 export async function loadMoreMembers(
   params: { q?: string; ownerId?: string; sort?: string; dir?: 'asc' | 'desc' },
@@ -58,6 +59,22 @@ export async function loadMoreArticleReactions(
   page: number,
 ) {
   const r = await listArticleReactions({ ...params, page, pageSize: LIST_PAGE_SIZE });
+  return r.rows;
+}
+
+export async function loadMoreWithdrawalParents(
+  params: { q?: string; sort?: string; dir?: 'asc' | 'desc' },
+  page: number,
+) {
+  const r = await listWithdrawalParents({ ...params, page, pageSize: LIST_PAGE_SIZE });
+  return r.rows;
+}
+
+export async function loadMoreWithdrawalChildren(
+  params: { q?: string; sort?: string; dir?: 'asc' | 'desc' },
+  page: number,
+) {
+  const r = await listWithdrawalChildren({ ...params, page, pageSize: LIST_PAGE_SIZE });
   return r.rows;
 }
 
