@@ -5,8 +5,7 @@
  * - 会員化アクション
  */
 
-import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { renderInquiryHighlightFieldValue } from '@/components/inquiries/InquiryHighlightFieldValue';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getInquiry } from '@/lib/domain/inquiries';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { formatDateTime } from '@/lib/utils/date';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { ConvertButton } from './ConvertButton';
 
 interface PageProps {
@@ -22,28 +23,23 @@ interface PageProps {
 
 export default async function InquiryDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const [inquiry, detailFields] = await Promise.all([
+  const [inquiry, detailFields, highlightFields] = await Promise.all([
     getInquiry(id),
     // オブジェクト管理 (/settings/objects/inquiries) で「詳細」表示ONのフィールドのみ
     getVisibleFields('inquiries', 'detail'),
+    // レイアウトエディタの「ハイライト」設定(is_visible_highlight 順)
+    getVisibleFields('inquiries', 'highlight'),
   ]);
   if (!inquiry) notFound();
 
-  return (
-    <div className="space-y-3">
-      {/* パンくず(戻るリンク) */}
-      <Link href="/inquiries" className="sf-back-link text-xs">
-        ← 問合せ一覧へ
-      </Link>
-
-      {/* Highlight Panel: 会員詳細と同じ Salesforce 風カードヘッダー */}
-      <HighlightPanel
-        iconLabel="INQ"
-        iconColor="#fea130"
-        objectLabel="問合せ"
-        recordName={inquiry.name ?? '(氏名なし)'}
-        recordSubName={inquiry.id}
-        facts={[
+  // ハイライト設定があればそれで組み立て、無ければ従来の既定4項目にフォールバック
+  const highlightFacts =
+    highlightFields.length > 0
+      ? highlightFields.map((f) => ({
+          label: f.label ?? f.field_name,
+          value: renderInquiryHighlightFieldValue(f, inquiry),
+        }))
+      : [
           {
             label: 'ステータス',
             value: inquiry.member ? (
@@ -63,17 +59,30 @@ export default async function InquiryDetailPage({ params }: PageProps) {
           {
             label: '会員ID',
             value: inquiry.member ? (
-              <Link
-                href={`/members/${inquiry.member.id}`}
-                className="text-primary hover:underline"
-              >
+              <Link href={`/members/${inquiry.member.id}`} className="text-primary hover:underline">
                 {inquiry.member.id}
               </Link>
             ) : (
               '-'
             ),
           },
-        ]}
+        ];
+
+  return (
+    <div className="space-y-3">
+      {/* パンくず(戻るリンク) */}
+      <Link href="/inquiries" className="sf-back-link text-xs">
+        ← 問合せ一覧へ
+      </Link>
+
+      {/* Highlight Panel: レイアウトエディタの「ハイライト」設定に従う(未設定時は既定4項目) */}
+      <HighlightPanel
+        iconLabel="INQ"
+        iconColor="#fea130"
+        objectLabel="問合せ"
+        recordName={inquiry.name ?? '(氏名なし)'}
+        recordSubName={inquiry.id}
+        facts={highlightFacts}
       />
 
       {/* 左: 基本情報, 右: 会員化 + フォーム固有項目 を 1:1 で並べる */}
@@ -123,9 +132,7 @@ export default async function InquiryDetailPage({ params }: PageProps) {
             </CardHeader>
             <CardContent>
               {Object.keys(inquiry.extra ?? {}).length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  追加項目はありません(共通項目のみ)
-                </p>
+                <p className="text-sm text-muted-foreground">追加項目はありません(共通項目のみ)</p>
               ) : (
                 <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
                   {Object.entries(inquiry.extra)
@@ -167,4 +174,3 @@ function formatExtraValue(v: unknown): string {
   if (typeof v === 'number' || typeof v === 'boolean') return String(v);
   return JSON.stringify(v);
 }
-
