@@ -16,7 +16,10 @@ export function HeaderSearch() {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const t = q.trim();
-    if (t) router.push(`/search?q=${encodeURIComponent(t)}`);
+    if (t) {
+      router.push(`/search?q=${encodeURIComponent(t)}`);
+      setQ(''); // 検索実行後は入力欄をクリアする(結果は検索ページ側に表示)
+    }
   };
 
   return (
