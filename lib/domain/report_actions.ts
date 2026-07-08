@@ -106,11 +106,9 @@ export async function deleteReport(id: string): Promise<ReportSaveResult> {
   if (existing.is_standard && me.role !== 'admin') {
     return { ok: false, error: '標準レポートは admin のみ削除可能です' };
   }
-  // 論理削除
-  const { error } = await supabase
-    .from('reports')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id);
+  // 論理削除: reports_update ポリシー(restricted の WITH CHECK 等)に阻まれないよう
+  // SECURITY DEFINER 関数で行う(権限は関数内で作成者/admin を検証。migration 62)。
+  const { error } = await supabase.rpc('delete_report', { p_report_id: id });
   if (error) return { ok: false, error: error.message };
   revalidatePath('/reports');
   return { ok: true };
