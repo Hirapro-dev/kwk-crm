@@ -186,7 +186,7 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
     table: 'withdrawal_parents',
     label: '出金管理-親',
     idField: 'id',
-    note: '元の【親】取込用CSVをそのまま使えます。償還-親No(SO-)で突合。会員ID(K-)で会員に紐付け(未登録会員はnull)。',
+    note: '元の【親】取込用CSVをそのまま使えます。償還-親No(SO-)で突合。会員ID(K-)で会員に紐付け(未登録会員はnull)。上記以外の列(出金管理【親】/SFID等)は取り込みません。',
     fields: [
       { field: 'id', label: '償還-親No', type: 'text', required: true },
       { field: 'member_id', label: '会員ID', type: 'text' },
@@ -196,8 +196,6 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
       { field: 'principal', label: '元金', type: 'number' },
       { field: 'profit', label: '利益', type: 'number' },
       { field: 'total_amount', label: '元利合計', type: 'number' },
-      { field: 'management_label', label: '出金管理【親】', type: 'text' },
-      { field: 'member_legacy_sf_id', label: 'SFID', type: 'text' },
     ],
   },
 
@@ -206,7 +204,7 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
     table: 'withdrawal_children',
     label: '出金管理-子',
     idField: 'id',
-    note: '元の【子】取込用CSVをそのまま使えます。償還-子No(SC-)で突合。償還-親No(SO-)で親に、会員ID(K-)で会員に紐付け(未登録はnull・原文は保持)。親を先に取り込んでください。',
+    note: '元の【子】取込用CSVをそのまま使えます。償還-子No(SC-)で突合。償還-親No(SO-)で親に、会員ID(K-)で会員に紐付け(未登録はnull・原文は保持)。親を先に取り込んでください。上記以外の列(出金管理【子】/セールスフォースＩＤ/償還管理ID等)は取り込みません。',
     fields: [
       { field: 'id', label: '償還-子No', type: 'text', required: true },
       { field: 'parent_no', label: '償還-親No', type: 'text' },
@@ -216,10 +214,6 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
       { field: 'campaign', label: 'ｷｬﾝﾍﾟｰﾝ名', type: 'text' },
       { field: 'withdrawal_date', label: '出金日', type: 'date' },
       { field: 'amount', label: '出金額', type: 'number' },
-      { field: 'management_label', label: '出金管理【子】', type: 'text' },
-      { field: 'member_legacy_sf_id', label: 'セールスフォースＩＤ', type: 'text' },
-      { field: 'legacy_parent_sf_id', label: '償還管理ID親', type: 'text' },
-      { field: 'legacy_sf_id', label: '償還管理ID子', type: 'text' },
     ],
   },
 

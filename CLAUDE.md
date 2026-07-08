@@ -547,8 +547,8 @@ Phase 1 では:
 - `member_id` text FK → members (nullable、実在チェック) / `member_name` text — 会員氏名スナップショット
 - `project_name` text — 投資案件(名称のまま保持) / `campaign` text — ｷｬﾝﾍﾟｰﾝ名
 - `principal` numeric(18,2) — 元金 / `profit` numeric(18,2) — 利益 / `total_amount` numeric(18,2) — 元利合計
-- `management_label` text — 出金管理【親】 / `member_legacy_sf_id` text — SFID (0015i…)
 - `created_at`, `updated_at`, `deleted_at` timestamptz
+- ※ CSVの「出金管理【親】」「SFID」列は取込対象外 (2026-07 確定、migration 66 で列削除)
 
 **withdrawal_children (出金管理-子)** — 1行 = 1回の出金
 - `id` text PK — 償還-子No (`SC-XXXXXX`)
@@ -556,9 +556,8 @@ Phase 1 では:
 - `member_id` text FK → members (nullable) / `member_name` text
 - `project_name` text / `campaign` text
 - `withdrawal_date` date — 出金日 / `amount` numeric(18,2) — 出金額
-- `management_label` text — 出金管理【子】 / `member_legacy_sf_id` text — セールスフォースＩＤ
-- `legacy_parent_sf_id` text — 償還管理ID親 / `legacy_sf_id` text — 償還管理ID子
 - `created_at`, `updated_at`, `deleted_at` timestamptz
+- ※ CSVの「出金管理【子】」「セールスフォースＩＤ」「償還管理ID親/子」列は取込対象外 (migration 66 で列削除)
 
 **RLS**: SELECT は admin / manager / support のみ(出金情報は機微のため)。書込は admin のみ
 (取込はサービスロールで実行)。
