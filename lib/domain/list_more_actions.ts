@@ -7,6 +7,7 @@
 
 import { listActivities } from './activities';
 import { listApplications } from './applications';
+import { listArticleReactions } from './article_reactions';
 import { listInquiries } from './inquiries';
 import { LIST_PAGE_SIZE } from './list_constants';
 import { listMembers } from './members';
@@ -49,6 +50,14 @@ export async function loadMoreApplications(
     page,
     pageSize: LIST_PAGE_SIZE,
   });
+  return r.rows;
+}
+
+export async function loadMoreArticleReactions(
+  params: { q?: string; sort?: string; dir?: 'asc' | 'desc' },
+  page: number,
+) {
+  const r = await listArticleReactions({ ...params, page, pageSize: LIST_PAGE_SIZE });
   return r.rows;
 }
 
