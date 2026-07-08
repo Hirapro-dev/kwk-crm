@@ -33,6 +33,17 @@ export function renderInquiryHighlightFieldValue(
     );
   }
 
+  // 氏名: 会員が紐付いていれば会員詳細へのリンクにする
+  if (field_name === 'name') {
+    const text = inquiry.name ?? '-';
+    if (!inquiry.member) return <span>{text}</span>;
+    return (
+      <Link href={`/members/${inquiry.member.id}`} className="text-primary hover:underline">
+        {text}
+      </Link>
+    );
+  }
+
   // 電話番号: タップ発信リンク
   if (field_name === 'phone') {
     return <PhoneLink value={inquiry.phone} />;

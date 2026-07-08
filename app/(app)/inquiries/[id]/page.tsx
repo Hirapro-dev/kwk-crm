@@ -75,7 +75,8 @@ export default async function InquiryDetailPage({ params }: PageProps) {
         ← 問合せ一覧へ
       </Link>
 
-      {/* Highlight Panel: レイアウトエディタの「ハイライト」設定に従う(未設定時は既定4項目) */}
+      {/* Highlight Panel: レイアウトエディタの「ハイライト」設定に従う(未設定時は既定4項目)。
+          未会員化の場合のみ会員化ボタンをアクションに出す。 */}
       <HighlightPanel
         iconLabel="INQ"
         iconColor="#fea130"
@@ -83,94 +84,52 @@ export default async function InquiryDetailPage({ params }: PageProps) {
         recordName={inquiry.name ?? '(氏名なし)'}
         recordSubName={inquiry.id}
         facts={highlightFacts}
+        actions={
+          inquiry.member ? undefined : (
+            <ConvertButton inquiryId={inquiry.id} defaultName={inquiry.name} />
+          )
+        }
       />
 
-      {/* 左: 基本情報, 右: 会員化 + フォーム固有項目 を 1:1 で並べる */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="border-b py-3">
-            <CardTitle className="text-sm">基本情報</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4">
-            {/*
-              会員詳細と同じ動的レンダリング方式。
-              オブジェクト管理 (/settings/objects/inquiries) の「詳細」表示ON
-              フィールドのみ、セクションと並び順を反映して表示する。
-            */}
-            <DynamicDetailFields
-              record={inquiry as unknown as Record<string, unknown>}
-              fields={detailFields}
-            />
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>会員化</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {inquiry.member ? (
-                <p className="text-sm text-muted-foreground">
-                  既に会員化済みです:
-                  <Link
-                    href={`/members/${inquiry.member.id}`}
-                    className="ml-1 text-primary hover:underline"
-                  >
-                    {inquiry.member.id}
-                  </Link>
-                </p>
+      {/* 基本情報(フルワイド)。氏名/会員IDは会員が紐付いていれば会員詳細へのリンクにする。 */}
+      <Card>
+        <CardHeader className="border-b py-3">
+          <CardTitle className="text-sm">基本情報</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
+          {/*
+            会員詳細と同じ動的レンダリング方式。
+            オブジェクト管理 (/settings/objects/inquiries) の「詳細」表示ON
+            フィールドのみ、セクションと並び順を反映して表示する。
+          */}
+          <DynamicDetailFields
+            record={inquiry as unknown as Record<string, unknown>}
+            fields={detailFields}
+            fieldOverrides={{
+              name: inquiry.member ? (
+                <Link
+                  href={`/members/${inquiry.member.id}`}
+                  className="text-primary hover:underline"
+                >
+                  {inquiry.name ?? inquiry.member.name ?? '-'}
+                </Link>
               ) : (
-                <ConvertButton inquiryId={inquiry.id} defaultName={inquiry.name} />
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>フォーム固有項目</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {Object.keys(inquiry.extra ?? {}).length === 0 ? (
-                <p className="text-sm text-muted-foreground">追加項目はありません(共通項目のみ)</p>
+                (inquiry.name ?? '-')
+              ),
+              member_id: inquiry.member ? (
+                <Link
+                  href={`/members/${inquiry.member.id}`}
+                  className="text-primary hover:underline"
+                >
+                  {inquiry.member.id}
+                </Link>
               ) : (
-                <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
-                  {Object.entries(inquiry.extra)
-                    .filter(([k]) => !k.startsWith('_'))
-                    .map(([k, v]) => (
-                      <div key={k} className="border-b pb-1">
-                        <dt className="text-xs text-muted-foreground">{k}</dt>
-                        <dd className="break-all">{formatExtraValue(v)}</dd>
-                      </div>
-                    ))}
-                </dl>
-              )}
-
-              {Object.entries(inquiry.extra ?? {}).some(([k]) => k.startsWith('_')) && (
-                <details className="mt-4 text-xs text-muted-foreground">
-                  <summary className="cursor-pointer">メタ情報(移行時の証跡)</summary>
-                  <pre className="mt-2 overflow-auto rounded bg-muted p-2 text-xs">
-                    {JSON.stringify(
-                      Object.fromEntries(
-                        Object.entries(inquiry.extra).filter(([k]) => k.startsWith('_')),
-                      ),
-                      null,
-                      2,
-                    )}
-                  </pre>
-                </details>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                (inquiry.member_id ?? '-')
+              ),
+            }}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
-}
-
-function formatExtraValue(v: unknown): string {
-  if (v === null || v === undefined) return '-';
-  if (typeof v === 'string') return v;
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-  return JSON.stringify(v);
 }
