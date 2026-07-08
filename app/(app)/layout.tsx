@@ -12,12 +12,15 @@
 import { BottomNav } from '@/components/layout/BottomNav';
 import { TabsNav } from '@/components/layout/TabsNav';
 import { Topbar } from '@/components/layout/Topbar';
+import { getCurrentUser } from '@/lib/domain/auth';
 import { getVisibleNavTabs } from '@/lib/domain/nav_items';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // メニューバーの並び・表示は nav_items マスタから取得 (管理者が /settings/navigation で編集)。
+  // visible_roles によるロール別表示のため現在ユーザーのロールを渡す (/settings/roles で管理)。
   // 未適用時は既定リストにフォールバック。仕様書 §5.10b / §8.1。
-  const navTabs = await getVisibleNavTabs();
+  const me = await getCurrentUser();
+  const navTabs = await getVisibleNavTabs(me.role);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

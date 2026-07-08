@@ -12,6 +12,7 @@ import {
   Menu as MenuIcon,
   ShieldCheck,
   Upload,
+  UserCog,
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -77,6 +78,11 @@ const SECTIONS: MenuSection[] = [
         href: '/settings/navigation',
         label: 'メニューバー',
         icon: <MenuIcon className="h-3.5 w-3.5" />,
+      },
+      {
+        href: '/settings/roles',
+        label: 'ロール管理',
+        icon: <UserCog className="h-3.5 w-3.5" />,
       },
       {
         href: '/settings/access-log',
