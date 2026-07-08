@@ -481,7 +481,7 @@ function DriveSourceCard({
             総行数 {preview.totalRows} ／{' '}
             <span className="text-green-700">新規 {preview.newCount}</span> ／{' '}
             <span className="text-primary">更新 {preview.updateCount}</span> ／{' '}
-            {updateOnly && <>スキップ {preview.skippedCount ?? 0} ／ </>}
+            <span className="text-muted-foreground">スキップ {preview.skippedCount ?? 0}</span> ／{' '}
             <span className={(preview.errorCount ?? 0) > 0 ? 'text-destructive' : ''}>
               エラー {preview.errorCount}
             </span>
@@ -514,7 +514,7 @@ function DriveSourceCard({
               committed.updateCount != null &&
               ` (新規 ${committed.newCount.toLocaleString()} / 更新 ${committed.updateCount.toLocaleString()})`}
             {(committed.skippedCount ?? 0) > 0 &&
-              ` (新規ID ${committed.skippedCount} 件はスキップ)`}
+              ` (スキップ ${committed.skippedCount} 件: 変更なし等)`}
             {(committed.errorCount ?? 0) > 0 && ` (エラー ${committed.errorCount} 件は除外)`}
           </p>
         )}

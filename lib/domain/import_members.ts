@@ -11,6 +11,7 @@
  * 行変換は lib/import/members_map.ts(純粋関数)を使用。
  */
 
+import { classifyAgainstDb } from '@/lib/import/diff';
 import {
   type MemberRecord,
   type OwnerMaps,
@@ -80,17 +81,6 @@ function convertAll(
   return { records: [...byId.values()], errors };
 }
 
-async function existingIds(supabase: Db, ids: string[]): Promise<Set<string>> {
-  const set = new Set<string>();
-  for (let i = 0; i < ids.length; i += BATCH) {
-    const chunk = ids.slice(i, i + BATCH);
-    if (chunk.length === 0) continue;
-    const { data } = await supabase.from('members').select('id').in('id', chunk);
-    for (const r of (data ?? []) as Array<{ id: string }>) set.add(String(r.id));
-  }
-  return set;
-}
-
 export async function previewMembersCsv(
   csvTexts: string[],
   updateOnly = false,
@@ -112,36 +102,33 @@ export async function previewMembersCsv(
   const supabase = createServiceRoleClient();
   const ownerMaps = await loadOwnerMaps(supabase);
   const { records, errors } = convertAll(rawRows, ownerMaps);
-  const existing = await existingIds(
+
+  // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定
+  const { toUpsert, newCount, updateCount, skippedCount, existingIds } = await classifyAgainstDb(
     supabase,
-    records.map((r) => r.id),
+    'members',
+    'id',
+    records,
+    (r) => r.id,
+    { updateOnly },
   );
 
-  let newCount = 0;
-  let updateCount = 0;
-  let skippedCount = 0;
+  const upsertIds = new Set(toUpsert.map((r) => r.id));
   const sample: PreviewResult['sample'] = [];
   for (const r of records) {
-    const isUpdate = existing.has(r.id);
-    let mode: '新規' | '更新' | 'スキップ';
-    if (isUpdate) {
-      updateCount++;
-      mode = '更新';
-    } else if (updateOnly) {
-      skippedCount++;
-      mode = 'スキップ';
-    } else {
-      newCount++;
-      mode = '新規';
-    }
-    if (sample!.length < 20) sample!.push({ row: 0, id: r.id, mode });
+    const mode: '新規' | '更新' | 'スキップ' = !upsertIds.has(r.id)
+      ? 'スキップ'
+      : existingIds.has(r.id)
+        ? '更新'
+        : '新規';
+    if (sample.length < 20) sample.push({ row: 0, id: r.id, mode });
   }
 
   const headers = rawRows[0] ? Object.keys(rawRows[0]) : [];
   return {
     ok: true,
     totalRows: rawRows.length,
-    validCount: updateOnly ? updateCount : records.length,
+    validCount: updateOnly ? updateCount : newCount + updateCount,
     newCount,
     updateCount,
     skippedCount,
@@ -194,25 +181,19 @@ export async function commitMembersCsv(
     };
   }
 
-  // 新規/更新の内訳を出すため、常に既存IDを照会する
-  const existing = await existingIds(
+  // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定。変更なしは upsert しない。
+  const { toUpsert, newCount, updateCount, skippedCount } = await classifyAgainstDb(
     supabase,
-    records.map((r) => r.id),
+    'members',
+    'id',
+    records,
+    (r) => r.id,
+    { updateOnly },
   );
 
-  let targetRecords = records;
-  let skippedCount = 0;
-  if (updateOnly) {
-    const before = targetRecords.length;
-    targetRecords = targetRecords.filter((r) => existing.has(r.id));
-    skippedCount = before - targetRecords.length;
-  }
-  const newCount = targetRecords.filter((r) => !existing.has(r.id)).length;
-  const updateCount = targetRecords.length - newCount;
-
   let upserted = 0;
-  for (let i = 0; i < targetRecords.length; i += BATCH) {
-    const batch = targetRecords.slice(i, i + BATCH);
+  for (let i = 0; i < toUpsert.length; i += BATCH) {
+    const batch = toUpsert.slice(i, i + BATCH);
     const { error } = await supabase.from('members').upsert(batch, { onConflict: 'id' });
     if (error) {
       return {

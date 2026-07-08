@@ -229,7 +229,7 @@ export function ImportPanel() {
                 <Stat label="総行数" value={preview.totalRows ?? 0} />
                 <Stat label="新規" value={preview.newCount ?? 0} tone="new" />
                 <Stat label="更新" value={preview.updateCount ?? 0} tone="update" />
-                {updateOnly && <Stat label="スキップ(新規)" value={preview.skippedCount ?? 0} />}
+                <Stat label="スキップ" value={preview.skippedCount ?? 0} />
                 <Stat
                   label="エラー"
                   value={preview.errorCount ?? 0}
@@ -330,7 +330,7 @@ export function ImportPanel() {
               <p role="status" className="text-sm text-green-700">
                 {committed.upserted?.toLocaleString()} 件を取り込みました。
                 {(committed.skippedCount ?? 0) > 0 &&
-                  ` (新規ID ${committed.skippedCount} 件はスキップ)`}
+                  ` (スキップ ${committed.skippedCount} 件: 変更なし等)`}
                 {(committed.errorCount ?? 0) > 0 && ` (エラー ${committed.errorCount} 件は除外)`}
               </p>
             )}

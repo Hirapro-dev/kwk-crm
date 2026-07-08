@@ -13,6 +13,7 @@
  *   - RLS は実行ユーザー(admin)権限で適用される
  */
 
+import { type Classification, classifyAgainstDb } from '@/lib/import/diff';
 import { type RowError, mapAndValidate, parseCsv } from '@/lib/import/parse';
 import { IMPORT_OBJECTS } from '@/lib/import/schema';
 import { createClient } from '@/lib/supabase/server';
@@ -68,26 +69,6 @@ async function assertAdmin(): Promise<string | null> {
   return null;
 }
 
-/** id 群のうち既に存在するものを返す(チャンク IN) */
-async function findExistingIds(
-  table: string,
-  idField: string,
-  ids: string[],
-): Promise<Set<string>> {
-  const supabase = await createClient();
-  const existing = new Set<string>();
-  for (let i = 0; i < ids.length; i += BATCH) {
-    const chunk = ids.slice(i, i + BATCH);
-    const { data, error } = await supabase.from(table).select(idField).in(idField, chunk);
-    if (error) throw new Error(error.message);
-    for (const r of data ?? []) {
-      const v = (r as Record<string, unknown>)[idField];
-      if (v != null) existing.add(String(v));
-    }
-  }
-  return existing;
-}
-
 export async function previewImport(
   object: string,
   csvText: string,
@@ -135,37 +116,29 @@ export async function previewImport(
     };
   }
 
-  let existing: Set<string>;
+  // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定
+  let cls: Classification<(typeof mapped.records)[number]>;
   try {
-    existing = await findExistingIds(
-      def.table,
-      def.idField,
-      mapped.records.map((r) => r.id),
-    );
+    const supabase = await createClient();
+    cls = await classifyAgainstDb(supabase, def.table, def.idField, mapped.records, (r) => r.id, {
+      updateOnly,
+      getData: (r) => r.data,
+    });
   } catch (e) {
     return {
       ok: false,
       error: `既存データ照会に失敗: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
-
-  let newCount = 0;
-  let updateCount = 0;
-  let skippedCount = 0;
+  const { toUpsert, newCount, updateCount, skippedCount, existingIds } = cls;
+  const upsertIds = new Set(toUpsert.map((r) => r.id));
   const sample: PreviewResult['sample'] = [];
   for (const r of mapped.records) {
-    const isUpdate = existing.has(r.id);
-    let mode: '新規' | '更新' | 'スキップ';
-    if (isUpdate) {
-      updateCount++;
-      mode = '更新';
-    } else if (updateOnly) {
-      skippedCount++;
-      mode = 'スキップ';
-    } else {
-      newCount++;
-      mode = '新規';
-    }
+    const mode: '新規' | '更新' | 'スキップ' = !upsertIds.has(r.id)
+      ? 'スキップ'
+      : existingIds.has(r.id)
+        ? '更新'
+        : '新規';
     if (sample.length < 20) sample.push({ row: r.row, id: r.id, mode });
   }
 
@@ -173,7 +146,7 @@ export async function previewImport(
     ok: true,
     totalRows: mapped.totalRows,
     // 取込対象になる行数(更新のみ時はスキップ分を除く)
-    validCount: updateOnly ? updateCount : mapped.records.length,
+    validCount: updateOnly ? updateCount : newCount + updateCount,
     newCount,
     updateCount,
     skippedCount,
@@ -232,34 +205,23 @@ export async function commitImport(
 
   const supabase = await createClient();
   let upserted = 0;
-  let skippedCount = 0;
 
-  // 新規/更新の内訳を出すため、常に既存IDを照会する
-  let existing: Set<string>;
+  // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定。変更なしは upsert しない。
+  let cls: Classification<(typeof mapped.records)[number]>;
   try {
-    existing = await findExistingIds(
-      def.table,
-      def.idField,
-      mapped.records.map((r) => r.id),
-    );
+    cls = await classifyAgainstDb(supabase, def.table, def.idField, mapped.records, (r) => r.id, {
+      updateOnly,
+      getData: (r) => r.data,
+    });
   } catch (e) {
     return {
       ok: false,
       error: `既存データ照会に失敗: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
+  const { toUpsert, newCount, updateCount, skippedCount } = cls;
 
-  // 更新のみモード: 既存IDの行だけに絞る(新規IDはスキップ)
-  let targetRecords = mapped.records;
-  if (updateOnly) {
-    const before = targetRecords.length;
-    targetRecords = targetRecords.filter((r) => existing.has(r.id));
-    skippedCount = before - targetRecords.length;
-  }
-  const newCount = targetRecords.filter((r) => !existing.has(r.id)).length;
-  const updateCount = targetRecords.length - newCount;
-
-  const rows = targetRecords.map((r) => r.data);
+  const rows = toUpsert.map((r) => r.data);
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
     const { error } = await supabase.from(def.table).upsert(batch, { onConflict: def.idField });

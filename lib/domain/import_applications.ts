@@ -16,6 +16,7 @@ import {
   applicationsExtraHeaderKeys,
   convertApplicationRow,
 } from '@/lib/import/applications_map';
+import { classifyAgainstDb } from '@/lib/import/diff';
 import { type RowError, parseCsv } from '@/lib/import/parse';
 // 取込はサービスロールで実行(auth.uid()=null → 監査ログに取込を記録しない)。
 import { createServiceRoleClient } from '@/lib/supabase/server';
@@ -53,6 +54,7 @@ function distinctValues(rows: Array<Record<string, string>>, header: string): st
   return [...s];
 }
 
+/** FK 検証用: 指定テーブルに実在する id 集合を返す */
 async function idsInTable(supabase: Db, table: string, ids: string[]): Promise<Set<string>> {
   const set = new Set<string>();
   for (let i = 0; i < ids.length; i += BATCH) {
@@ -136,37 +138,31 @@ export async function previewApplicationsCsv(
   const supabase = createServiceRoleClient();
   const maps = await buildResolveMaps(supabase, rawRows);
   const { records, errors } = convertAll(rawRows, maps);
-  const existing = await idsInTable(
+  // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定
+  const { toUpsert, newCount, updateCount, skippedCount, existingIds } = await classifyAgainstDb(
     supabase,
     'applications',
-    records.map((r) => r.id),
+    'id',
+    records,
+    (r) => r.id,
+    { updateOnly },
   );
-
-  let newCount = 0;
-  let updateCount = 0;
-  let skippedCount = 0;
+  const upsertIds = new Set(toUpsert.map((r) => r.id));
   const sample: PreviewResult['sample'] = [];
   for (const r of records) {
-    const isUpdate = existing.has(r.id);
-    let mode: '新規' | '更新' | 'スキップ';
-    if (isUpdate) {
-      updateCount++;
-      mode = '更新';
-    } else if (updateOnly) {
-      skippedCount++;
-      mode = 'スキップ';
-    } else {
-      newCount++;
-      mode = '新規';
-    }
-    if (sample!.length < 20) sample!.push({ row: 0, id: r.id, mode });
+    const mode: '新規' | '更新' | 'スキップ' = !upsertIds.has(r.id)
+      ? 'スキップ'
+      : existingIds.has(r.id)
+        ? '更新'
+        : '新規';
+    if (sample.length < 20) sample.push({ row: 0, id: r.id, mode });
   }
 
   const headers = rawRows[0] ? Object.keys(rawRows[0]) : [];
   return {
     ok: true,
     totalRows: rawRows.length,
-    validCount: updateOnly ? updateCount : records.length,
+    validCount: updateOnly ? updateCount : newCount + updateCount,
     newCount,
     updateCount,
     skippedCount,
@@ -210,26 +206,19 @@ export async function commitApplicationsCsv(
     };
   }
 
-  // 新規/更新の内訳を出すため、常に既存IDを照会する
-  const existing = await idsInTable(
+  // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定。変更なしは upsert しない。
+  const { toUpsert, newCount, updateCount, skippedCount } = await classifyAgainstDb(
     supabase,
     'applications',
-    records.map((r) => r.id),
+    'id',
+    records,
+    (r) => r.id,
+    { updateOnly },
   );
 
-  let targetRecords = records;
-  let skippedCount = 0;
-  if (updateOnly) {
-    const before = targetRecords.length;
-    targetRecords = targetRecords.filter((r) => existing.has(r.id));
-    skippedCount = before - targetRecords.length;
-  }
-  const newCount = targetRecords.filter((r) => !existing.has(r.id)).length;
-  const updateCount = targetRecords.length - newCount;
-
   let upserted = 0;
-  for (let i = 0; i < targetRecords.length; i += BATCH) {
-    const batch = targetRecords.slice(i, i + BATCH);
+  for (let i = 0; i < toUpsert.length; i += BATCH) {
+    const batch = toUpsert.slice(i, i + BATCH);
     const { error } = await supabase.from('applications').upsert(batch, { onConflict: 'id' });
     if (error) {
       return {

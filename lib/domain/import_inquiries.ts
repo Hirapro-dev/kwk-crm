@@ -11,6 +11,7 @@
  * 行変換は lib/import/inquiries.ts(純粋関数)を使用。
  */
 
+import { classifyAgainstDb } from '@/lib/import/diff';
 import {
   INQUIRY_COMMON_KEYS,
   type InquiryRecord,
@@ -128,33 +129,24 @@ export async function previewInquiriesCsv(
   const validMembers = await loadValidMemberIds(supabase, distinctMemberIds(rawRows));
   const { records, errors } = convertAll(rawRows, formMap, validMembers);
 
-  // 新規 / 更新 判定(既存 inquiries.id を問合せ)
-  const ids = records.map((r) => r.id);
-  const existing = new Set<string>();
-  for (let i = 0; i < ids.length; i += BATCH) {
-    const chunk = ids.slice(i, i + BATCH);
-    if (chunk.length === 0) continue;
-    const { data } = await supabase.from('inquiries').select('id').in('id', chunk);
-    for (const r of (data ?? []) as Array<{ id: string }>) existing.add(String(r.id));
-  }
-  let newCount = 0;
-  let updateCount = 0;
-  let skippedCount = 0;
+  // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定
+  const { toUpsert, newCount, updateCount, skippedCount, existingIds } = await classifyAgainstDb(
+    supabase,
+    'inquiries',
+    'id',
+    records,
+    (r) => r.id,
+    { updateOnly },
+  );
+  const upsertIds = new Set(toUpsert.map((r) => r.id));
   const sample: PreviewResult['sample'] = [];
   for (const r of records) {
-    const isUpdate = existing.has(r.id);
-    let mode: '新規' | '更新' | 'スキップ';
-    if (isUpdate) {
-      updateCount++;
-      mode = '更新';
-    } else if (updateOnly) {
-      skippedCount++;
-      mode = 'スキップ';
-    } else {
-      newCount++;
-      mode = '新規';
-    }
-    if (sample!.length < 20) sample!.push({ row: 0, id: r.id, mode });
+    const mode: '新規' | '更新' | 'スキップ' = !upsertIds.has(r.id)
+      ? 'スキップ'
+      : existingIds.has(r.id)
+        ? '更新'
+        : '新規';
+    if (sample.length < 20) sample.push({ row: 0, id: r.id, mode });
   }
 
   // 取込されるフォーム名のうち、未登録(新規作成予定)を数える
@@ -165,7 +157,7 @@ export async function previewInquiriesCsv(
   return {
     ok: true,
     totalRows: rawRows.length,
-    validCount: updateOnly ? updateCount : records.length,
+    validCount: updateOnly ? updateCount : newCount + updateCount,
     newCount,
     updateCount,
     skippedCount,
@@ -234,33 +226,20 @@ export async function commitInquiriesCsv(
     };
   }
 
-  // 新規/更新の内訳を出すため、常に既存の問合せIDを照会する
-  const existing = new Set<string>();
-  {
-    const ids = records.map((r) => r.id);
-    for (let i = 0; i < ids.length; i += BATCH) {
-      const chunk = ids.slice(i, i + BATCH);
-      if (chunk.length === 0) continue;
-      const { data } = await supabase.from('inquiries').select('id').in('id', chunk);
-      for (const r of (data ?? []) as Array<{ id: string }>) existing.add(String(r.id));
-    }
-  }
-
-  // 更新のみモード: 既存の問合せIDだけに絞る(新規IDはスキップ)
-  let targetRecords = records;
-  let skippedCount = 0;
-  if (updateOnly) {
-    const before = targetRecords.length;
-    targetRecords = targetRecords.filter((r) => existing.has(r.id));
-    skippedCount = before - targetRecords.length;
-  }
-  const newCount = targetRecords.filter((r) => !existing.has(r.id)).length;
-  const updateCount = targetRecords.length - newCount;
+  // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定。変更なしは upsert しない。
+  const { toUpsert, newCount, updateCount, skippedCount } = await classifyAgainstDb(
+    supabase,
+    'inquiries',
+    'id',
+    records,
+    (r) => r.id,
+    { updateOnly },
+  );
 
   // 3) inquiries upsert(問合せIDで突合)
   let upserted = 0;
-  for (let i = 0; i < targetRecords.length; i += BATCH) {
-    const batch = targetRecords.slice(i, i + BATCH);
+  for (let i = 0; i < toUpsert.length; i += BATCH) {
+    const batch = toUpsert.slice(i, i + BATCH);
     const { error } = await supabase.from('inquiries').upsert(batch, { onConflict: 'id' });
     if (error) {
       return {
