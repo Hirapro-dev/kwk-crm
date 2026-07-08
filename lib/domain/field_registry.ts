@@ -3,17 +3,15 @@
  * (CLAUDE.md §5.9 / §5.10: CSV取込で新カラム検出 → field_definitions 追加)。
  *
  * - is_in_db=false(extra), is_custom=true で登録
- * - 既定は一覧/詳細とも非表示(オブジェクト管理で管理者が表示ONにする)
+ * - 既定は「一覧=非表示 / 詳細=表示」。CSVに増えた列が詳細に自動で出るようにする。
+ *   (一覧は列数が多いオブジェクト(会員170列超)で崩れないよう非表示のまま)
  * - 既存(object_id, field_name)はスキップ
  * サーバー専用。import ハンドラから呼ぶ。
  */
 
 import { createClient } from '@/lib/supabase/server';
 
-export async function registerExtraFields(
-  objectId: string,
-  keys: string[],
-): Promise<number> {
+export async function registerExtraFields(objectId: string, keys: string[]): Promise<number> {
   const unique = [...new Set(keys)].filter((k) => k && k.trim() !== '');
   if (unique.length === 0) return 0;
 
@@ -53,7 +51,7 @@ export async function registerExtraFields(
         is_custom: true,
         is_system: false,
         is_visible_list: false,
-        is_visible_detail: false,
+        is_visible_detail: true,
         sort_order_list: sort,
         sort_order_detail: sort,
         csv_column_name: k,
