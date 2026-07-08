@@ -17,6 +17,8 @@ export interface WithdrawalParentRow {
   principal: number | null;
   profit: number | null;
   total_amount: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface WithdrawalChildRow {
@@ -29,11 +31,14 @@ export interface WithdrawalChildRow {
   campaign: string | null;
   withdrawal_date: string | null;
   amount: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
-const PARENT_COLS = 'id,member_id,member_name,project_name,campaign,principal,profit,total_amount';
+const PARENT_COLS =
+  'id,member_id,member_name,project_name,campaign,principal,profit,total_amount,created_at,updated_at';
 const CHILD_COLS =
-  'id,parent_no,parent_id,member_id,member_name,project_name,campaign,withdrawal_date,amount';
+  'id,parent_no,parent_id,member_id,member_name,project_name,campaign,withdrawal_date,amount,created_at,updated_at';
 
 /** 一覧でソート可能なカラム(SortHeader からの ?sort= を受ける) */
 const PARENT_SORTABLE = new Set([
