@@ -467,12 +467,15 @@ CREATE INDEX idx_act_date        ON activities(registered_date);
 - `match_prefix` boolean NOT NULL DEFAULT false — 下層パスでもアクティブ表示にするか
 - `sort_order` int NOT NULL DEFAULT 100 — 表示順
 - `is_visible` boolean NOT NULL DEFAULT true — タブ表示ON/OFF
+- `parent_id` text FK → nav_items (nullable) — 親タブID。指定時は親タブのホバープルダウン内に表示 (2026-07 追加, migration 65)
+- `visible_roles` text[] (nullable) — 表示を許可するロール群。NULL は全ロール表示 (2026-07 追加, migration 65)。`/settings/roles` で管理
 - `created_at`, `updated_at` timestamptz
 
 **RLS**: 全員 SELECT (レイアウト描画に必要)、admin のみ INSERT/UPDATE/DELETE。
 **初期シード**: 現行 `NAV_TABS` (ダッシュボード/顧客情報/問合せ/申込/サマリ/レポート)。
 **フォールバック**: テーブル未適用・空のときは `lib/domain/nav_items.ts` の既定リストを使用し、
-レイアウトが壊れないようにする (migration: 14)。
+レイアウトが壊れないようにする (migration: 14)。新列(parent_id/visible_roles)未適用時も
+旧列のみで取得して壊れないようにする。
 
 ### 5.10c import_sources (定期取込ソース) ★2026-06 追加
 Google Drive 上の指定CSVを各オブジェクトに紐づけ、ボタン1つで取込(upsert)するための設定。
@@ -533,6 +536,37 @@ Phase 1 では:
   - 実質変更なし(`updated_at` のみ)の UPDATE は記録しない。
 **RLS**: admin のみ SELECT。INSERT/UPDATE/DELETE ポリシーは設けず、記録はトリガー関数(SECURITY DEFINER)のみ。
 **フォールバック**: テーブル未適用でも一覧は空配列で画面を壊さない。
+
+### 5.13 withdrawal_parents / withdrawal_children (出金管理-親/子) ★2026-07 追加 (migration 63)
+出金(償還)管理の親子オブジェクト。Google Drive の「SF出金管理システム元データ」CSV
+(【親】取込用 / 【子】取込用)を取込専用オブジェクトとして保持する。
+元CSV列をそのままカラム化し、会員ID(K-)で members に紐付ける。
+
+**withdrawal_parents (出金管理-親)** — 1行 = 1償還枠(元金・利益)
+- `id` text PK — 償還-親No (`SO-XXXXXX`)
+- `member_id` text FK → members (nullable、実在チェック) / `member_name` text — 会員氏名スナップショット
+- `project_name` text — 投資案件(名称のまま保持) / `campaign` text — ｷｬﾝﾍﾟｰﾝ名
+- `principal` numeric(18,2) — 元金 / `profit` numeric(18,2) — 利益 / `total_amount` numeric(18,2) — 元利合計
+- `management_label` text — 出金管理【親】 / `member_legacy_sf_id` text — SFID (0015i…)
+- `created_at`, `updated_at`, `deleted_at` timestamptz
+
+**withdrawal_children (出金管理-子)** — 1行 = 1回の出金
+- `id` text PK — 償還-子No (`SC-XXXXXX`)
+- `parent_no` text — 償還-親No 原文 / `parent_id` text FK → withdrawal_parents (実在時のみ)
+- `member_id` text FK → members (nullable) / `member_name` text
+- `project_name` text / `campaign` text
+- `withdrawal_date` date — 出金日 / `amount` numeric(18,2) — 出金額
+- `management_label` text — 出金管理【子】 / `member_legacy_sf_id` text — セールスフォースＩＤ
+- `legacy_parent_sf_id` text — 償還管理ID親 / `legacy_sf_id` text — 償還管理ID子
+- `created_at`, `updated_at`, `deleted_at` timestamptz
+
+**RLS**: SELECT は admin / manager / support のみ(出金情報は機微のため)。書込は admin のみ
+(取込はサービスロールで実行)。
+**取込**: 専用ハンドラ(lib/domain/import_withdrawals.ts)。ID(SO-/SC-)で upsert、
+会員ID・親No は実在チェックして紐付け(無ければ null、原文は保持)。定期取込(Drive)対象。
+親→子の順に取り込むこと(子の親FK解決のため)。
+**画面**: `/withdrawal-parents` `/withdrawal-children` (一覧+詳細)。メニューバーは
+「出金管理」親タブのホバープルダウンから遷移(nav_items の parent_id / visible_roles)。
 
 ---
 
