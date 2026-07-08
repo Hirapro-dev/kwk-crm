@@ -11,7 +11,12 @@
  * 行変換は lib/import/members_map.ts(純粋関数)を使用。
  */
 
-import { type MemberRecord, type OwnerMaps, convertMemberRow } from '@/lib/import/members_map';
+import {
+  type MemberRecord,
+  type OwnerMaps,
+  convertMemberRow,
+  membersExtraHeaderKeys,
+} from '@/lib/import/members_map';
 import { type RowError, parseCsv } from '@/lib/import/parse';
 // 取込(preview/commit)はサービスロールで実行する。
 // commit の upsert が auth.uid()=null になり、監査ログ(audit_logs)に
@@ -220,13 +225,11 @@ export async function commitMembersCsv(
     upserted += batch.length;
   }
 
-  // extra に入った新カラムをフィールド管理へ自動登録(失敗しても取込は成功扱い)
+  // CSVヘッダー基準で「標準カラム以外の全列」をフィールド管理へ自動登録。
+  // ※ 値から集めると「全行が空の新列」が登録されないため、ヘッダーから拾う。
+  //   (失敗しても取込は成功扱い)
   try {
-    const keys = new Set<string>();
-    for (const r of records) {
-      for (const k of Object.keys((r.extra as Record<string, unknown>) ?? {})) keys.add(k);
-    }
-    await registerExtraFields('members', [...keys]);
+    await registerExtraFields('members', membersExtraHeaderKeys(rawRows));
   } catch {
     /* フィールド登録の失敗は取込本体に影響させない */
   }

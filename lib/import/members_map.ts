@@ -50,6 +50,21 @@ const CONSUMED_HEADERS = new Set<string>([
   ...DIRECT_FIELDS.map((f) => f.header),
 ]);
 
+/**
+ * CSV に現れたヘッダーのうち「標準カラムに消費されない列」= extra 行きの列名を返す。
+ * ※ 値の有無に関わらずヘッダー基準で拾う(全行が空の新列も項目登録できるように)。
+ *   フィールド自動登録(field_registry)に渡す用途。
+ */
+export function membersExtraHeaderKeys(rawRows: Array<Record<string, string>>): string[] {
+  const set = new Set<string>();
+  for (const r of rawRows) {
+    for (const k of Object.keys(r)) {
+      if (k && k.trim() !== '' && !CONSUMED_HEADERS.has(k)) set.add(k);
+    }
+  }
+  return [...set];
+}
+
 /** テンプレCSVの共通ヘッダー(ダウンロード用) */
 export const MEMBER_TEMPLATE_HEADERS = [
   '会員ID',

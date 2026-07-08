@@ -13,6 +13,7 @@
 import {
   type AppRecord,
   type AppResolveMaps,
+  applicationsExtraHeaderKeys,
   convertApplicationRow,
 } from '@/lib/import/applications_map';
 import { type RowError, parseCsv } from '@/lib/import/parse';
@@ -241,12 +242,10 @@ export async function commitApplicationsCsv(
     upserted += batch.length;
   }
 
+  // CSVヘッダー基準で「標準カラム以外の全列」をフィールド管理へ自動登録。
+  // ※ 値から集めると「全行が空の新列」が登録されないため、ヘッダーから拾う。
   try {
-    const keys = new Set<string>();
-    for (const r of records) {
-      for (const k of Object.keys((r.extra as Record<string, unknown>) ?? {})) keys.add(k);
-    }
-    await registerExtraFields('applications', [...keys]);
+    await registerExtraFields('applications', applicationsExtraHeaderKeys(rawRows));
   } catch {
     /* フィールド登録の失敗は取込本体に影響させない */
   }

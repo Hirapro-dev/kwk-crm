@@ -42,6 +42,20 @@ const CONSUMED_HEADERS = new Set<string>([
   ...DIRECT_FIELDS.map((f) => f.header),
 ]);
 
+/**
+ * CSV に現れたヘッダーのうち「標準カラムに消費されない列」= extra 行きの列名を返す。
+ * ※ 値の有無に関わらずヘッダー基準で拾う(全行が空の新列も項目登録できるように)。
+ */
+export function applicationsExtraHeaderKeys(rawRows: Array<Record<string, string>>): string[] {
+  const set = new Set<string>();
+  for (const r of rawRows) {
+    for (const k of Object.keys(r)) {
+      if (k && k.trim() !== '' && !CONSUMED_HEADERS.has(k)) set.add(k);
+    }
+  }
+  return [...set];
+}
+
 export const APPLICATION_TEMPLATE_HEADERS = [
   '申込情報ID', '投資案件', '会員ID', '問合せ管理ID', '申込日', 'ステータス',
   '入金/移動', '永久担当', '申込獲得者', '入金日', '入金額', '入金予定日', '入金予定額',

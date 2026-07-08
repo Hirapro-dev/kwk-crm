@@ -38,6 +38,20 @@ export function cleanInquiryValue(v: unknown): string | null {
   return s;
 }
 
+/**
+ * CSV に現れたヘッダーのうち「共通カラムに消費されない列」= extra 行きの列名を返す。
+ * ※ 値の有無に関わらずヘッダー基準で拾う(全行が空の新列も項目登録できるように)。
+ */
+export function inquiriesExtraHeaderKeys(rawRows: Array<Record<string, string>>): string[] {
+  const set = new Set<string>();
+  for (const r of rawRows) {
+    for (const k of Object.keys(r)) {
+      if (k && k.trim() !== '' && !INQUIRY_COMMON_KEYS.has(k)) set.add(k);
+    }
+  }
+  return [...set];
+}
+
 /** 共通キー以外を extra に格納(クリーニング後、非空のみ) */
 export function buildInquiryExtra(
   raw: Record<string, string>,

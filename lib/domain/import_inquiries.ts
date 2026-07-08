@@ -11,7 +11,12 @@
  * 行変換は lib/import/inquiries.ts(純粋関数)を使用。
  */
 
-import { INQUIRY_COMMON_KEYS, type InquiryRecord, convertInquiryRow } from '@/lib/import/inquiries';
+import {
+  INQUIRY_COMMON_KEYS,
+  type InquiryRecord,
+  convertInquiryRow,
+  inquiriesExtraHeaderKeys,
+} from '@/lib/import/inquiries';
 import { type RowError, parseCsv } from '@/lib/import/parse';
 // 取込はサービスロールで実行(auth.uid()=null → 監査ログに取込を記録しない)。
 import { createServiceRoleClient } from '@/lib/supabase/server';
@@ -268,12 +273,10 @@ export async function commitInquiriesCsv(
     upserted += batch.length;
   }
 
+  // CSVヘッダー基準で「共通カラム以外の全列」をフィールド管理へ自動登録。
+  // ※ 値から集めると「全行が空の新列」が登録されないため、ヘッダーから拾う。
   try {
-    const keys = new Set<string>();
-    for (const r of records) {
-      for (const k of Object.keys((r.extra as Record<string, unknown>) ?? {})) keys.add(k);
-    }
-    await registerExtraFields('inquiries', [...keys]);
+    await registerExtraFields('inquiries', inquiriesExtraHeaderKeys(rawRows));
   } catch {
     /* フィールド登録の失敗は取込本体に影響させない */
   }
