@@ -23,12 +23,12 @@ export function renderApplicationHighlightFieldValue(
     return <span>{app.project?.name ?? '-'}</span>;
   }
 
-  // 会員ID: 会員詳細へのリンク
+  // 会員: 会員氏名を表示して会員詳細へリンク(基本情報の表示に合わせる)
   if (field_name === 'member_id') {
     if (!app.member) return <span className="text-muted-foreground">-</span>;
     return (
       <Link href={`/members/${app.member.id}`} className="text-primary hover:underline">
-        {app.member.id}
+        {app.member.name ?? app.member.id}
       </Link>
     );
   }
