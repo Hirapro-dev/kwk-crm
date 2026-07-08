@@ -5,8 +5,7 @@
  * - JSONB extra(案件固有項目)
  */
 
-import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { renderApplicationHighlightFieldValue } from '@/components/applications/ApplicationHighlightFieldValue';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getApplication } from '@/lib/domain/applications';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { formatDate } from '@/lib/utils/date';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -21,28 +22,23 @@ interface PageProps {
 
 export default async function ApplicationDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const [app, detailFields] = await Promise.all([
+  const [app, detailFields, highlightFields] = await Promise.all([
     getApplication(id),
     // オブジェクト管理 (/settings/objects/applications) で「詳細」表示ONのフィールドのみ
     getVisibleFields('applications', 'detail'),
+    // レイアウトエディタの「ハイライト」設定(is_visible_highlight 順)
+    getVisibleFields('applications', 'highlight'),
   ]);
   if (!app) notFound();
 
-  return (
-    <div className="space-y-3">
-      {/* パンくず(戻るリンク) */}
-      <Link href="/applications" className="sf-back-link text-xs">
-        ← 申込一覧へ
-      </Link>
-
-      {/* Highlight Panel: 会員/問合せ詳細と同じ Salesforce 風カードヘッダー */}
-      <HighlightPanel
-        iconLabel="APP"
-        iconColor="#04844b"
-        objectLabel="申込"
-        recordName={app.project?.name ?? '(案件未設定)'}
-        recordSubName={app.id}
-        facts={[
+  // ハイライト設定があればそれで組み立て、無ければ従来の既定4項目にフォールバック
+  const highlightFacts =
+    highlightFields.length > 0
+      ? highlightFields.map((f) => ({
+          label: f.label ?? f.field_name,
+          value: renderApplicationHighlightFieldValue(f, app),
+        }))
+      : [
           {
             label: 'ステータス',
             value: app.status ? <Badge>{app.status}</Badge> : '-',
@@ -58,17 +54,30 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           {
             label: '会員ID',
             value: app.member ? (
-              <Link
-                href={`/members/${app.member.id}`}
-                className="text-primary hover:underline"
-              >
+              <Link href={`/members/${app.member.id}`} className="text-primary hover:underline">
                 {app.member.id}
               </Link>
             ) : (
               '-'
             ),
           },
-        ]}
+        ];
+
+  return (
+    <div className="space-y-3">
+      {/* パンくず(戻るリンク) */}
+      <Link href="/applications" className="sf-back-link text-xs">
+        ← 申込一覧へ
+      </Link>
+
+      {/* Highlight Panel: 会員/問合せ詳細と同じ Salesforce 風カードヘッダー */}
+      <HighlightPanel
+        iconLabel="APP"
+        iconColor="#04844b"
+        objectLabel="申込"
+        recordName={app.project?.name ?? '(案件未設定)'}
+        recordSubName={app.id}
+        facts={highlightFacts}
       />
 
       {/*
@@ -89,18 +98,14 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
             // (/settings/objects/applications) のレイアウトエディタで制御する。
             fieldOverrides={{
               member_id: app.member ? (
-                <Link
-                  href={`/members/${app.member.id}`}
-                  className="text-primary hover:underline"
-                >
+                <Link href={`/members/${app.member.id}`} className="text-primary hover:underline">
                   {app.member.name ?? app.member.id}
                 </Link>
               ) : (
                 '-'
               ),
               project_id: app.project?.name ?? '-',
-              acquirer_id:
-                app.acquirer?.full_name ?? app.acquirer_name_raw ?? '-',
+              acquirer_id: app.acquirer?.full_name ?? app.acquirer_name_raw ?? '-',
               owner_id: app.owner?.full_name ?? app.owner_name_raw ?? '-',
             }}
           />
