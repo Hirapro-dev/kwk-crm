@@ -210,7 +210,8 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
       { field: 'parent_no', label: '償還-親No', type: 'text' },
       { field: 'member_id', label: '会員ID', type: 'text' },
       { field: 'member_name', label: '会員氏名', type: 'text' },
-      { field: 'project_name', label: '投資案件', type: 'text' },
+      // 実CSVのヘッダーは「案件」(旧・取込用CSVは「投資案件」。ハンドラ側で別名対応)
+      { field: 'project_name', label: '案件', type: 'text' },
       { field: 'campaign', label: 'ｷｬﾝﾍﾟｰﾝ名', type: 'text' },
       { field: 'withdrawal_date', label: '出金日', type: 'date' },
       { field: 'amount', label: '出金額', type: 'number' },

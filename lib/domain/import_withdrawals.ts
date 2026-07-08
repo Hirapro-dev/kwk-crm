@@ -35,12 +35,43 @@ async function assertAdmin(): Promise<string | null> {
   return null;
 }
 
-function parseAll(csvTexts: string[]): Array<Record<string, string>> {
+/**
+ * ヘッダー行より前のゴミ行(合計金額行など)を取り除く。
+ * 元CSVはヘッダーの上に集計行があるため、ID列ラベル(償還-親No/償還-子No)を含む
+ * 最初の行をヘッダーとみなし、それ以降だけをパースする。
+ * 見つからない場合は原文のまま返す(従来の取込用CSVは1行目がヘッダー)。
+ */
+function sliceFromHeaderLine(text: string, idLabel: string): string {
+  const lines = text.split(/\r?\n/);
+  const idx = lines.findIndex((l) => l.includes(idLabel));
+  if (idx <= 0) return text;
+  return lines.slice(idx).join('\n');
+}
+
+function parseAll(csvTexts: string[], idLabel: string): Array<Record<string, string>> {
   const rows: Array<Record<string, string>> = [];
   for (const t of csvTexts) {
-    if (t && t.trim() !== '') rows.push(...parseCsv(t));
+    if (t && t.trim() !== '') rows.push(...parseCsv(sliceFromHeaderLine(t, idLabel)));
   }
   return rows;
+}
+
+/**
+ * ヘッダーの表記ゆれ対応。
+ * 子の案件列は 実CSV=「案件」/ 旧・取込用CSV=「投資案件」の2表記がある。
+ */
+const HEADER_ALIASES: Record<string, string[]> = {
+  案件: ['投資案件'],
+  投資案件: ['案件'],
+};
+
+/** ラベル本命 → 無ければ別名の順で値を取り出す */
+function rawValueFor(raw: Record<string, string>, label: string): string {
+  if (raw[label] !== undefined) return (raw[label] ?? '').toString();
+  for (const alias of HEADER_ALIASES[label] ?? []) {
+    if (raw[alias] !== undefined) return (raw[alias] ?? '').toString();
+  }
+  return '';
 }
 
 /** CSV 内に現れる指定ヘッダーの値(前後trim・非空)の一覧 */
@@ -81,7 +112,7 @@ function convertRow(
 ): { record?: WithdrawalRecord; error?: string } {
   const rec: WithdrawalRecord = {};
   for (const f of ctx.def.fields) {
-    const rawVal = (raw[f.label] ?? '').toString();
+    const rawVal = rawValueFor(raw, f.label);
     const res = coerceValue(f.type, rawVal);
     if (isCoerceErr(res)) return { error: `${f.label}: ${res.error}` };
     rec[f.field] = res.value;
@@ -143,6 +174,11 @@ async function buildContext(
   return { def, validMemberIds };
 }
 
+/** ヘッダー行検出に使うID列ラベル */
+function idLabelFor(object: 'withdrawal_parents' | 'withdrawal_children'): string {
+  return object === 'withdrawal_parents' ? '償還-親No' : '償還-子No';
+}
+
 async function previewWithdrawals(
   object: 'withdrawal_parents' | 'withdrawal_children',
   csvTexts: string[],
@@ -153,7 +189,7 @@ async function previewWithdrawals(
 
   let rawRows: Array<Record<string, string>>;
   try {
-    rawRows = parseAll(csvTexts);
+    rawRows = parseAll(csvTexts, idLabelFor(object));
   } catch (e) {
     return { ok: false, error: `CSV解析に失敗: ${e instanceof Error ? e.message : String(e)}` };
   }
@@ -215,7 +251,7 @@ async function commitWithdrawals(
 
   let rawRows: Array<Record<string, string>>;
   try {
-    rawRows = parseAll(csvTexts);
+    rawRows = parseAll(csvTexts, idLabelFor(object));
   } catch (e) {
     return { ok: false, error: `CSV解析に失敗: ${e instanceof Error ? e.message : String(e)}` };
   }
