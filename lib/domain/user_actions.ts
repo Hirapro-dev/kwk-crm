@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getCurrentUser } from './auth';
@@ -171,7 +171,9 @@ export async function inviteUser(input: {
     return { ok: false, error: '招待は admin のみ可能です' };
   }
 
-  const supabase = await createClient();
+  // Supabase Auth の Admin API(inviteUserByEmail 等)はサービスロールキーが必須。
+  // 通常クライアントで呼ぶと "User not allowed" になるため service role を使う。
+  const supabase = createServiceRoleClient();
 
   // 既に同メアドの public.users が居ないかチェック
   const { data: existing, error: chkErr } = await supabase
