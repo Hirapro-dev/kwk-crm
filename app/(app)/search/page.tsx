@@ -65,7 +65,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
                   key={m.id}
                   href={`/members/${m.id}`}
                   title={m.name ?? '(名称未設定)'}
-                  sub={`${m.id}${m.phone1 ? ` ・ ${m.phone1}` : ''}${m.email1 ? ` ・ ${m.email1}` : ''}`}
+                  sub={`${m.id}${m.phone1 ? ` ・ ${m.phone1}` : ''}${m.email1 ? ` ・ ${m.email1}` : ''}${m.address ? ` ・ ${m.address}` : ''}`}
                 />
               ))
             )}
