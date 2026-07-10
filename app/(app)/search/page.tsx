@@ -60,14 +60,29 @@ export default async function SearchPage({ searchParams }: PageProps) {
             {members.rows.length === 0 ? (
               <Empty />
             ) : (
-              members.rows.map((m) => (
-                <ResultRow
-                  key={m.id}
-                  href={`/members/${m.id}`}
-                  title={m.name ?? '(名称未設定)'}
-                  sub={`${m.id}${m.phone1 ? ` ・ ${m.phone1}` : ''}${m.email1 ? ` ・ ${m.email1}` : ''}${m.address ? ` ・ ${m.address}` : ''}`}
-                />
-              ))
+              members.rows.map((m) => {
+                // 会員ID・プロテクト者・電話番号・メールアドレス・住所・累計入金額
+                const sub = [
+                  m.id,
+                  m.protect_by_user?.full_name,
+                  m.phone1,
+                  m.email1,
+                  m.address,
+                  m.total_paid_amount != null
+                    ? `累計入金 ¥${m.total_paid_amount.toLocaleString()}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ・ ');
+                return (
+                  <ResultRow
+                    key={m.id}
+                    href={`/members/${m.id}`}
+                    title={m.name ?? '(名称未設定)'}
+                    sub={sub}
+                  />
+                );
+              })
             )}
           </ResultCard>
 
