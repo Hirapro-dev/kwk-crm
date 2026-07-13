@@ -13,6 +13,7 @@ import { ActivityTimeline } from '@/components/activities/ActivityTimeline';
 import { NewActivityTrigger } from '@/components/activities/NewActivityTrigger';
 import { CollapsibleSection } from '@/components/layout/CollapsibleSection';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
+import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
 import { renderHighlightFieldValue } from '@/components/members/HighlightFieldValue';
 import { MemberDeleteButton } from '@/components/members/MemberDeleteButton';
 import { MemberEditDialog } from '@/components/members/MemberEditDialog';
@@ -142,17 +143,21 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
         recordSubName={`${member.id}${member.name_kana ? ` ・ ${member.name_kana}` : ''}`}
         facts={highlightFacts}
         actions={
-          me.role === 'admin' ? (
-            <>
-              <MemberEditDialog
-                member={member}
-                currentUserRole={me.role}
-                protectUsers={protectUsers}
-                detailFields={detailFields}
-              />
-              <MemberDeleteButton memberId={member.id} memberName={member.name ?? member.id} />
-            </>
-          ) : null
+          <>
+            {/* 共有ボタンは全ロール表示。編集/削除の左隣に配置する */}
+            <ShareLinkButton />
+            {me.role === 'admin' && (
+              <>
+                <MemberEditDialog
+                  member={member}
+                  currentUserRole={me.role}
+                  protectUsers={protectUsers}
+                  detailFields={detailFields}
+                />
+                <MemberDeleteButton memberId={member.id} memberName={member.name ?? member.id} />
+              </>
+            )}
+          </>
         }
       />
 

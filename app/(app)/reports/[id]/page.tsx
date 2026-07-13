@@ -7,6 +7,7 @@
  */
 
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
+import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
 import { ResizableSplit } from '@/components/layout/ResizableSplit';
 import { ScrollRestorer } from '@/components/layout/ScrollRestorer';
 import { ReportResultView } from '@/components/reports/ReportResultView';
@@ -130,6 +131,8 @@ export default async function ReportRunPage({ params, searchParams }: PageProps)
         facts={panelFacts}
         actions={
           <>
+            {/* 現在の表示条件(クエリ含む)のリンクをコピー */}
+            <ShareLinkButton />
             {hasMemberLink &&
               (isSplit ? (
                 <Link href={toNormalHref}>
