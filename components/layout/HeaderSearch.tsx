@@ -68,6 +68,9 @@ export function HeaderSearch() {
         onChange={(e) => {
           setQ(e.target.value);
           setActiveIndex(-1);
+          // 候補クリック/Enter遷移後は preventDefault で input がフォーカスを保持したままになり、
+          // 再入力時に onFocus が発火しないことがある。入力があれば必ず候補表示状態にする。
+          setFocused(true);
         }}
         onFocus={() => setFocused(true)}
         // クリックによる遷移(onMouseDown)を先に処理させるため、blur は少し遅延させて閉じる
