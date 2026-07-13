@@ -3,6 +3,7 @@
 import { Search, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createContext, useContext, useRef, useState } from 'react';
+import { useQuickSearch } from './useQuickSearch';
 
 /**
  * モバイル検索シェル。
@@ -39,6 +40,10 @@ export function MobileSearchShell({ children }: { children: React.ReactNode }) {
     setOpen(false);
     setQ('');
   };
+  const go = (href: string) => {
+    router.push(href);
+    close();
+  };
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const t = q.trim();
@@ -47,6 +52,9 @@ export function MobileSearchShell({ children }: { children: React.ReactNode }) {
       close();
     }
   };
+
+  const { items, loading } = useQuickSearch(q);
+  const showDropdown = open && q.trim().length > 0;
 
   return (
     <SearchCtx.Provider value={{ open, toggle }}>
@@ -61,6 +69,7 @@ export function MobileSearchShell({ children }: { children: React.ReactNode }) {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="会員名 / ID / メール などで検索"
+              autoComplete="off"
               className="flex-1 bg-transparent text-base text-white placeholder:text-white/50 focus:outline-none"
             />
             <button
@@ -72,6 +81,30 @@ export function MobileSearchShell({ children }: { children: React.ReactNode }) {
               <X className="h-4 w-4" />
             </button>
           </form>
+        </div>
+      )}
+      {showDropdown && (
+        <div className="max-h-[60vh] overflow-auto bg-white text-foreground md:hidden">
+          {items.length === 0 ? (
+            <div className="px-4 py-3 text-xs text-muted-foreground">
+              {loading ? '検索中…' : '該当するレコードが見つかりません'}
+            </div>
+          ) : (
+            items.map((it) => (
+              <button
+                key={`${it.kind}:${it.href}`}
+                type="button"
+                onClick={() => go(it.href)}
+                className="block w-full border-b px-4 py-2.5 text-left active:bg-accent"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm font-medium text-foreground">{it.title}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{it.objectLabel}</span>
+                </div>
+                {it.sub && <div className="truncate text-xs text-muted-foreground">{it.sub}</div>}
+              </button>
+            ))
+          )}
         </div>
       )}
     </SearchCtx.Provider>
