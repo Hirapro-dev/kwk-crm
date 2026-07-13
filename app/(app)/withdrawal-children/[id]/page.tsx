@@ -8,6 +8,7 @@
  */
 
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
+import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
 import { Card } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { getWithdrawalChild } from '@/lib/domain/withdrawals';
@@ -82,6 +83,7 @@ export default async function WithdrawalChildDetailPage({
           },
           { label: '出金管理【親】', value: parentLink },
         ]}
+        actions={<ShareLinkButton />}
       />
 
       {/* 詳細(2カラム項目表)。旧SFの並びを踏襲。 */}

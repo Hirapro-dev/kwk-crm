@@ -7,6 +7,7 @@
 
 import { renderInquiryHighlightFieldValue } from '@/components/inquiries/InquiryHighlightFieldValue';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
+import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -85,9 +86,12 @@ export default async function InquiryDetailPage({ params }: PageProps) {
         recordSubName={inquiry.id}
         facts={highlightFacts}
         actions={
-          inquiry.member ? undefined : (
-            <ConvertButton inquiryId={inquiry.id} defaultName={inquiry.name} />
-          )
+          <>
+            <ShareLinkButton />
+            {inquiry.member ? null : (
+              <ConvertButton inquiryId={inquiry.id} defaultName={inquiry.name} />
+            )}
+          </>
         }
       />
 

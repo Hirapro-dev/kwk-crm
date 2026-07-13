@@ -7,6 +7,7 @@
 
 import { renderApplicationHighlightFieldValue } from '@/components/applications/ApplicationHighlightFieldValue';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
+import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,6 +79,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
         recordName={app.project?.name ?? '(案件未設定)'}
         recordSubName={app.id}
         facts={highlightFacts}
+        actions={<ShareLinkButton />}
       />
 
       {/*

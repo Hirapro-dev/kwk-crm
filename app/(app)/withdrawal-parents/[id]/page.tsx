@@ -13,6 +13,7 @@
  */
 
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
+import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -101,6 +102,7 @@ export default async function WithdrawalParentDetailPage({
           { label: '利益', value: yen(parent.profit) },
           { label: '元利合計', value: yen(parent.total_amount) },
         ]}
+        actions={<ShareLinkButton />}
       />
 
       {/* 詳細(2カラム項目表)。右列は金額と償還の計算フィールド。 */}
