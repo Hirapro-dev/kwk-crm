@@ -160,12 +160,10 @@ export async function deleteMember(id: string): Promise<{ error?: string }> {
     return { error: '会員の削除は管理者のみ可能です' };
   }
 
+  // RLS の想定外挙動で通常 UPDATE では deleted_at セットが拒否されるため、
+  // SECURITY DEFINER の RPC(soft_delete_member)経由で確実に論理削除する(migration 67)。
   const supabase = await createClient();
-  const { error } = await supabase
-    .from('members')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id)
-    .is('deleted_at', null);
+  const { error } = await supabase.rpc('soft_delete_member', { p_id: id });
 
   if (error) return { error: error.message };
 
