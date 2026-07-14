@@ -16,7 +16,7 @@ import { deleteActivity, updateActivity } from '@/lib/domain/activity_actions';
 import type { ActivityListItem } from '@/lib/domain/types';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 
 const CONTACT_TYPES = ['アウト', 'イン', 'LINE／メール', '対面接触（個別面談）', 'その他'] as const;
@@ -198,6 +198,10 @@ interface Props {
   currentUserRole: string;
   /** 会員名列(会員詳細へのリンク)を表示するか。ダッシュボード・直近一覧で使用 */
   showMember?: boolean;
+  /** 分割ビュー: 会員名クリックで詳細ページに遷移せず、右ペインに詳細を出す(URL の selected を差し替え) */
+  splitMode?: boolean;
+  /** 分割ビューで現在選択中の会員ID(選択行ハイライト用) */
+  selectedMemberId?: string;
 }
 
 export function ActivityTimeline({
@@ -205,10 +209,22 @@ export function ActivityTimeline({
   currentUserId,
   currentUserRole,
   showMember = false,
+  splitMode = false,
+  selectedMemberId,
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleting, startDelete] = useTransition();
+
+  // 分割ビュー用: 現在のクエリを維持したまま selected を差し替えるリンク先を作る
+  const buildSelectHref = (memberId: string) => {
+    const p = new URLSearchParams(searchParams?.toString() ?? '');
+    p.set('view', 'split');
+    p.set('selected', memberId);
+    return `${pathname}?${p.toString()}`;
+  };
 
   const canEdit = (a: ActivityListItem) =>
     currentUserRole === 'admin' || a.created_by_id === currentUserId;
@@ -255,7 +271,14 @@ export function ActivityTimeline({
             const editing = editingId === a.id;
             return (
               <>
-                <TableRow key={a.id} className="sf-row-hover">
+                <TableRow
+                  key={a.id}
+                  className={
+                    splitMode && selectedMemberId && a.member?.id === selectedMemberId
+                      ? 'sf-row-hover bg-primary/10'
+                      : 'sf-row-hover'
+                  }
+                >
                   <TableCell className="whitespace-nowrap py-2 text-xs">
                     <time dateTime={ts}>{formatDateTime(ts)}</time>
                   </TableCell>
@@ -263,7 +286,9 @@ export function ActivityTimeline({
                     <TableCell className="whitespace-nowrap py-2 text-sm">
                       {a.member?.id ? (
                         <Link
-                          href={`/members/${a.member.id}`}
+                          href={splitMode ? buildSelectHref(a.member.id) : `/members/${a.member.id}`}
+                          scroll={!splitMode}
+                          replace={splitMode}
                           className="text-primary hover:underline"
                         >
                           {a.member.name ?? a.member.id}

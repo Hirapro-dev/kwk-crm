@@ -24,6 +24,10 @@ interface Props {
     from?: string;
     to?: string;
   };
+  /** 分割ビュー: 会員名クリックで右ペインに詳細を出す */
+  splitMode?: boolean;
+  /** 分割ビューで現在選択中の会員ID */
+  selectedMemberId?: string;
 }
 
 export function ActivitiesInfinite({
@@ -32,6 +36,8 @@ export function ActivitiesInfinite({
   currentUserId,
   currentUserRole,
   params,
+  splitMode,
+  selectedMemberId,
 }: Props) {
   const [rows, setRows] = useState<ActivityListItem[]>(initialRows);
   const [page, setPage] = useState(1);
@@ -70,12 +76,14 @@ export function ActivitiesInfinite({
   }, [page, done, total, params]);
 
   return (
-    <div className="p-2">
+    <div className={splitMode ? 'min-h-0 flex-1 overflow-y-auto p-2' : 'p-2'}>
       <ActivityTimeline
         activities={rows}
         currentUserId={currentUserId}
         currentUserRole={currentUserRole}
         showMember
+        splitMode={splitMode}
+        selectedMemberId={selectedMemberId}
       />
       {!done && (
         <div ref={sentinelRef} className="py-4 text-center text-xs text-muted-foreground">
