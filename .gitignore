@@ -60,3 +60,4 @@ errors/*
 
 # ビルド成果物
 *.tsbuildinfo
+.vercel

@@ -35,6 +35,10 @@ export async function listReports(filter?: {
   favoritesOnly?: boolean;
   standardOnly?: boolean;
   userId?: string;
+  /** 名前・説明の部分一致検索 */
+  q?: string;
+  /** 自分が作成したレポートのみ(created_by = userId) */
+  mineOnly?: boolean;
 }): Promise<ReportSummary[]> {
   const supabase = await createClient();
   const build = (withShared: boolean) => {
@@ -54,6 +58,18 @@ export async function listReports(filter?: {
     if (filter?.standardOnly) q = q.eq('is_standard', true);
     if (filter?.favoritesOnly && filter.userId) {
       q = q.contains('favorited_by', [filter.userId]);
+    }
+    if (filter?.mineOnly && filter.userId) {
+      q = q.eq('created_by', filter.userId);
+    }
+    if (filter?.q && filter.q.trim()) {
+      // 2段のエスケープが必要。順序を入れ替えるとワイルドカードのエスケープが壊れる。
+      //   1) ilike 層: \ % _ を無効化してリテラル扱いにする(Postgres の既定 ESCAPE は \)
+      //   2) PostgREST 層: or() は「,」を条件の区切りとして解釈するため値全体を "" で囲む。
+      //      囲んだ中では \ が次の1文字をエスケープするので \ と " を二重化する。
+      const like = filter.q.trim().replace(/[%_\\]/g, '\\$&');
+      const val = `"%${like.replace(/["\\]/g, '\\$&')}%"`;
+      q = q.or(`name.ilike.${val},description.ilike.${val}`);
     }
     return q;
   };
