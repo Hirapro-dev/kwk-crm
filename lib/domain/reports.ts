@@ -63,8 +63,13 @@ export async function listReports(filter?: {
       q = q.eq('created_by', filter.userId);
     }
     if (filter?.q && filter.q.trim()) {
-      const kw = filter.q.trim().replace(/[%_]/g, '\\$&');
-      q = q.or(`name.ilike.%${kw}%,description.ilike.%${kw}%`);
+      // 2段のエスケープが必要。順序を入れ替えるとワイルドカードのエスケープが壊れる。
+      //   1) ilike 層: \ % _ を無効化してリテラル扱いにする(Postgres の既定 ESCAPE は \)
+      //   2) PostgREST 層: or() は「,」を条件の区切りとして解釈するため値全体を "" で囲む。
+      //      囲んだ中では \ が次の1文字をエスケープするので \ と " を二重化する。
+      const like = filter.q.trim().replace(/[%_\\]/g, '\\$&');
+      const val = `"%${like.replace(/["\\]/g, '\\$&')}%"`;
+      q = q.or(`name.ilike.${val},description.ilike.${val}`);
     }
     return q;
   };
