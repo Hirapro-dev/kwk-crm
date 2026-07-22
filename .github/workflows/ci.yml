@@ -1,0 +1,60 @@
+name: CI
+
+# 仕様書 §10 Phase 0: lint + type check + build
+#
+# 方針: 既存コードには手を入れずに導入する。
+#   - typecheck / build は現状パスするため「失敗させる」ゲートにする
+#   - lint / test は既存の未解消な指摘・失敗が残っているため、当面は
+#     continue-on-error で「結果を見えるようにするだけ」に留める
+#     (ここをゲートにすると全PRが即失敗し、開発が止まるため)
+#
+#   TODO: 既存の指摘を解消したら continue-on-error を外してゲート化する
+#     - lint: Biome 14 errors / 2 warnings (既存コードのフォーマット・key={i} 等)
+#     - test: tests/unit/report_builder.test.ts が1件失敗 (レポートv1ビルダー)
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Lint / Typecheck / Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # このリポジトリのパッケージマネージャは npm (package-lock.json)。
+      # pnpm-lock.yaml は存在しないため pnpm を使うとインストールで失敗する。
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # --- 参考情報(失敗してもCIは止めない) ---
+      - name: Lint (Biome)
+        continue-on-error: true
+        run: npm run lint
+
+      # --- ここから下はゲート(失敗させる) ---
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        env:
+          # ビルド時に必要なダミーの環境変数(実値はVercelで設定)
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-anon-key
+        run: npm run build
+
+      # --- 参考情報(失敗してもCIは止めない) ---
+      - name: Unit tests
+        continue-on-error: true
+        run: npm test
