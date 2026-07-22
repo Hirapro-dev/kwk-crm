@@ -52,6 +52,8 @@ function ActivityEditForm({ activity, onDone }: EditFormProps) {
   const [connected, setConnected] = useState(flags.includes('通電'));
   const [absent, setAbsent] = useState(flags.includes('不在'));
   const [inPerson, setInPerson] = useState(flags.includes('接触対応'));
+  // 申込獲得は接触種別に依存しない独立フラグ
+  const [acquired, setAcquired] = useState(flags.includes('申込獲得'));
 
   useEffect(() => {
     if (dBunrui === 'イン') {
@@ -69,7 +71,12 @@ function ActivityEditForm({ activity, onDone }: EditFormProps) {
     e.preventDefault();
     setError(null);
     const sBunrui =
-      [connected ? '通電' : '', absent ? '不在' : '', inPerson ? '接触対応' : '']
+      [
+        connected ? '通電' : '',
+        absent ? '不在' : '',
+        inPerson ? '接触対応' : '',
+        acquired ? '申込獲得' : '',
+      ]
         .filter(Boolean)
         .join('|') || undefined;
 
@@ -141,6 +148,7 @@ function ActivityEditForm({ activity, onDone }: EditFormProps) {
                     disabled: dBunrui !== 'アウト',
                   },
                   { label: '接触対応', val: inPerson, set: () => {}, disabled: true },
+                  { label: '申込獲得', val: acquired, set: setAcquired, disabled: false },
                 ].map(({ label, val, set, disabled }) => (
                   <label
                     key={label}

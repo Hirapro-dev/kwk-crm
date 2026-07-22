@@ -20,6 +20,8 @@ const CONTACT_CONTENTS = ['営業', '営業サポート', 'サポートチーム
 const FLAG_CONNECTED = '通電';
 const FLAG_ABSENT = '不在';
 const FLAG_IN_PERSON = '接触対応';
+/** 申込獲得。接触種別に依存せず手動で付けるフラグ(30日プロテクトのトリガー) */
+const FLAG_ACQUIRED = '申込獲得';
 
 /**
  * 対応歴入力フォーム(仕様書 §8.2「主役画面」)。
@@ -88,6 +90,8 @@ export function ActivityForm({
   const [connected, setConnected] = useState(false);
   const [absent, setAbsent] = useState(false);
   const [inPerson, setInPerson] = useState(false);
+  // 申込獲得は接触種別に依存しない独立フラグ(自動制御の対象外)
+  const [acquired, setAcquired] = useState(false);
 
   // 接触種別が変わったらチェックを自動制御
   useEffect(() => {
@@ -118,6 +122,7 @@ export function ActivityForm({
     setConnected(false);
     setAbsent(false);
     setInPerson(false);
+    setAcquired(false);
     if (!fixedMemberId) setMemberId('');
   };
 
@@ -131,6 +136,7 @@ export function ActivityForm({
     if (connected) flags.push(FLAG_CONNECTED);
     if (absent) flags.push(FLAG_ABSENT);
     if (inPerson) flags.push(FLAG_IN_PERSON);
+    if (acquired) flags.push(FLAG_ACQUIRED);
     const sBunrui = flags.length > 0 ? flags.join('|') : undefined;
 
     startTransition(async () => {
@@ -249,7 +255,20 @@ export function ActivityForm({
               /* 自動制御のみ */
             }}
           />
+          <CheckLabel
+            label="申込獲得"
+            checked={acquired}
+            // 接触種別に依存せず常に手動操作可
+            disabled={false}
+            onChange={setAcquired}
+          />
         </div>
+        {acquired && (
+          <p className="pt-1 text-xs text-muted-foreground">
+            登録すると、この会員に30日間のプロテクトが自分に付きます
+            (他ユーザーがプロテクト中の場合は付きません)
+          </p>
+        )}
       </Field>
 
       <Field
