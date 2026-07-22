@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getCurrentUser } from './auth';
+import { getReport } from './reports';
 
 const ReportSaveSchema = z.object({
   id: z.string().uuid().optional(),
@@ -91,6 +92,22 @@ export async function saveReport(input: {
   if (error || !data) return { ok: false, error: error?.message ?? '作成失敗' };
   revalidatePath('/reports');
   return { ok: true, id: data.id as string };
+}
+
+/**
+ * レポートを複製する。閲覧可能なレポート(標準含む)を、自分が作成者・公開範囲 private の
+ * 新規レポートとしてコピーする。複製物は非標準(is_standard=false)になる。
+ */
+export async function duplicateReport(id: string): Promise<ReportSaveResult> {
+  const src = await getReport(id);
+  if (!src) return { ok: false, error: 'レポートが見つかりません' };
+  return saveReport({
+    name: `${src.name} (コピー)`,
+    description: src.description ?? undefined,
+    report_type: src.report_type,
+    definition: src.definition,
+    visibility: 'private',
+  });
 }
 
 export async function deleteReport(id: string): Promise<ReportSaveResult> {

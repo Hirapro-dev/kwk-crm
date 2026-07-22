@@ -35,6 +35,10 @@ export async function listReports(filter?: {
   favoritesOnly?: boolean;
   standardOnly?: boolean;
   userId?: string;
+  /** 名前・説明の部分一致検索 */
+  q?: string;
+  /** 自分が作成したレポートのみ(created_by = userId) */
+  mineOnly?: boolean;
 }): Promise<ReportSummary[]> {
   const supabase = await createClient();
   const build = (withShared: boolean) => {
@@ -54,6 +58,13 @@ export async function listReports(filter?: {
     if (filter?.standardOnly) q = q.eq('is_standard', true);
     if (filter?.favoritesOnly && filter.userId) {
       q = q.contains('favorited_by', [filter.userId]);
+    }
+    if (filter?.mineOnly && filter.userId) {
+      q = q.eq('created_by', filter.userId);
+    }
+    if (filter?.q && filter.q.trim()) {
+      const kw = filter.q.trim().replace(/[%_]/g, '\\$&');
+      q = q.or(`name.ilike.%${kw}%,description.ilike.%${kw}%`);
     }
     return q;
   };

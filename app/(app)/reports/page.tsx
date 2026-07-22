@@ -22,19 +22,23 @@ import { REPORT_TYPES } from '@/lib/reports/types';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { DeleteReportButton } from './DeleteReportButton';
+import { DuplicateReportButton } from './DuplicateReportButton';
 import { FavoriteButton } from './FavoriteButton';
+import { ReportsSearchBox } from './ReportsSearchBox';
 
 interface PageProps {
-  searchParams: Promise<{ favorites?: string }>;
+  searchParams: Promise<{ favorites?: string; q?: string }>;
 }
 
 export default async function ReportsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   const favoritesOnly = sp.favorites === '1';
+  const q = (sp.q ?? '').trim();
   const reports = await listReports({
     favoritesOnly,
     userId: me.id,
+    q: q || undefined,
   });
 
   const standard = reports.filter((r) => r.is_standard);
@@ -67,6 +71,10 @@ export default async function ReportsPage({ searchParams }: PageProps) {
             </div>
           }
         />
+        {/* 常時表示: ページ内検索 */}
+        <div className="border-t px-4 py-2">
+          <ReportsSearchBox initialQ={q} />
+        </div>
         {/* モバイル: フィルターボタンをヘッダー下段に表示 */}
         <div className="flex gap-2 border-t px-4 py-2 sm:hidden">
           <Link href="/reports">
@@ -182,7 +190,10 @@ function ReportTable({
                       {r.last_run_row_count?.toLocaleString() ?? '-'}
                     </TableCell>
                     <TableCell className="text-right">
-                      <DeleteReportButton reportId={r.id} reportName={r.name} />
+                      <div className="flex items-center justify-end gap-2">
+                        <DuplicateReportButton reportId={r.id} reportName={r.name} />
+                        <DeleteReportButton reportId={r.id} reportName={r.name} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
