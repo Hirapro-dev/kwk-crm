@@ -130,8 +130,62 @@ export function ReportResultView({
   const colFixed = allSeeded(colKeys);
   const colTotalWidth = colFixed ? colKeys.reduce((s, k) => s + (colWidths[k] ?? 0), 0) : undefined;
 
+  // 既定の並び順を「日付は新しい順(降順)」にする。SQL は変えず、取得済みの行を表示上で並べ替えるだけ。
+  //   1) 表示グルーピング列が日付/日時型 → その列で降順(グループの最新日付が上に来る)
+  //   2) グルーピングが無く、1列目(左端)が日付/日時型 → その列で降順
+  // どちらにも当てはまらなければ既定ソートなし(SQL の並び順のまま)。
+  const isDateType = (t?: string) => t === 'date' || t === 'datetime';
+  const groupColForDefaultSort = display?.groupByColumnId
+    ? columns.find((c) => c.id === display.groupByColumnId)
+    : undefined;
+  const firstCol = columns[0];
+  let defaultSort: { colId: string; dir: 'asc' | 'desc' } | null = null;
+  if (groupColForDefaultSort) {
+    // グルーピング列がある場合はそれを基準に(日付型のときだけ降順)
+    if (isDateType(groupColForDefaultSort.dataType)) {
+      defaultSort = { colId: groupColForDefaultSort.id, dir: 'desc' };
+    }
+  } else if (firstCol && isDateType(firstCol.dataType)) {
+    // グルーピングが無く、左端が日付列 → 新しい順
+    defaultSort = { colId: firstCol.id, dir: 'desc' };
+  }
+
   // 列ヘッダークリックによる昇順/降順ソート(グラフの並びも連動)
-  const [sort, setSort] = useState<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
+  const [sort, setSort] = useState<{ colId: string; dir: 'asc' | 'desc' } | null>(defaultSort);
+
+  // 直近に選んだ並び順を保持する。会員詳細などへ遷移して戻っても、
+  // 最後に操作した並び順を維持する(sessionStorage・パス単位。既存のスクロール復元と同方式)。
+  const sortStorageKey = `crm.reportsort:${pathname}`;
+  const sortHydrated = useRef(false);
+  // 初回マウント時のみ: 保存済みの並び順があれば復元(既定より優先)。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: マウント時に一度だけ復元する
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(sortStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          sort: { colId: string; dir: 'asc' | 'desc' } | null;
+        };
+        const s = parsed.sort;
+        // 保存された列が現在の列構成に存在するときだけ適用(レポート編集後の齟齬を防ぐ)
+        if (s === null || columns.some((c) => c.id === s.colId)) {
+          setSort(s);
+        }
+      }
+    } catch {
+      // sessionStorage 不可(プライベートモード等)でも既定動作にフォールバック
+    }
+    sortHydrated.current = true;
+  }, []);
+  // 並び順が変わるたびに保存(復元完了後のみ書き込む)。
+  useEffect(() => {
+    if (!sortHydrated.current) return;
+    try {
+      sessionStorage.setItem(sortStorageKey, JSON.stringify({ sort }));
+    } catch {
+      // 保存不可でも致命的でないため無視
+    }
+  }, [sort, sortStorageKey]);
   // 下部トグル(画像3): 行数 / 詳細行 / 小計 / 総計
   const [showCounts, setShowCounts] = useState(true);
   const [showDetail, setShowDetail] = useState(true);
