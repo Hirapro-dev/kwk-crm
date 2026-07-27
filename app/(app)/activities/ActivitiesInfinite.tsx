@@ -59,6 +59,8 @@ export function ActivitiesInfinite({
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   // 復元処理を一度だけ行うためのガード
   const restoredRef = useRef(false);
+  // 復元が完了するまで保存を止めるフラグ(復元前の保存で保存値を潰さないため)
+  const restoreDoneRef = useRef(false);
   // 保存クロージャから最新ページ数を参照するための ref
   const pageRef = useRef(1);
   pageRef.current = page;
@@ -79,6 +81,18 @@ export function ActivitiesInfinite({
       window.scrollTo(0, y);
     }
   };
+
+  // 一覧表示中はブラウザ標準のスクロール復元を止める。
+  // 標準復元は「初期50件しかない状態の位置」を後から書き戻してしまい、
+  // こちらの復元(全ページ再取得後の位置)を打ち消すため。離脱時に元へ戻す。
+  useEffect(() => {
+    if (typeof history === 'undefined' || !('scrollRestoration' in history)) return;
+    const prev = history.scrollRestoration;
+    history.scrollRestoration = 'manual';
+    return () => {
+      history.scrollRestoration = prev;
+    };
+  }, []);
 
   // 無限スクロール(下端センチネル監視)
   useEffect(() => {
@@ -119,21 +133,39 @@ export function ActivitiesInfinite({
     try {
       raw = sessionStorage.getItem(storageKey);
     } catch {
+      restoreDoneRef.current = true;
       return;
     }
-    if (!raw) return;
+    if (!raw) {
+      restoreDoneRef.current = true;
+      return;
+    }
     let saved: { page?: number; offset?: number };
     try {
       saved = JSON.parse(raw);
     } catch {
+      restoreDoneRef.current = true;
       return;
     }
     const targetPage = Math.min(MAX_RESTORE_PAGES, Math.max(1, saved.page ?? 1));
     const offset = Math.max(0, saved.offset ?? 0);
 
-    // 2フレーム待って描画確定後にスクロール位置を戻す
+    // 2フレーム待って描画確定後にスクロール位置を戻す。
+    // 復元し終えるまでは保存を止めておく(ブラウザ標準のスクロール復元が発火させる
+    // scroll イベントで、保存済みのページ数・位置が上書きされるのを防ぐため)。
+    // 行の描画が終わって高さが伸びきるまで再適用し、位置が定着してから保存を再開する。
+    // requestAnimationFrame は非表示タブで停止するためタイマーで再試行する。
     const restoreScroll = () => {
-      requestAnimationFrame(() => requestAnimationFrame(() => setScrollOffset(offset)));
+      const deadline = Date.now() + 3000;
+      const tick = () => {
+        setScrollOffset(offset);
+        if (Math.abs(getScrollOffset() - offset) <= 2 || Date.now() > deadline) {
+          restoreDoneRef.current = true;
+          return;
+        }
+        setTimeout(tick, 60);
+      };
+      setTimeout(tick, 0);
     };
 
     if (targetPage <= 1 || initialRows.length >= total) {
@@ -158,6 +190,9 @@ export function ActivitiesInfinite({
         setPage(p);
         if (reachedEnd) setDone(true);
         restoreScroll();
+      } catch {
+        // 復元用の再取得に失敗しても一覧表示自体は継続する
+        restoreDoneRef.current = true;
       } finally {
         loadingRef.current = false;
         setLoading(false);
@@ -165,19 +200,30 @@ export function ActivitiesInfinite({
     })();
   }, []);
 
-  // 離脱/リロード直前に現在の位置を保存する
-  // biome-ignore lint/correctness/useExhaustiveDependencies: getScrollOffset は毎レンダー再生成される安定処理のため除外
+  /**
+   * 現在位置を保存する。
+   * 注意: アンマウント時(顧客詳細への遷移時)には呼ばないこと。
+   *   Next.js は遷移時にページ先頭へスクロールしてからアンマウントするため、
+   *   その時点で位置を読むと 0 になり、保存済みの正しい位置を潰してしまう。
+   */
+  const saveNow = () => {
+    // 復元完了前は保存しない(復元対象の値を上書きしてしまうため)
+    if (!restoreDoneRef.current) return;
+    try {
+      sessionStorage.setItem(
+        storageKey,
+        JSON.stringify({ page: pageRef.current, offset: getScrollOffset() }),
+      );
+    } catch {
+      // sessionStorage 使用不可(容量超過など)は無視
+    }
+  };
+  const saveNowRef = useRef(saveNow);
+  saveNowRef.current = saveNow;
+
+  // スクロール中(デバウンス)とリロード直前に位置を保存する
   useEffect(() => {
-    const save = () => {
-      try {
-        sessionStorage.setItem(
-          storageKey,
-          JSON.stringify({ page: pageRef.current, offset: getScrollOffset() }),
-        );
-      } catch {
-        // sessionStorage 使用不可(容量超過など)は無視
-      }
-    };
+    const save = () => saveNowRef.current();
     const scroller: Window | HTMLElement | null = splitMode ? wrapperRef.current : window;
     if (!scroller) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -190,14 +236,18 @@ export function ActivitiesInfinite({
     return () => {
       scroller.removeEventListener('scroll', onScroll);
       window.removeEventListener('beforeunload', save);
+      // 遷移時の先頭スクロールを保存しないよう、保留中の保存は破棄する
       clearTimeout(timer);
-      // アンマウント(顧客詳細への遷移など)直前に最終位置を保存
-      save();
     };
-  }, [storageKey, splitMode]);
+  }, [splitMode]);
 
   return (
-    <div ref={wrapperRef} className={splitMode ? 'min-h-0 flex-1 overflow-y-auto p-2' : 'p-2'}>
+    // 会員名リンク等を押した瞬間(遷移前=位置が正しいうち)に保存する
+    <div
+      ref={wrapperRef}
+      onPointerDownCapture={saveNow}
+      className={splitMode ? 'min-h-0 flex-1 overflow-y-auto p-2' : 'p-2'}
+    >
       <ActivityTimeline
         activities={rows}
         currentUserId={currentUserId}
