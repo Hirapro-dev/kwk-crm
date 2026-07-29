@@ -141,3 +141,37 @@ export async function convertInquiryToMember(input: {
 
   return { ok: true, memberId };
 }
+
+/** 備考の最大文字数 (member_actions.ts の updateMemberRemarks と同値) */
+const INQUIRY_REMARKS_MAX_LENGTH = 5000;
+
+/**
+ * 問合せの備考 (extra->'備考') を更新する。全ロールが編集可能 (migration 72)。
+ * inquiries_update ポリシー (can_write のみ) に阻まれないよう SECURITY DEFINER RPC を使う
+ * (update_member_remarks / migration 71 と同方式。extra の「備考」キーのみ更新)。
+ */
+export async function updateInquiryRemarks(
+  inquiryId: string,
+  remarks: string,
+): Promise<{ error?: string }> {
+  await getCurrentUser(); // 未ログインなら throw
+
+  if (remarks.length > INQUIRY_REMARKS_MAX_LENGTH) {
+    return { error: `備考は${INQUIRY_REMARKS_MAX_LENGTH}文字以内で入力してください` };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('update_inquiry_remarks', {
+    p_inquiry_id: inquiryId,
+    p_remarks: remarks,
+  });
+
+  if (error) {
+    // migration 72 未適用(関数なし)などのケース
+    return { error: `備考の更新に失敗しました: ${error.message}` };
+  }
+
+  revalidatePath(`/inquiries/${inquiryId}`);
+  revalidatePath('/inquiries');
+  return {};
+}

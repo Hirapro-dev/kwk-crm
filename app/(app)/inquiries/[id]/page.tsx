@@ -9,6 +9,7 @@ import { renderInquiryHighlightFieldValue } from '@/components/inquiries/Inquiry
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
 import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
+import { RemarksEditor } from '@/components/objects/RemarksEditor';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getInquiry } from '@/lib/domain/inquiries';
@@ -110,7 +111,16 @@ export default async function InquiryDetailPage({ params }: PageProps) {
             record={inquiry as unknown as Record<string, unknown>}
             fields={detailFields}
             columns={4}
+            fullWidthFields={['備考']}
             fieldOverrides={{
+              // 備考 (extra->'備考'): 全ロールがインライン編集可能 (migration 72)
+              備考: (
+                <RemarksEditor
+                  objectType="inquiries"
+                  recordId={inquiry.id}
+                  value={typeof inquiry.extra?.備考 === 'string' ? inquiry.extra.備考 : null}
+                />
+              ),
               // フォーム: 生ID(form_id)ではなくフォーム名を表示(ハイライトと統一)
               form_id: inquiry.form?.name ?? '-',
               name: inquiry.member ? (
