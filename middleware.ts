@@ -9,6 +9,13 @@ import { updateSession } from '@/lib/supabase/middleware';
  *   - どちらも無いとき: /login のみ通す
  */
 export async function middleware(request: NextRequest) {
+  // Vercel Cron (/api/cron/*) は認証リダイレクトの対象外。
+  // 認証は各 route 側の CRON_SECRET 検証で行う (app/api/cron/*/route.ts)。
+  // ここで除外しないと cron が /login へ 307 リダイレクトされ、ジョブが実行されない。
+  if (request.nextUrl.pathname.startsWith('/api/cron/')) {
+    return NextResponse.next();
+  }
+
   const devAuth = process.env.DEV_AUTH_BYPASS === '1';
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
