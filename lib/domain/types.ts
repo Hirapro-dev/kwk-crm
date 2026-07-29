@@ -42,6 +42,8 @@ export interface Member {
   protect_expires_at: string | null;
   /** プロテクトが解除された日時 (migration 55)。解除後経過日数の算出に使う */
   protect_released_at: string | null;
+  /** 備考 (migration 70)。全ロールがインライン編集可能 (migration 71) */
+  remarks: string | null;
   total_amount: number | null;
   total_paid_amount: number | null;
   total_used_amount: number | null;

@@ -38,6 +38,11 @@ interface Props {
    * クラス文字列はマップで持つ)。
    */
   columns?: 1 | 2 | 3 | 4;
+  /**
+   * 指定された field_name のフィールドはグリッド全幅 (列数分) で表示する。
+   * 例: 備考など長文フィールドを2列分の幅で見せたいときに使う。
+   */
+  fullWidthFields?: string[];
 }
 
 /**
@@ -103,7 +108,9 @@ export function DynamicDetailFields({
   fieldOverrides,
   hideFields,
   columns = 2,
+  fullWidthFields,
 }: Props) {
+  const fullWidthSet = new Set(fullWidthFields ?? []);
   // hideFields に含まれるフィールドは描画スキップ
   if (hideFields && hideFields.length > 0) {
     const hideSet = new Set(hideFields);
@@ -154,8 +161,11 @@ export function DynamicDetailFields({
                 valueNode =
                   resolvedName ?? formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
               }
+              const cellClass = fullWidthSet.has(f.field_name)
+                ? 'flex min-w-0 flex-col border-b pb-2 last:border-b-0 sm:col-span-full'
+                : 'flex min-w-0 flex-col border-b pb-2 last:border-b-0';
               return (
-                <div key={f.id} className="flex min-w-0 flex-col border-b pb-2 last:border-b-0">
+                <div key={f.id} className={cellClass}>
                   <dt className="truncate text-xs font-semibold tracking-wide text-slate-600">
                     {label}
                   </dt>
