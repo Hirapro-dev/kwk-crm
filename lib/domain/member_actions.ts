@@ -41,6 +41,7 @@ const EDITABLE_MEMBER_COLUMNS = new Set<string>([
   'xels_insider_joined_at',
   'sct_insider_joined_at',
   'regular_contact_id',
+  'remarks',
 ]);
 
 /**
@@ -148,6 +149,40 @@ export async function toggleRegularContactSelf(
   revalidatePath('/members');
   revalidatePath('/');
   return { assigned: (data as string | null) === me.id };
+}
+
+/** 備考の最大文字数 (フリーテキストの想定外肥大を防ぐ) */
+const REMARKS_MAX_LENGTH = 5000;
+
+/**
+ * 会員の備考 (remarks) を更新する。全ロールが編集可能 (migration 71)。
+ * members_update ポリシーに阻まれないよう SECURITY DEFINER RPC を使う
+ * (toggle_regular_contact_self と同方式。列を remarks に限定するため安全)。
+ */
+export async function updateMemberRemarks(
+  memberId: string,
+  remarks: string,
+): Promise<{ error?: string }> {
+  await getCurrentUser(); // 未ログインなら throw
+
+  if (remarks.length > REMARKS_MAX_LENGTH) {
+    return { error: `備考は${REMARKS_MAX_LENGTH}文字以内で入力してください` };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('update_member_remarks', {
+    p_member_id: memberId,
+    p_remarks: remarks,
+  });
+
+  if (error) {
+    // migration 71 未適用(関数なし)などのケース
+    return { error: `備考の更新に失敗しました: ${error.message}` };
+  }
+
+  revalidatePath(`/members/${memberId}`);
+  revalidatePath('/members');
+  return {};
 }
 
 /**
