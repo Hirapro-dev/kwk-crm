@@ -18,7 +18,7 @@ import { renderHighlightFieldValue } from '@/components/members/HighlightFieldVa
 import { MemberDeleteButton } from '@/components/members/MemberDeleteButton';
 import { MemberEditDialog } from '@/components/members/MemberEditDialog';
 import { RegularContactButton } from '@/components/members/RegularContactButton';
-import { RemarksEditor } from '@/components/members/RemarksEditor';
+import { RemarksEditor } from '@/components/objects/RemarksEditor';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -176,7 +176,9 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                 fields={detailFields}
                 fullWidthFields={['remarks']}
                 fieldOverrides={{
-                  remarks: <RemarksEditor memberId={member.id} value={member.remarks} />,
+                  remarks: (
+                    <RemarksEditor objectType="members" recordId={member.id} value={member.remarks} />
+                  ),
                   protect_released_at: (() => {
                     const exp = member.protect_expires_at;
                     const isProtected = !!exp && new Date(exp).getTime() > Date.now();

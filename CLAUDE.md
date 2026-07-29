@@ -293,6 +293,7 @@ erDiagram
 - `extra` jsonb default `'{}'::jsonb` — フォーム固有項目(不安要素フラグ、暗号資産保有、ADA詳細など)
 - `registered_at` timestamptz not null — 元の登録日時
 - `created_at`, `updated_at`, `deleted_at` timestamptz
+- ※ `extra` 内の「備考」キーは問合せ詳細で全ロールがインライン編集可能 (SECURITY DEFINER RPC `update_inquiry_remarks`, migration 72。会員の備考/migration 71 と同方式)
 
 **JSONB extra に格納するキー例**:
 ```json
