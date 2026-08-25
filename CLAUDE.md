@@ -570,6 +570,31 @@ Phase 1 では:
 **画面**: `/withdrawal-parents` `/withdrawal-children` (一覧+詳細)。メニューバーは
 「出金管理」親タブのホバープルダウンから遷移(nav_items の parent_id / visible_roles)。
 
+### 5.14 一覧画面からのレコード削除 ★2026-08 追加 (migration 73)
+一覧画面の各行の**左端**に、選択チェックボックスと削除ボタンを表示し、
+複数選択してまとめて削除できるようにする(§8.1)。
+
+- **論理削除のみ**。`deleted_at` をセットする(§4.3 のとおり物理削除はしない)。
+- **admin のみ**。他ロールには選択列自体を描画せず、RPC 側でも `is_admin()` で弾く。
+- **対象6オブジェクト**: `members` / `inquiries` / `applications` /
+  `article_reactions` / `withdrawal_parents` / `withdrawal_children`。
+  いずれも主キーが text のため引数は `text[]` で統一。
+  ※ `activities` は一覧がタイムライン表示のため対象外(既存の1件削除のみ)。
+- **RPC** `soft_delete_records(p_object text, p_ids text[]) RETURNS integer`
+  (SECURITY DEFINER)。migration 58 / 67 と同方式(RLS の想定外挙動を避けるため)。
+  `p_object` はホワイトリストで検証し `CASE` で固定SQLに分岐する(動的SQLの文字列連結はしない)。
+  戻り値は実際に削除できた件数。
+  - 既存の `soft_delete_member`(67) / `soft_delete_activity`(58) は**変更しない**
+    (会員詳細・対応歴タイムラインの削除ボタンは現状のまま)。
+- **一括削除の上限**: 1回 500 件 (RPC・Server Action の両方で検証)。誤操作時の被害を限定する。
+- **「全選択」の範囲**: 画面に**読み込み済みの行のみ**。検索条件に一致する全件ではない
+  (無限スクロールのため、意図しない大量削除を防ぐ)。
+- **実装**: 共通部品 `InfiniteTable` の `selection` プロップ(未指定なら従来どおり選択列なし)、
+  確認ダイアログ `components/layout/DeleteConfirmDialog.tsx`、
+  Server Action `lib/domain/delete_actions.ts`。
+- **注意**: 監査ログ(migration 41)のトリガー対象は members / applications / activities / users のみ。
+  inquiries・出金管理・記事リアクションの削除は**監査ログに残らない**(将来の課題)。
+
 ---
 
 ## 6. データ移行計画

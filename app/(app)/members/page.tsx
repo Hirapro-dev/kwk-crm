@@ -114,6 +114,7 @@ export default async function MembersPage({ searchParams }: PageProps) {
                 params={memberParams}
                 splitMode
                 selectedId={selected}
+                canDelete={me.role === 'admin'}
               />
             </div>
           </Card>
@@ -192,6 +193,7 @@ export default async function MembersPage({ searchParams }: PageProps) {
           fields={listFields}
           total={result.total}
           params={memberParams}
+          canDelete={me.role === 'admin'}
         />
       </Card>
     </div>

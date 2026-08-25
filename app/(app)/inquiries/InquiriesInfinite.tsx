@@ -3,6 +3,7 @@
 import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTable';
 import { PhoneLink } from '@/components/layout/PhoneLink';
 import { TableCell } from '@/components/ui/table';
+import { deleteRecords } from '@/lib/domain/delete_actions';
 import type { InquiryListItem } from '@/lib/domain/inquiries';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { loadMoreInquiries } from '@/lib/domain/list_more_actions';
@@ -21,9 +22,11 @@ interface Props {
     sort?: string;
     dir?: 'asc' | 'desc';
   };
+  /** 左端の選択チェックボックス・削除ボタンを出すか (admin のみ) */
+  canDelete?: boolean;
 }
 
-export function InquiriesInfinite({ initialRows, fields, total, params }: Props) {
+export function InquiriesInfinite({ initialRows, fields, total, params, canDelete }: Props) {
   const columns: InfiniteCol[] = fields.map((f) => ({
     header: f.label ?? f.field_name,
     sortField: f.is_in_db ? f.field_name : undefined,
@@ -121,6 +124,16 @@ export function InquiriesInfinite({ initialRows, fields, total, params }: Props)
       renderRow={renderRow}
       getKey={(r) => r.id}
       emptyMessage="該当する問合せがありません"
+      selection={
+        canDelete
+          ? {
+              getId: (r) => r.id,
+              getLabel: (r) => r.name ?? r.id,
+              objectLabel: '問合せ',
+              onDelete: (ids) => deleteRecords('inquiries', ids),
+            }
+          : undefined
+      }
     />
   );
 }

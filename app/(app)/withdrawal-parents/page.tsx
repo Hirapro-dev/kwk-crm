@@ -95,6 +95,7 @@ export default async function WithdrawalParentsPage({ searchParams }: PageProps)
           fields={listFields}
           total={result.total}
           params={{ q: sp.q, sort: sp.sort, dir }}
+          canDelete={me.role === 'admin'}
         />
       </Card>
     </div>

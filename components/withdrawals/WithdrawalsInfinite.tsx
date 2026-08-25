@@ -13,6 +13,7 @@
 
 import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTable';
 import { TableCell } from '@/components/ui/table';
+import { deleteRecords } from '@/lib/domain/delete_actions';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import {
   loadMoreWithdrawalChildren,
@@ -31,10 +32,20 @@ interface Props {
   fields: FieldDefinition[];
   total: number;
   params: { q?: string; sort?: string; dir?: 'asc' | 'desc' };
+  /** 左端の選択チェックボックス・削除ボタンを出すか (admin のみ) */
+  canDelete?: boolean;
 }
 
-export function WithdrawalsInfinite({ object, initialRows, fields, total, params }: Props) {
+export function WithdrawalsInfinite({
+  object,
+  initialRows,
+  fields,
+  total,
+  params,
+  canDelete,
+}: Props) {
   const basePath = object === 'withdrawal_parents' ? '/withdrawal-parents' : '/withdrawal-children';
+  const objectLabel = object === 'withdrawal_parents' ? '出金管理(親)' : '出金管理(子)';
   const loadMore =
     object === 'withdrawal_parents' ? loadMoreWithdrawalParents : loadMoreWithdrawalChildren;
 
@@ -114,6 +125,16 @@ export function WithdrawalsInfinite({ object, initialRows, fields, total, params
       renderRow={renderRow}
       getKey={(r) => String(r.id)}
       emptyMessage="該当するデータがありません"
+      selection={
+        canDelete
+          ? {
+              getId: (r) => String(r.id),
+              getLabel: (r) => String(r.id),
+              objectLabel,
+              onDelete: (ids) => deleteRecords(object, ids),
+            }
+          : undefined
+      }
     />
   );
 }

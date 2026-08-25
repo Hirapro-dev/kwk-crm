@@ -8,6 +8,7 @@
 
 import { Card } from '@/components/ui/card';
 import { listArticleReactions } from '@/lib/domain/article_reactions';
+import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import Link from 'next/link';
@@ -25,7 +26,8 @@ export default async function ArticleReactionsPage({ searchParams }: PageProps) 
   const sp = await searchParams;
   const dir = sp.dir === 'asc' ? 'asc' : 'desc';
 
-  const [result, listFields] = await Promise.all([
+  const [me, result, listFields] = await Promise.all([
+    getCurrentUser(),
     listArticleReactions({
       q: sp.q,
       sort: sp.sort,
@@ -92,6 +94,7 @@ export default async function ArticleReactionsPage({ searchParams }: PageProps) 
           fields={listFields}
           total={result.total}
           params={{ q: sp.q, sort: sp.sort, dir }}
+          canDelete={me.role === 'admin'}
         />
       </Card>
     </div>
