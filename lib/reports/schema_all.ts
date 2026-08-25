@@ -114,6 +114,15 @@ const MEMBER_COLUMNS = (alias: string): AllowedColumnDef[] => [
   { source: `${alias}.postal_code`, label: '郵便番号', dataType: 'text', filterable: true },
   { source: `${alias}.address`, label: '住所', dataType: 'text', filterable: true },
   {
+    // address から自動導出される生成カラム(migration 74)。海外住所は NULL。
+    source: `${alias}.prefecture`,
+    label: '都道府県',
+    dataType: 'text',
+    filterable: true,
+    groupable: true,
+    sortable: true,
+  },
+  {
     source: `${alias}.customer_type`,
     label: '顧客種別',
     dataType: 'text',

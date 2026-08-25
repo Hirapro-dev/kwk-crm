@@ -28,10 +28,14 @@ export interface ProtectUserOption {
  * - protect_by_user_id / protect_expires_at → 下部「プロテクト設定(管理者のみ)」で編集
  * - regular_contact_id                      → 下部「定期連絡者」コンボボックスで編集
  * - protect_released_at                     → 計算表示(経過日数)のため編集不可
+ * - prefecture                              → 住所から自動導出する生成カラム(migration 74)。
+ *                                             DB が UPDATE を拒否するため入力欄を出さない。
+ *                                             住所を編集すれば自動で追従する
  */
 const SPECIAL_OR_READONLY_FIELDS = new Set<string>([
   'id',
   'owner_id',
+  'prefecture',
   'protect_by_user_id',
   'protect_expires_at',
   'protect_released_at',
