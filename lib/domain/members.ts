@@ -23,7 +23,7 @@ export interface MemberListParams {
 /** 一覧でソート可能な members カラム(SQL安全のためホワイトリスト) */
 const MEMBER_SORTABLE = new Set<string>([
   'id', 'name', 'name_kana', 'email1', 'phone1', 'do_not_call',
-  'postal_code', 'address', 'customer_type', 'owner_id', 'owner_name_raw',
+  'postal_code', 'address', 'prefecture', 'customer_type', 'owner_id', 'owner_name_raw',
   'gender', 'birthdate', 'first_contact_date', 'registered_at',
   'info_acquired_date', 'mailmag_registered_at',
   'total_amount', 'total_paid_amount', 'total_used_amount',
