@@ -3,6 +3,7 @@
 import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTable';
 import { PhoneLink } from '@/components/layout/PhoneLink';
 import { TableCell } from '@/components/ui/table';
+import { deleteRecords } from '@/lib/domain/delete_actions';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { loadMoreMembers } from '@/lib/domain/list_more_actions';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
@@ -20,6 +21,8 @@ interface Props {
   splitMode?: boolean;
   /** 分割ビューで現在選択中の会員ID(選択行ハイライト用) */
   selectedId?: string;
+  /** 左端の選択チェックボックス・削除ボタンを出すか (admin のみ) */
+  canDelete?: boolean;
 }
 
 export function MembersInfinite({
@@ -29,6 +32,7 @@ export function MembersInfinite({
   params,
   splitMode,
   selectedId,
+  canDelete,
 }: Props) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -137,6 +141,17 @@ export function MembersInfinite({
       renderRow={renderRow}
       getKey={(m) => String((m as unknown as Record<string, unknown>).id)}
       emptyMessage="該当する会員がいません"
+      selection={
+        canDelete
+          ? {
+              getId: (m) => String((m as unknown as Record<string, unknown>).id),
+              getLabel: (m) =>
+                (m.name as string | null) ?? String((m as unknown as Record<string, unknown>).id),
+              objectLabel: '会員',
+              onDelete: (ids) => deleteRecords('members', ids),
+            }
+          : undefined
+      }
       // 分割ビューでは左ペインの高さいっぱいをスクロール領域にする(通常時は既定の高さ)
       fillParent={splitMode}
       rowClassName={(m) =>

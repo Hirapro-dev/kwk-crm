@@ -10,6 +10,7 @@
 import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTable';
 import { TableCell } from '@/components/ui/table';
 import type { ArticleReactionRow } from '@/lib/domain/article_reactions';
+import { deleteRecords } from '@/lib/domain/delete_actions';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { loadMoreArticleReactions } from '@/lib/domain/list_more_actions';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
@@ -21,9 +22,11 @@ interface Props {
   fields: FieldDefinition[];
   total: number;
   params: { q?: string; sort?: string; dir?: 'asc' | 'desc' };
+  /** 左端の選択チェックボックス・削除ボタンを出すか (admin のみ) */
+  canDelete?: boolean;
 }
 
-export function ArticleReactionsInfinite({ initialRows, fields, total, params }: Props) {
+export function ArticleReactionsInfinite({ initialRows, fields, total, params, canDelete }: Props) {
   if (fields.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -74,6 +77,16 @@ export function ArticleReactionsInfinite({ initialRows, fields, total, params }:
       renderRow={renderRow}
       getKey={(r) => r.id}
       emptyMessage="該当する記事反応がありません"
+      selection={
+        canDelete
+          ? {
+              getId: (r) => r.id,
+              getLabel: (r) => r.member_name ?? r.id,
+              objectLabel: '記事反応',
+              onDelete: (ids) => deleteRecords('article_reactions', ids),
+            }
+          : undefined
+      }
     />
   );
 }

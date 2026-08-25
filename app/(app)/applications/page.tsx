@@ -5,6 +5,7 @@
 import { PanelFilterBar, PanelHeader } from '@/components/layout/PanelHeader';
 import { Card } from '@/components/ui/card';
 import { APP_STATUSES, type AppStatus, listApplications } from '@/lib/domain/applications';
+import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { listProjects } from '@/lib/domain/projects';
@@ -31,7 +32,8 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
       ? (sp.status as AppStatus)
       : undefined;
 
-  const [result, projects, listFields] = await Promise.all([
+  const [me, result, projects, listFields] = await Promise.all([
+    getCurrentUser(),
     listApplications({
       q: sp.q,
       projectId,
@@ -80,6 +82,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
             sort: sp.sort,
             dir: sp.dir === 'desc' ? 'desc' : 'asc',
           }}
+          canDelete={me.role === 'admin'}
         />
       </Card>
     </div>

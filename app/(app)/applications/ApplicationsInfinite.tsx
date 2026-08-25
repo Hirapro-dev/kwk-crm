@@ -4,6 +4,7 @@ import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTab
 import { Badge } from '@/components/ui/badge';
 import { TableCell } from '@/components/ui/table';
 import type { AppStatus, ApplicationListItem } from '@/lib/domain/applications';
+import { deleteRecords } from '@/lib/domain/delete_actions';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { loadMoreApplications } from '@/lib/domain/list_more_actions';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
@@ -21,6 +22,8 @@ interface Props {
     sort?: string;
     dir?: 'asc' | 'desc';
   };
+  /** 左端の選択チェックボックス・削除ボタンを出すか (admin のみ) */
+  canDelete?: boolean;
 }
 
 const STATUS_VARIANT: Record<AppStatus, 'default' | 'secondary' | 'outline' | 'success'> = {
@@ -40,7 +43,7 @@ const AMOUNT_FIELDS = new Set([
   'crypto_excluded_amount',
 ]);
 
-export function ApplicationsInfinite({ initialRows, fields, total, params }: Props) {
+export function ApplicationsInfinite({ initialRows, fields, total, params, canDelete }: Props) {
   const columns: InfiniteCol[] = fields.map((f) => {
     const amount = AMOUNT_FIELDS.has(f.field_name);
     return {
@@ -164,6 +167,16 @@ export function ApplicationsInfinite({ initialRows, fields, total, params }: Pro
       renderRow={renderRow}
       getKey={(a) => a.id}
       emptyMessage="該当する申込がありません"
+      selection={
+        canDelete
+          ? {
+              getId: (a) => a.id,
+              getLabel: (a) => a.id,
+              objectLabel: '申込',
+              onDelete: (ids) => deleteRecords('applications', ids),
+            }
+          : undefined
+      }
     />
   );
 }
