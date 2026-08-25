@@ -54,6 +54,8 @@ const FIELD_LABEL: Record<string, string> = {
   phone1: '電話',
   do_not_call: '架電NG',
   address: '住所',
+  // 生成カラム(migration 74)。住所を編集すると自動で変わるため差分に現れる。
+  prefecture: '都道府県',
   postal_code: '郵便番号',
   customer_type: '顧客種別',
   owner_id: '担当',

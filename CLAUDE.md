@@ -323,6 +323,7 @@ erDiagram
 - `phone1` text
 - `do_not_call` boolean default false — 元データ「架電NG」フラグから抽出
 - `address` text
+- `prefecture` text — 都道府県 (2026-08 追加, migration 74)。`address` 先頭の47都道府県名から**自動導出する生成カラム** (`GENERATED ALWAYS AS ... STORED`)。取込経路(画面取込 / 一括移行スクリプト)を問わず住所と常に一致する。海外住所(国名プレフィックス)は NULL。手修正は不可 (住所を直せば追従する)。用途はレポートのみ (会員一覧/詳細には非表示のため `field_definitions` には登録しない)
 - `postal_code` text
 - `customer_type` text — 細客 等
 - `owner_id` uuid FK → users — 永久担当(95%はNULL)
