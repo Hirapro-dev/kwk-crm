@@ -18,8 +18,9 @@
 --   - 対象6テーブルはいずれも主キーが text のため、引数は text[] で統一。
 --   - AFTER UPDATE の監査トリガー(migration 41)は関数内 UPDATE でも発火し、
 --     auth.uid()(=実行した管理者)を actor として記録する。
---     ※ トリガー対象は members / applications のみ。inquiries・出金管理・
---        記事リアクションは監査ログに残らない (migration 41 の対象外)。
+--     ※ トリガー対象は members / applications / activities / users のみ。
+--        本RPCの対象のうち inquiries・出金管理・記事リアクションは
+--        監査ログに残らない (migration 41 の対象外)。
 --   - 実際に削除できた件数を返す (UI で「N件削除しました」と表示するため)。
 --
 -- 既存の soft_delete_member / soft_delete_activity は変更しない。
