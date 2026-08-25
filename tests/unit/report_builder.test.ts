@@ -41,7 +41,6 @@ describe('buildReportQuery(仕様書 §9.8)', () => {
     expect(q.sql).toContain('m.name AS m_name');
     expect(q.sql).toContain('m.deleted_at IS NULL');
     expect(q.sql).toContain(`LIMIT ${DEFAULT_ROW_LIMIT}`);
-    expect(q.sql).toContain('statement_timeout = 30000');
     expect(q.params).toEqual([]);
   });
 
@@ -188,6 +187,46 @@ describe('buildReportQuery(仕様書 §9.8)', () => {
     );
     expect(q.sql).toContain('m.total_amount >= $1');
     expect(q.sql).toMatch(/\(.*m\.owner_id IS NULL OR m\.owner_id = \$2.*\)/);
+  });
+
+  /**
+   * 生成した SQL は exec_report_sql(migration 07)にそのまま渡されるため、
+   * 同関数の入力ガードを通る形でなければ実行時に必ず失敗する。
+   *
+   * なぜこの契約が必要か:
+   *   クエリタイムアウト30秒(仕様書 §9.8-3)は exec_report_sql の関数定義側で
+   *   `SET statement_timeout = '30s'` として担保している。
+   *   builder が `SET LOCAL statement_timeout = ...;` を先頭に付けると複文になり、
+   *   同関数のセミコロン検出ガードに弾かれて実行できなくなるため、
+   *   builder は SELECT 単文のみを組み立てる契約とする。
+   */
+  it('SELECT 単文のみを生成する(exec_report_sql の入力ガードを通る)', () => {
+    // JOIN / GROUP BY / HAVING / ORDER BY / フィルタを全部使った複雑なケースで確認する
+    const q = buildReportQuery(
+      'RT02',
+      {
+        columns: [
+          { id: 'c1', source: 'm.id', label: '会員ID' },
+          { id: 'c2', source: 'owner.full_name', label: '担当者' },
+          { id: 'c3', source: 'apps.payment_amount', label: '総入金額', aggregate: 'sum' },
+        ],
+        filters: {
+          logic: 'AND',
+          conditions: [{ field: 'm.name', op: 'contains', value: 'テスト' }],
+        },
+        sort: [{ field: 'm.total_amount', direction: 'desc' }],
+      },
+      CURRENT_USER,
+    );
+
+    // 単純なクエリで通っただけにならないよう、複雑な形が生成されていることを先に確認する
+    expect(q.sql).toContain('LEFT JOIN public.users owner');
+    expect(q.sql).toContain('GROUP BY');
+    expect(q.sql).toContain('ORDER BY');
+
+    // migration 07 の exec_report_sql が課すガードと同じ条件で検証する
+    expect(/^(SET LOCAL statement_timeout\s*=\s*\d+\s*;\s*)?SELECT/i.test(q.sql)).toBe(true);
+    expect(/;\s*[^;\s].*\S/.test(q.sql)).toBe(false);
   });
 
   it('集計列に aggregatable=false の列を拒否', () => {
