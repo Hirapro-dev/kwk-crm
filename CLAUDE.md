@@ -323,7 +323,7 @@ erDiagram
 - `phone1` text
 - `do_not_call` boolean default false — 元データ「架電NG」フラグから抽出
 - `address` text
-- `prefecture` text — 都道府県 (2026-08 追加, migration 74)。`address` 先頭の47都道府県名から**自動導出する生成カラム** (`GENERATED ALWAYS AS ... STORED`)。取込経路(画面取込 / 一括移行スクリプト)を問わず住所と常に一致する。海外住所(国名プレフィックス)は NULL。手修正は不可 (住所を直せば追従する)。レポートのカラムとして選択可 (フィルタ/並び替え/グルーピング)。`field_definitions` にも登録済み (migration 75) で、`/settings/objects` から一覧/詳細への表示ON/OFFを管理者が切り替えられる (初期値はどちらも非表示)。生成カラムのため編集フォームには出さない (`MemberEditDialog` の `SPECIAL_OR_READONLY_FIELDS`)。`is_system=true` のため項目自体の削除は不可
+- `prefecture` text — 都道府県 (2026-08 追加, migration 74)。`address` 先頭の47都道府県名から**自動導出する生成カラム** (`GENERATED ALWAYS AS ... STORED`)。取込経路(画面取込 / 一括移行スクリプト)を問わず住所と常に一致する。海外住所(国名プレフィックス)は NULL。手修正は不可 (住所を直せば追従する)。レポートのカラムとして選択可 (フィルタ/並び替え/グルーピング)。`field_definitions` にも登録済み (migration 75) で、`/settings/objects` から一覧/詳細への表示ON/OFFを管理者が切り替えられる (初期値はどちらも非表示)。生成カラムのため編集フォームには出さない (`MemberEditDialog` の `SPECIAL_OR_READONLY_FIELDS`)。`is_system=true` のため項目自体の削除は不可。ヘッダー検索 / 全体検索(`/search`) / 会員一覧の検索対象でもある (`buildMemberSearchOr`)。他フィールドが部分一致なのに対し都道府県は**前方一致**で、かつ**1文字入力時は対象外**にする (「京都」で「東京都」を拾わないため / 「東」で氏名検索の結果が埋もれないため)
 - `postal_code` text
 - `customer_type` text — 細客 等
 - `owner_id` uuid FK → users — 永久担当(95%はNULL)

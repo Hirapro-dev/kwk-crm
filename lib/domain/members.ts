@@ -30,6 +30,30 @@ const MEMBER_SORTABLE = new Set<string>([
   'created_at', 'updated_at',
 ]);
 
+/**
+ * 会員のあいまい検索 (q) で使う PostgREST の or 句を組み立てる。
+ * ヘッダー検索の候補 / 全体検索 (/search) / 会員一覧 のすべてがこれを共有する。
+ * 空文字のときは null を返す (呼び出し側で or を付けない)。
+ *
+ * 都道府県 (prefecture) だけ他フィールドと扱いを変えている理由:
+ *   1. 前方一致 (q%) にする — 部分一致だと「京都」で「東京都」まで拾ってしまう。
+ *      本番データで 京都府468件 に対し 東京都3,480件 が混入し、結果が使いものに
+ *      ならない。前方一致なら「東京」「神奈川」のような途中までの入力でも絞れる。
+ *   2. 1文字のときは対象にしない — 「東」で東京都3,480件が返り、氏名検索の結果が
+ *      埋もれてしまう。都道府県は2文字あれば一意に絞れる
+ *      (東京→東京都 / 京都→京都府 / 北海→北海道)。
+ *
+ * ※ prefecture は住所から自動導出される生成カラム (migration 74)。
+ */
+export function buildMemberSearchOr(rawQuery: string): string | null {
+  const raw = (rawQuery ?? '').trim();
+  if (!raw) return null;
+  // ユーザー入力中の LIKE メタ文字はワイルドカードとして働かないようエスケープする
+  const q = raw.replace(/[%_]/g, '\\$&');
+  const prefectureClause = raw.length >= 2 ? `,prefecture.ilike.${q}%` : '';
+  return `name.ilike.%${q}%,name_kana.ilike.%${q}%,email1.ilike.%${q}%,phone1.ilike.%${q}%,id.ilike.%${q}%${prefectureClause}`;
+}
+
 export interface MemberListResult {
   rows: MemberWithOwner[];
   total: number;
@@ -73,13 +97,10 @@ export async function listMembers(params: MemberListParams = {}): Promise<Member
     .order('registered_at', { ascending: false, nullsFirst: false })
     .range(from, to);
 
-  // q: 部分一致(複数フィールド OR)
-  if (params.q && params.q.trim()) {
-    const q = params.q.trim().replace(/[%_]/g, '\\$&');
-    // PostgREST の or 構文。各 ilike は %q% 形式。
-    query = query.or(
-      `name.ilike.%${q}%,name_kana.ilike.%${q}%,email1.ilike.%${q}%,phone1.ilike.%${q}%,id.ilike.%${q}%`,
-    );
+  // q: 複数フィールドの OR 検索(ヘッダー検索・/search・一覧で共通)
+  const searchOr = buildMemberSearchOr(params.q ?? '');
+  if (searchOr) {
+    query = query.or(searchOr);
   }
 
   // 「担当」フィルタは現在の担当である protect_by_user_id(プロテクト)で絞る。
