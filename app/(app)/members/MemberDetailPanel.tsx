@@ -9,7 +9,7 @@
  */
 
 import { ActivityFormCard } from '@/components/activities/ActivityFormCard';
-import { ActivityTimeline } from '@/components/activities/ActivityTimeline';
+import { MemberActivityTimeline } from '@/components/activities/MemberActivityTimeline';
 import { NewActivityTrigger } from '@/components/activities/NewActivityTrigger';
 import { CollapsibleSection } from '@/components/layout/CollapsibleSection';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
@@ -35,6 +35,7 @@ import { listApplications } from '@/lib/domain/applications';
 import { getReactionsByMember } from '@/lib/domain/article_reactions';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { listInquiries } from '@/lib/domain/inquiries';
+import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { getMember } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { listAllUsers } from '@/lib/domain/users_admin';
@@ -78,7 +79,10 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     relInqs,
     relReactions,
   ] = await Promise.all([
-    listActivities({ memberId, pageSize: 50, page: 1 }),
+    // 先頭ページのみ。以降は MemberActivityTimeline が無限スクロールで追記する。
+    // ページサイズは追加取得(loadMoreActivities)と必ず揃えること。
+    // ずれると2ページ目以降の取得位置が合わず、行の重複や抜けが起きる。
+    listActivities({ memberId, pageSize: LIST_PAGE_SIZE, page: 1 }),
     getDBunruiList(),
     getRecentBunruiPairs(200),
     getVisibleFields('members', 'detail'),
@@ -387,8 +391,10 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
               bunruiList={bunruiList}
               recentPairs={recentPairs}
             />
-            <ActivityTimeline
-              activities={activities.rows}
+            <MemberActivityTimeline
+              memberId={member.id}
+              initialRows={activities.rows}
+              total={activities.total}
               currentUserId={me.id}
               currentUserRole={me.role}
             />

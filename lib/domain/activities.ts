@@ -43,6 +43,11 @@ export async function listActivities(params: ActivityListParams = {}): Promise<A
     )
     .is('deleted_at', null)
     .order('registered_datetime', { ascending: false, nullsFirst: false })
+    // id を第2ソートキーにしてページ送りを決定論的にする。
+    // registered_datetime は同値が普通にある(例: ある会員の250件中16件が同一日時で、
+    // 50件目と51件目=ページ境界がまさに同一日時)。同値行の順序は SQL では保証されず、
+    // 実行計画次第で入れ替わりうるため、無限スクロールで行の重複・欠落が起こりえる。
+    .order('id', { ascending: false })
     .range(from, to);
 
   if (params.memberId) query = query.eq('member_id', params.memberId);
