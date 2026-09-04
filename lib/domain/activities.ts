@@ -22,33 +22,33 @@ export interface ActivityListResult {
 
 const DEFAULT_PAGE_SIZE = 50;
 
-export async function listActivities(params: ActivityListParams = {}): Promise<ActivityListResult> {
-  const supabase = await createClient();
-  const page = Math.max(1, params.page ?? 1);
-  const pageSize = Math.min(200, Math.max(10, params.pageSize ?? DEFAULT_PAGE_SIZE));
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
+const ACTIVITY_SELECT = `
+  id, legacy_sf_id, owner_id, member_id, created_by_id,
+  description, d_bunrui, m_bunrui, s_bunrui,
+  registered_date, registered_datetime, created_at, updated_at,
+  owner:users!activities_owner_id_fkey(id, full_name),
+  member:members!activities_member_id_fkey(id, name)
+`;
 
+/**
+ * 一覧・CSV出力で共通の「絞り込み + 並び順」を適用したクエリを返す。
+ * 呼び出し側で .range() だけ足して使う。
+ * 画面とCSVで条件がずれないよう、必ずここを通すこと。
+ */
+function buildActivityQuery(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  params: ActivityListParams,
+) {
   let query = supabase
     .from('activities')
-    .select(
-      `
-        id, legacy_sf_id, owner_id, member_id, created_by_id,
-        description, d_bunrui, m_bunrui, s_bunrui,
-        registered_date, registered_datetime, created_at, updated_at,
-        owner:users!activities_owner_id_fkey(id, full_name),
-        member:members!activities_member_id_fkey(id, name)
-      `,
-      { count: 'exact' },
-    )
+    .select(ACTIVITY_SELECT, { count: 'exact' })
     .is('deleted_at', null)
     .order('registered_datetime', { ascending: false, nullsFirst: false })
     // id を第2ソートキーにしてページ送りを決定論的にする。
     // registered_datetime は同値が普通にある(例: ある会員の250件中16件が同一日時で、
     // 50件目と51件目=ページ境界がまさに同一日時)。同値行の順序は SQL では保証されず、
     // 実行計画次第で入れ替わりうるため、無限スクロールで行の重複・欠落が起こりえる。
-    .order('id', { ascending: false })
-    .range(from, to);
+    .order('id', { ascending: false });
 
   if (params.memberId) query = query.eq('member_id', params.memberId);
   if (params.ownerId) query = query.eq('owner_id', params.ownerId);
@@ -59,7 +59,17 @@ export async function listActivities(params: ActivityListParams = {}): Promise<A
   if (params.from) query = query.gte('registered_datetime', params.from);
   if (params.to) query = query.lte('registered_datetime', params.to);
 
-  const { data, error, count } = await query;
+  return query;
+}
+
+export async function listActivities(params: ActivityListParams = {}): Promise<ActivityListResult> {
+  const supabase = await createClient();
+  const page = Math.max(1, params.page ?? 1);
+  const pageSize = Math.min(200, Math.max(10, params.pageSize ?? DEFAULT_PAGE_SIZE));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data, error, count } = await buildActivityQuery(supabase, params).range(from, to);
   if (error) throw new Error(`対応歴一覧取得に失敗: ${error.message}`);
 
   return {
@@ -68,6 +78,61 @@ export async function listActivities(params: ActivityListParams = {}): Promise<A
     page,
     pageSize,
   };
+}
+
+/** CSV出力で一度に取り出せる上限。これを超える条件は絞り込みを促す。 */
+export const ACTIVITY_EXPORT_MAX_ROWS = 50_000;
+
+/**
+ * PostgREST が1リクエストで返す最大行数(Supabase の db-max-rows)。
+ * 本番で実測して 1000。これを超える range を指定しても 1000 件で頭打ちになる。
+ */
+const EXPORT_CHUNK = 1000;
+
+export interface ActivityExportResult {
+  rows: ActivityListItem[];
+  /** 絞り込み条件に一致する総件数 */
+  total: number;
+  /** 上限を超えたため取得しなかった(= rows は空) */
+  tooMany: boolean;
+}
+
+/**
+ * CSV出力用に、一覧と同じ条件・同じ並び順で全件を取り出す。
+ *
+ * 一覧の listActivities は1ページ200件までに丸めるため、そのままでは
+ * 大量取得に使えない。ここでは PostgREST の上限(1000件)ずつ繰り返し取得する。
+ *
+ * 総件数が ACTIVITY_EXPORT_MAX_ROWS を超える場合は取得せず tooMany を返す。
+ * 黙って途中まで出すと「全部出た」と誤解されるため、呼び出し側で絞り込みを促す。
+ */
+export async function exportActivities(
+  params: ActivityListParams = {},
+): Promise<ActivityExportResult> {
+  const supabase = await createClient();
+
+  // 1回目で総件数を確認してから、必要なぶんだけ繰り返す
+  const first = await buildActivityQuery(supabase, params).range(0, EXPORT_CHUNK - 1);
+  if (first.error) throw new Error(`対応歴の取得に失敗: ${first.error.message}`);
+
+  const total = first.count ?? 0;
+  if (total > ACTIVITY_EXPORT_MAX_ROWS) {
+    return { rows: [], total, tooMany: true };
+  }
+
+  const rows = (first.data ?? []) as unknown as ActivityListItem[];
+  for (let offset = EXPORT_CHUNK; offset < total; offset += EXPORT_CHUNK) {
+    const next = await buildActivityQuery(supabase, params).range(
+      offset,
+      offset + EXPORT_CHUNK - 1,
+    );
+    if (next.error) throw new Error(`対応歴の取得に失敗: ${next.error.message}`);
+    const chunk = (next.data ?? []) as unknown as ActivityListItem[];
+    if (chunk.length === 0) break; // 取得中に削除された等で件数が減った場合の保険
+    rows.push(...chunk);
+  }
+
+  return { rows, total, tooMany: false };
 }
 
 /**

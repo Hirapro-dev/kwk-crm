@@ -83,6 +83,11 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
     const qs = baseParams().toString();
     return qs ? `/activities?${qs}` : '/activities';
   })();
+  // CSV出力。画面で絞り込んだ条件をそのまま引き継ぐ(view/selected は表示状態なので渡さない)
+  const toCsvHref = (() => {
+    const qs = baseParams().toString();
+    return qs ? `/activities/export?${qs}` : '/activities/export';
+  })();
 
   const filterBar = (
     <PanelFilterBar>
@@ -115,11 +120,18 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
               viewName="対応歴"
               totalCount={result.total}
               actions={
-                <Link href={toListHref}>
-                  <Button variant="outline" size="sm">
-                    一覧表示
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link href={toCsvHref} prefetch={false}>
+                    <Button variant="outline" size="sm">
+                      CSV出力
+                    </Button>
+                  </Link>
+                  <Link href={toListHref}>
+                    <Button variant="outline" size="sm">
+                      一覧表示
+                    </Button>
+                  </Link>
+                </div>
               }
             />
             {filterBar}
@@ -162,11 +174,18 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
           viewName="対応歴"
           totalCount={result.total}
           actions={
-            <Link href={toSplitHref}>
-              <Button variant="outline" size="sm">
-                分割ビュー
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href={toCsvHref} prefetch={false}>
+                <Button variant="outline" size="sm">
+                  CSV出力
+                </Button>
+              </Link>
+              <Link href={toSplitHref}>
+                <Button variant="outline" size="sm">
+                  分割ビュー
+                </Button>
+              </Link>
+            </div>
           }
         />
 
