@@ -10,6 +10,8 @@ import { listApplications } from './applications';
 import { listArticleReactions } from './article_reactions';
 import { listInquiries } from './inquiries';
 import { LIST_PAGE_SIZE } from './list_constants';
+import { listMailThreads } from './mail';
+import type { MailCategory, MailStatus } from './mail_types';
 import { listMembers } from './members';
 import { listWithdrawalChildren, listWithdrawalParents } from './withdrawals';
 
@@ -75,6 +77,21 @@ export async function loadMoreWithdrawalChildren(
   page: number,
 ) {
   const r = await listWithdrawalChildren({ ...params, page, pageSize: LIST_PAGE_SIZE });
+  return r.rows;
+}
+
+export async function loadMoreMailThreads(
+  params: {
+    q?: string;
+    status?: MailStatus;
+    category?: MailCategory;
+    assigneeId?: string;
+    mailBoxId?: number;
+    unreadOnly?: boolean;
+  },
+  page: number,
+) {
+  const r = await listMailThreads({ ...params, page, pageSize: LIST_PAGE_SIZE });
   return r.rows;
 }
 

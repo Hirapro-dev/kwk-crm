@@ -595,6 +595,90 @@ Phase 1 では:
 - **注意**: 監査ログ(migration 41)のトリガー対象は members / applications / activities / users のみ。
   inquiries・出金管理・記事リアクションの削除は**監査ログに残らない**(将来の課題)。
 
+### 5.15 メール一元管理 (mail_boxes / mail_threads / mail_messages / mail_attachments) ★2026-09 追加
+設計の経緯・代替案比較・導入手順は `docs/MAIL_DESIGN.md` を参照。ここでは確定仕様のみ。
+
+**目的**: Xserver の共有アドレス `ad@kawaraban.co.jp` 宛のメールを CRM の受信箱(`/mail`)で一元管理し
+(担当割当・ステータス・会員紐付け)、同アドレスを差出人として返信・新規送信する。メールディーラーの置き換え。
+
+**基盤**: **AWS SES** (東京リージョン `ap-northeast-1`)。**送信は SES API、受信は SES 受信ルール → S3 → SNS 通知**。
+IMAP ポーリング・独自メールサーバーは持たない。
+2026-09-08 決定: 当初案の Resend から SES に変更。送信ドメインが約20 (主要5〜6) と多く、送信数は月1,000通未満のため、
+ドメイン数に課金の無い SES が費用面で明確に有利 (年額 数千円 vs Resend Pro $240 / Scale $1,080)。
+代償として、受信の配管 (S3 / SNS / MIME 解析) を自前で持ち、受信用サブドメインの MX 設定とサンドボックス解除申請が必要。
+- 受信経路: 顧客 → 各共有アドレス (Xserver 等、複数サーバー・数百アドレス) → 各サーバーの転送設定
+  (「メールボックスに残す」) → **全アドレス共通の受信用アドレス1つ** (環境変数 `MAIL_INBOUND_ADDRESS`。
+  受信用サブドメインの MX を `inbound-smtp.ap-northeast-1.amazonaws.com` に向ける) → SES 受信ルール
+  (スパム・ウイルス判定を有効化) → **S3 バケット** (`MAIL_INBOUND_BUCKET`) に生 MIME を保存 → **SNS トピック**
+  (`MAIL_SNS_TOPIC_ARN`) から HTTPS 通知 → `POST /api/mail/inbound`。
+  Webhook は SNS の署名を検証し、`TopicArn` が一致する通知だけ処理する (SubscriptionConfirmation は自動確認)。
+  S3 から MIME を取得して `mailparser` で解析し、添付は Supabase Storage へ保存する。S3 側の生 MIME は
+  ライフサイクル (30日) で削除する (CRM が正本)。
+  どの受信箱 (`mail_boxes`) のメールかは、**元の宛先** (`To` / `Cc` / `Delivered-To` / `X-Original-To` /
+  `XSRV-Filter` ヘッダ) と `mail_boxes.address` の一致で判定する。一致が無く有効な受信箱が1つだけならそれに入れる。
+  ウイルス判定 FAIL のメールは取り込まない。スパム判定 FAIL は `category = 迷惑メール` として取り込む。
+  ※ 実メールのヘッダで確認済み (2026-09): Xserver・海外サーバーとも転送で元の `From` / `To` / `Message-ID` は
+  保持される。Xserver は転送時に `Return-Path` を空 (`<>`) にする。メールディーラーも同じ転送方式。
+- 送信経路: `/mail` から SES `SendEmail` API。From は `mail_boxes.address`。ドメインごとに SES で ID を検証し
+  Easy DKIM の CNAME 3本を各ドメインの DNS に追加 (既存の SPF・MX は変えない)。送信可否は SES の ID 検証状態から
+  決定論的に判定し、未検証ドメインのアドレスは「受信専用」表示。配信状態 (Delivery / Bounce / Complaint) は
+  SES 設定セット → SNS → 同じ Webhook で `delivery_status` に反映。本番送信には SES のサンドボックス解除申請が必要。
+- 段階: 主要5〜6ドメイン (Tier 1) から DKIM を設定して送信可にし、残りは受信専用で開始。必要になったドメインから追加。
+- 共有アドレスのドメイン本体の MX には触らない。各サーバーの転送先を外せば元に戻る。
+
+**テーブル**(共通規約: `created_at` / `updated_at`、論理削除は `mail_threads` のみ `deleted_at`):
+- `mail_boxes` — 共有アドレス (1行 = 会社側の公開アドレス1つ。数百件を想定)。`id` serial PK /
+  `address` text unique (公開アドレス = 受信時の宛先判定キー = 送信時の From) / `display_name` text /
+  `signature` text / `is_active` boolean。まず1行 (`ad@kawaraban.co.jp`)。
+  受信用アドレスは受信箱ごとには持たず、全体で1つ (環境変数 `MAIL_INBOUND_ADDRESS`)。
+- `mail_threads` — 対応単位 (受信箱の1行)。`id` uuid PK / `mail_box_id` FK / `subject` text (先頭メールの件名、`Re:` 除去) /
+  `member_id` text FK → members nullable / `status` text check in (`未対応`, `対応中`, `完了`) /
+  `category` text NOT NULL DEFAULT `通常` check in (`通常`, `メルマガ`, `自動応答`, `迷惑メール`) — 受信時にヘッダで
+  決定論的に自動分類。受信箱の既定表示は `通常` のみ、他は絞り込みで表示。**削除はしない** /
+  `assignee_id` uuid FK → users nullable / `last_message_at` timestamptz / `last_direction` text check in (`in`, `out`) /
+  `is_read` boolean (スレッド単位。ユーザー別既読は持たない) / `deleted_at`。
+- `mail_messages` — 1通。`id` uuid PK / `thread_id` FK / `direction` text check in (`in`, `out`) /
+  `message_id` text **unique** (RFC 5322 Message-ID。Webhook 再送の二重登録防止 = 冪等キー) /
+  `in_reply_to` text / `references_header` text (`references` は SQL 予約語のため) / `from_address` / `from_name` text / `to_addresses` / `cc_addresses` text[] /
+  `subject` text / `text_body` text / `html_body` text / `sent_at` timestamptz /
+  `provider_message_id` text (SES 側の MessageId。受信は S3 オブジェクトキー、送信は SendEmail の戻り値。配信状態通知との突合) /
+  `delivery_status` text (送信のみ: `queued` / `sent` / `delivered` / `bounced` / `failed`) /
+  `sender_user_id` uuid FK → users (送信のみ) /
+  `source` text NOT NULL DEFAULT `ses` check in (`ses`, `import_maildealer`, `import_server`) — 来源。将来の
+  過去データ取込 (M4) で取り込んだものを区別し、やり直しを安全にする。
+- `mail_attachments` — `id` uuid PK / `message_id` FK / `filename` / `content_type` text / `size_bytes` bigint /
+  `storage_path` text (Supabase Storage 非公開バケット `mail-attachments`。閲覧は短期署名 URL)。
+
+**決定論的ルール** (コードで実装、AI 判断に任せない / §0.1 R6):
+- スレッド判定: 受信メールの `In-Reply-To` / `References` に含まれる Message-ID が `mail_messages.message_id` に
+  存在すれば同スレッド、無ければ新規。**件名では結合しない**(別件が混ざるため)。
+- 会員突合: 差出人アドレスを小文字化し `members.email1/2/3` と**完全一致**。1件一致→`member_id`、
+  複数一致→先頭 + 要確認表示、0件→NULL (画面で手動紐付け)。あいまい一致はしない。
+- 受信の宛先検証: SES 通知の `receipt.recipients` に `MAIL_INBOUND_ADDRESS` が含まれないものは無視。
+  受信箱の特定は元の宛先と `mail_boxes.address` の完全一致 (小文字化)。同じメールが複数の共有アドレス宛 (To と Cc 等)
+  で複数回転送されてきても `message_id` UNIQUE により最初の1通だけ取り込む。
+- 自動分類 (`category`)。上から順に評価し最初に一致したもの。**会員として登録済みのアドレスからのメールは常に `通常`**:
+  `自動応答` = `Auto-Submitted` が `no` 以外 / 差出人が `mailer-daemon@` `postmaster@` / SES 通知が不達 (bounce);
+  `迷惑メール` = SES の spamVerdict FAIL / `X-Spam-Flag: YES` / `X-Spam-Status: Yes` / 件名先頭 `[SPAM]`;
+  `メルマガ` = `List-Unsubscribe` または `List-Id` あり / `Precedence: bulk` or `list`; それ以外 `通常`。
+  分類したスレッドは `status` を `完了` にしない (見た目上は受信箱の既定表示から外れるだけ)。
+- 送信時: `In-Reply-To` / `References` を付与し顧客側でもスレッド化。送信後 `status`→`対応中`、`last_direction`→`out`。
+  既定では BCC しない (Xserver の転送で戻ってきても `message_id` UNIQUE で二重登録されない)。
+
+**セキュリティ**: Webhook は SNS の署名 (署名用証明書は `sns.<region>.amazonaws.com` のものだけ許可) と `TopicArn` を検証、
+不一致は 401/403。HTML 本文は sandbox iframe + CSP で描画し**画像の自動読み込みをブロック**(開封トラッキング対策)。
+本文・アドレスをログに出さない (§12.4)。AWS の認証情報は Vercel の環境変数のみ (クライアント露出禁止 §12.4)。
+**RLS**: migration 33 と同方針 (SELECT 全ロール / INSERT・UPDATE は viewer 以外 / DELETE は admin)。
+**メニュー**: `nav_items` に `mail` (「メール」, `/mail`) を追加。
+**環境変数** (§13): `MAIL_AWS_REGION` / `MAIL_AWS_ACCESS_KEY_ID` / `MAIL_AWS_SECRET_ACCESS_KEY` (SES・S3 用の IAM ユーザー。
+Vercel では `AWS_*` が予約名のため `MAIL_` 接頭辞を付け、SDK クライアントに明示的に渡す) /
+`MAIL_INBOUND_BUCKET` (受信 MIME の S3 バケット) / `MAIL_SNS_TOPIC_ARN` (受信・配信状態通知のトピック) /
+`MAIL_INBOUND_ADDRESS` (全アドレス共通の受信用アドレス。各サーバーの転送先に登録するもの)。
+
+**段階**: M1 受信箱(受信・スレッド・会員突合・担当/ステータス) → M2 送信(返信・新規・配信状態・`/settings/mail`) →
+M3 CRM 連携(受信/送信を対応歴 `d_bunrui=メール` に自動記録、会員詳細「メール」タブ、定型文、添付送信、スレッド結合)。
+M3 の対応歴自動記録の要否は M2 完了後に判断。
+
 ---
 
 ## 6. データ移行計画
@@ -672,6 +756,11 @@ Supabase RLSで以下を実装:
 | `/applications/[id]` | 申込詳細 | 全項目編集、ステータス遷移 |
 | `/activities` | 活動一覧(ログ中心) | **本システムの主役画面**。新規入力フォーム上部固定。CSV出力ボタンあり(`/activities/export`。画面の絞り込み条件をそのまま引き継ぎ、UTF-8 BOM付き。上限50,000件を超える場合は出力せず絞り込みを促す) |
 | `/projects` | 案件マスタ | admin のみ編集可 |
+| `/mail` | メール受信箱 | スレッド一覧(状態/件名/差出人/会員/担当/最終受信)。フィルタ(状態/担当/受信箱/未読)、既存と同じ分割ビュー (§5.15) |
+| `/mail/[id]` | メールスレッド | メッセージ時系列表示、返信(引用・署名付き)、担当・ステータス変更、会員紐付け |
+| `/mail/new` | メール新規作成 | 宛先(会員検索 or 直接入力)・件名・本文 |
+| `/settings/mail` | メール設定 | 受信箱(mail_boxes)の管理。admin のみ (M2) |
+| `/api/mail/inbound` | (Webhook) | Resend からの受信通知。署名検証必須。画面ではない |
 | `/reports` | レポート一覧 | フォルダ、お気に入り、標準レポート(§9参照) |
 | `/reports/new` | レポート新規作成 | レポートタイプ選択→ビルダー |
 | `/reports/[id]` | レポート実行・表示 | 結果テーブル、グラフ、CSV/Excel出力 |
@@ -1126,6 +1215,14 @@ SUPABASE_SERVICE_ROLE_KEY=        # サーバー専用
 # 移行スクリプト用
 MIGRATE_SOURCE_DIR=./csv          # CSV配置ディレクトリ
 MIGRATE_ERROR_DIR=./errors
+
+# メール一元管理 (§5.15) — サーバー専用。AWS_* は Vercel の予約名のため MAIL_ 接頭辞
+MAIL_AWS_REGION=ap-northeast-1
+MAIL_AWS_ACCESS_KEY_ID=           # SES 送信 + 受信バケット読取 の IAM ユーザー
+MAIL_AWS_SECRET_ACCESS_KEY=
+MAIL_INBOUND_BUCKET=              # SES 受信ルールが生 MIME を置く S3 バケット
+MAIL_SNS_TOPIC_ARN=               # 受信・配信状態の SNS トピック (Webhook で TopicArn を検証)
+MAIL_INBOUND_ADDRESS=             # 全共有アドレス共通の受信用アドレス(各サーバーの転送先に登録)
 ```
 
 ---
