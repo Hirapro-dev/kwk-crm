@@ -32,7 +32,7 @@ export async function listMailBoxes(): Promise<MailBox[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('mail_boxes')
-    .select('id, address, display_name, inbound_address, signature, is_active')
+    .select('id, address, display_name, signature, is_active')
     .order('id', { ascending: true });
   if (error) {
     // migration 76 未適用でも画面を壊さない(既存テーブルと同じフォールバック方針)
@@ -116,7 +116,7 @@ export async function getMailThread(id: string): Promise<MailThreadDetail | null
     .from('mail_threads')
     .select(
       `${THREAD_SELECT},
-       mail_box:mail_boxes!mail_threads_mail_box_id_fkey(id, address, display_name, inbound_address, signature, is_active)`,
+       mail_box:mail_boxes!mail_threads_mail_box_id_fkey(id, address, display_name, signature, is_active)`,
     )
     .eq('id', id)
     .is('deleted_at', null)

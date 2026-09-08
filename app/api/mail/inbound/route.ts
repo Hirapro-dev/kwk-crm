@@ -9,7 +9,9 @@
  *
  * 安全策:
  *   - Resend の署名(Svix 形式)を検証。不一致は 401。
- *   - 宛先が mail_boxes.inbound_address に一致しない受信は無視(200 を返し再送させない)。
+ *   - 受信用アドレス(MAIL_INBOUND_ADDRESS)宛でない受信は無視(200 を返し再送させない)。
+ *     数百の共有アドレスはすべてこの1アドレスへ転送され、どの受信箱かは元の宛先
+ *     (To / Cc / Delivered-To 等。転送で保持されることを実メールで確認済み)で判定する。
  *   - 二重登録防止: provider_message_id(Resend の email_id)と message_id の両方で判定。
  *   - Resend API の失敗時は 500 を返して Resend 側の再送に任せる。
  *   - 本文・アドレスはログに出さない(§12.4)。
@@ -20,8 +22,9 @@
 import {
   ensureMessageId,
   extractReferencedMessageIds,
-  findInboundBox,
   isBlockedAttachment,
+  isInboundTarget,
+  matchMailBox,
   normalizeSubject,
   parseAddress,
   safeFilename,
@@ -59,7 +62,8 @@ function isSafeForMatch(address: string): boolean {
 export async function POST(request: Request): Promise<Response> {
   const apiKey = process.env.RESEND_API_KEY;
   const secret = process.env.RESEND_WEBHOOK_SECRET;
-  if (!apiKey || !secret) {
+  const inboundAddress = process.env.MAIL_INBOUND_ADDRESS;
+  if (!apiKey || !secret || !inboundAddress) {
     return json({ error: 'mail integration is not configured' }, 503);
   }
 
@@ -104,17 +108,9 @@ export async function POST(request: Request): Promise<Response> {
 
   const meta = event.data;
 
-  // ---- 宛先の検証: 受信箱に登録した inbound_address 宛のものだけ取り込む ----
-  const { data: boxes } = await supabase
-    .from('mail_boxes')
-    .select('id, inbound_address, is_active')
-    .eq('is_active', true);
-  const box = findInboundBox(
-    (boxes ?? []) as Array<{ id: number; inbound_address: string | null }>,
-    [...(meta.received_for ?? []), ...(meta.to ?? [])],
-  );
-  if (!box) {
-    return json({ ok: true, ignored: 'no matching mail box' });
+  // ---- 受信用アドレス宛の受信だけを取り込む(他所からの流入は無視) ----
+  if (!isInboundTarget([...(meta.received_for ?? []), ...(meta.to ?? [])], inboundAddress)) {
+    return json({ ok: true, ignored: 'not addressed to inbound address' });
   }
 
   // ---- 二重登録防止(1): Resend の email_id で既に取り込み済みか ----
@@ -132,6 +128,27 @@ export async function POST(request: Request): Promise<Response> {
   if (fetchErr || !email) {
     // Resend 側の一時障害の可能性があるため 500 で再送を促す
     return json({ error: 'failed to fetch received email' }, 500);
+  }
+
+  // ---- 受信箱の特定: 元の宛先(To / Cc / 転送で付くヘッダ)と mail_boxes.address の一致 ----
+  const { data: boxes } = await supabase
+    .from('mail_boxes')
+    .select('id, address, is_active')
+    .eq('is_active', true);
+  const box = matchMailBox(
+    (boxes ?? []) as Array<{ id: number; address: string; is_active: boolean }>,
+    [
+      ...(email.to ?? []),
+      ...(email.cc ?? []),
+      header(email.headers, 'Delivered-To'),
+      header(email.headers, 'X-Original-To'),
+      header(email.headers, 'XSRV-Filter'),
+    ],
+  );
+  if (!box) {
+    // 受信用アドレス宛だが、どの共有アドレス宛か判定できない(未登録のアドレスなど)。
+    // 再送させても結果は変わらないため 200 で受け取り、登録漏れは応答で分かるようにする
+    return json({ ok: true, ignored: 'no matching mail box for original recipient' });
   }
 
   const from = parseAddress(email.from);

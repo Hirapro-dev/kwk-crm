@@ -9,9 +9,9 @@ export type MailStatus = (typeof MAIL_STATUSES)[number];
 
 export interface MailBox {
   id: number;
+  /** 公開アドレス。受信時の宛先判定キーであり、送信時の From */
   address: string;
   display_name: string | null;
-  inbound_address: string | null;
   signature: string | null;
   is_active: boolean;
 }

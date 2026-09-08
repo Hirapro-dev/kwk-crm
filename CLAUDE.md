@@ -603,18 +603,24 @@ Phase 1 では:
 
 **基盤**: Resend (Vercel Marketplace `resend/resend-email`)。**送信は API、受信は Webhook**。
 IMAP ポーリング・独自メールサーバー・生 MIME の保存は持たない。
-- 受信経路: 顧客 → `ad@kawaraban.co.jp` (Xserver) → Xserver の転送設定(「メールボックスに残す」) →
-  Resend 提供の受信用アドレス `inbox@<id>.resend.app` (R1: DNS 作業なし) → Webhook `email.received` →
-  `POST /api/mail/inbound`。Webhook は**メタデータのみ**のため、本文は Resend API で取得し、
-  添付は**期限付き URL** から受信時に即座に Supabase Storage へ保存する。
+- 受信経路: 顧客 → 各共有アドレス (Xserver 等、複数サーバー・数百アドレス) → 各サーバーの転送設定
+  (「メールボックスに残す」) → **全アドレス共通の受信用アドレス1つ** (環境変数 `MAIL_INBOUND_ADDRESS`。
+  Resend 提供の `inbox@<id>.resend.app`。R1: DNS 作業なし) → Webhook `email.received` → `POST /api/mail/inbound`。
+  どの受信箱 (`mail_boxes`) のメールかは、**元の宛先** (`To` / `Cc` / `Delivered-To` / `X-Original-To` /
+  `XSRV-Filter` ヘッダ) と `mail_boxes.address` の一致で判定する。一致が無く有効な受信箱が1つだけならそれに入れる。
+  Webhook は**メタデータのみ**のため、本文・ヘッダは Resend API で取得し、添付は**期限付き URL** から
+  受信時に即座に Supabase Storage へ保存する。
+  ※ 実メールのヘッダで確認済み (2026-09): Xserver・海外サーバーとも転送で元の `From` / `To` / `Message-ID` は
+  保持される。Xserver は転送時に `Return-Path` を空 (`<>`) にする。メールディーラーも同じ転送方式。
 - 送信経路: `/mail` から Resend API。From は `mail_boxes.address`。`kawaraban.co.jp` を Resend の
   送信ドメインとして検証(DKIM 等の DNS レコードを Xserver の DNS 設定に追加。MX は変えない)。
 - `kawaraban.co.jp` 本体の MX には触らない。Xserver の転送先を外せば元に戻る。
 
 **テーブル**(共通規約: `created_at` / `updated_at`、論理削除は `mail_threads` のみ `deleted_at`):
-- `mail_boxes` — 共有アドレス。`id` serial PK / `address` text unique (公開アドレス = 送信時の From) /
-  `display_name` text / `inbound_address` text unique (Xserver の転送先に登録したアドレス。Webhook の宛先判定) /
+- `mail_boxes` — 共有アドレス (1行 = 会社側の公開アドレス1つ。数百件を想定)。`id` serial PK /
+  `address` text unique (公開アドレス = 受信時の宛先判定キー = 送信時の From) / `display_name` text /
   `signature` text / `is_active` boolean。まず1行 (`ad@kawaraban.co.jp`)。
+  受信用アドレスは受信箱ごとには持たず、全体で1つ (環境変数 `MAIL_INBOUND_ADDRESS`)。
 - `mail_threads` — 対応単位 (受信箱の1行)。`id` uuid PK / `mail_box_id` FK / `subject` text (先頭メールの件名、`Re:` 除去) /
   `member_id` text FK → members nullable / `status` text check in (`未対応`, `対応中`, `完了`) /
   `assignee_id` uuid FK → users nullable / `last_message_at` timestamptz / `last_direction` text check in (`in`, `out`) /
@@ -634,7 +640,9 @@ IMAP ポーリング・独自メールサーバー・生 MIME の保存は持た
   存在すれば同スレッド、無ければ新規。**件名では結合しない**(別件が混ざるため)。
 - 会員突合: 差出人アドレスを小文字化し `members.email1/2/3` と**完全一致**。1件一致→`member_id`、
   複数一致→先頭 + 要確認表示、0件→NULL (画面で手動紐付け)。あいまい一致はしない。
-- 受信の宛先検証: Webhook の宛先が `mail_boxes.inbound_address` と一致しないものは無視。
+- 受信の宛先検証: Webhook の `received_for` / `to` に `MAIL_INBOUND_ADDRESS` が含まれないものは無視。
+  受信箱の特定は元の宛先と `mail_boxes.address` の完全一致 (小文字化)。同じメールが複数の共有アドレス宛 (To と Cc 等)
+  で複数回転送されてきても `message_id` UNIQUE により最初の1通だけ取り込む。
 - 送信時: `In-Reply-To` / `References` を付与し顧客側でもスレッド化。送信後 `status`→`対応中`、`last_direction`→`out`。
   既定では BCC しない (Xserver の転送で戻ってきても `message_id` UNIQUE で二重登録されない)。
 
@@ -642,7 +650,8 @@ IMAP ポーリング・独自メールサーバー・生 MIME の保存は持た
 **画像の自動読み込みをブロック**(開封トラッキング対策)。本文・アドレスをログに出さない (§12.4)。
 **RLS**: migration 33 と同方針 (SELECT 全ロール / INSERT・UPDATE は viewer 以外 / DELETE は admin)。
 **メニュー**: `nav_items` に `mail` (「メール」, `/mail`) を追加。
-**環境変数** (§13): `RESEND_API_KEY` (Marketplace が自動投入) / `RESEND_WEBHOOK_SECRET` (Webhook 署名検証用)。
+**環境変数** (§13): `RESEND_API_KEY` (Marketplace が自動投入) / `RESEND_WEBHOOK_SECRET` (Webhook 署名検証用) /
+`MAIL_INBOUND_ADDRESS` (全アドレス共通の受信用アドレス。各サーバーの転送先に登録するもの)。
 
 **段階**: M1 受信箱(受信・スレッド・会員突合・担当/ステータス) → M2 送信(返信・新規・配信状態・`/settings/mail`) →
 M3 CRM 連携(受信/送信を対応歴 `d_bunrui=メール` に自動記録、会員詳細「メール」タブ、定型文、添付送信、スレッド結合)。
@@ -1188,6 +1197,7 @@ MIGRATE_ERROR_DIR=./errors
 # メール一元管理 (§5.15) — サーバー専用
 RESEND_API_KEY=                   # Vercel Marketplace 導入時に自動投入
 RESEND_WEBHOOK_SECRET=            # Resend の Webhook 署名検証用
+MAIL_INBOUND_ADDRESS=             # 全共有アドレス共通の受信用アドレス(各サーバーの転送先に登録)
 ```
 
 ---

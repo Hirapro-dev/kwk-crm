@@ -9,6 +9,7 @@
  *   - 件名の Re:/Fw: 除去(スレッドの表示件名に使う。突合には使わない)
  *   - In-Reply-To / References から Message-ID を取り出す(スレッド判定の入力)
  *   - Message-ID が無いメールへの ID 付与(mail_messages.message_id は NOT NULL UNIQUE)
+ *   - 受信用アドレス宛かの検証と、元の宛先による受信箱の特定(数百アドレスを1つの転送先で受ける)
  */
 
 import { randomUUID } from 'node:crypto';
@@ -93,24 +94,50 @@ export function ensureMessageId(raw: string | null | undefined): string {
   return s.startsWith('<') ? s : `<${s}>`;
 }
 
+/** 宛先群を小文字化したアドレスの集合にする(表示名付き・重複・空を整理) */
+function toAddressSet(recipients: Array<string | null | undefined>): Set<string> {
+  const set = new Set<string>();
+  for (const r of recipients) {
+    // "a@x, b@y" のように1ヘッダに複数入ることがあるため分割してから解析する
+    for (const part of (r ?? '').split(',')) {
+      const a = parseAddress(part).address;
+      if (a) set.add(a);
+    }
+  }
+  return set;
+}
+
 /**
- * 受信メールの宛先群が、いずれかの受信箱の inbound_address に一致するか。
- * Xserver からの転送では宛先は元の ad@kawaraban.co.jp のままで、Resend 側は
- * `received_for`(実際に配送された受信アドレス)に inbox@...resend.app を入れてくるため、
- * to と received_for の両方を見る。一致しない受信は無視する(§5.15)。
+ * Webhook の宛先(received_for / to)に、運用中の受信用アドレス(MAIL_INBOUND_ADDRESS)が
+ * 含まれるか。各サーバーからの転送はすべてこの1アドレスに集まる。
+ * 含まれない受信は他所からの流入とみなして無視する(§5.15)。
  */
-export function findInboundBox<T extends { inbound_address: string | null }>(
+export function isInboundTarget(
+  recipients: Array<string | null | undefined>,
+  inboundAddress: string | null | undefined,
+): boolean {
+  const target = parseAddress(inboundAddress).address;
+  if (!target) return false;
+  return toAddressSet(recipients).has(target);
+}
+
+/**
+ * 元の宛先(To / Cc / Delivered-To / X-Original-To / XSRV-Filter)から受信箱を選ぶ。
+ * 転送で To は元のまま保持されるため(実メールのヘッダで確認済み)、
+ * mail_boxes.address との完全一致(小文字化)で判定する。
+ * 一致が無く、有効な受信箱がちょうど1つなら救済としてそれを返す(単一運用で
+ * 宛先が書き換わっても取りこぼさない)。複数あって決められないときは null。
+ */
+export function matchMailBox<T extends { address: string; is_active?: boolean }>(
   boxes: T[],
   recipients: Array<string | null | undefined>,
 ): T | null {
-  const set = new Set(
-    recipients.map((r) => parseAddress(r).address).filter((a): a is string => a !== ''),
-  );
-  for (const b of boxes) {
-    const ia = (b.inbound_address ?? '').trim().toLowerCase();
-    if (ia && set.has(ia)) return b;
+  const active = boxes.filter((b) => b.is_active !== false);
+  const set = toAddressSet(recipients);
+  for (const b of active) {
+    if (set.has(b.address.trim().toLowerCase())) return b;
   }
-  return null;
+  return active.length === 1 ? (active[0] ?? null) : null;
 }
 
 /**

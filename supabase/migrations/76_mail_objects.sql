@@ -16,14 +16,13 @@
 --   - 生 MIME は保存しない。テキスト/HTML/添付のみ。
 -- ============================================================================
 
--- 1) 共有アドレス(受信箱)。まず ad@kawaraban.co.jp の1行。
+-- 1) 共有アドレス(受信箱)。1行 = 会社側の公開アドレス1つ(数百件を想定)。まず ad@kawaraban.co.jp の1行。
 CREATE TABLE IF NOT EXISTS public.mail_boxes (
   id               serial PRIMARY KEY,
   address          text NOT NULL UNIQUE,   -- 公開アドレス(= 送信時の From)
   display_name     text,                   -- 送信時の表示名
-  -- Xserver の転送先に登録した受信用アドレス(Resend 提供の inbox@<id>.resend.app)。
-  -- Webhook の宛先がこれと一致しない受信は無視する。Resend 導入後に設定するため NULL 可。
-  inbound_address  text UNIQUE,
+  -- 受信用アドレス(各サーバーの転送先に登録する inbox@<id>.resend.app)は受信箱ごとには持たない。
+  -- 全体で1つを環境変数 MAIL_INBOUND_ADDRESS で持ち、どの受信箱かは元の宛先と address の一致で判定する。
   signature        text,                   -- 返信時に付ける署名
   is_active        boolean NOT NULL DEFAULT true,
   created_at       timestamptz NOT NULL DEFAULT now(),
@@ -187,7 +186,7 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 -- 初期データ
 -- ============================================================================
--- 共有アドレス。inbound_address は Resend 導入後に /settings/mail または SQL で設定する。
+-- 共有アドレス。受信用アドレス(転送先)は環境変数 MAIL_INBOUND_ADDRESS で設定する。
 INSERT INTO public.mail_boxes (address, display_name)
 VALUES ('ad@kawaraban.co.jp', 'KAWARA版')
 ON CONFLICT (address) DO NOTHING;

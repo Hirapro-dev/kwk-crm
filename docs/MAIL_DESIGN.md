@@ -53,6 +53,32 @@ Resend 送信 API ── From: ad@kawaraban.co.jp(kawaraban.co.jp の DKIM で�
 
 どちらも `kawaraban.co.jp` 本体の MX には触らない。R1 なら受信側の DNS 作業がゼロになるため、**送信用の DNS(DKIM)だけ**を Xserver の DNS 設定に追加すれば済む。
 
+### 実メールのヘッダーで確認したこと(2026-09-08、メールディーラーが受信した2通)
+
+| | Xserver(`info@hirapro.jp`) | 海外サーバー(`info@shinshi-kyoutei.com`) |
+|---|---|---|
+| 仕組み | `sv101.xserver.jp` で受信 → サーバー側転送で `maildealer-3@mds3191.maildealer.jp` へ | mgfhosting(qmail)で受信 → 同様に転送 |
+| 元の `From` / `To` / `Message-ID` / `Date` | **保持される** | **保持される** |
+| 元の宛先の痕跡 | `Delivered-To` / `XSRV-Filter` に元アドレス | `Delivered-To` に元アドレス |
+| `Return-Path` | `<>`(Xserver が空に書き換える) | 元の送信者のまま |
+
+- メールディーラーの受信は本設計と同じ「各サーバーから、ベンダー提供の受信アドレスへ転送」方式。
+  Xserver 以外のサーバーも同様に転送で動いている
+- `From` と `Message-ID` が保持されるため、会員突合とスレッド判定は設計どおり動く(M1 の懸念は解消)
+- **数百の共有アドレスを1つの受信用アドレスに集約できる**。どの受信箱かは元の宛先(`To` / `Cc` /
+  `Delivered-To` / `X-Original-To` / `XSRV-Filter`)と `mail_boxes.address` の一致で判定する
+- Xserver の転送は `Return-Path` が空(`<>`)になる。Resend の受信がこれを受け付けることは M1 のテスト送信で確認する【要確認】
+
+### DNS から分かったこと(送信側)
+
+`kawaraban.co.jp` の SPF に `include:mdharima.maildealer.jp` / `include:mdharimagw.maildealer.jp` が入っている
+(`toushi-kawaraban.com` も同様)。つまり**メールディーラーはベンダーのサーバーから送信しており、そのための DNS(SPF)は
+導入時に設定済み**だった。「DNS 設定なしで送れている」わけではない。
+
+副産物: `kawaraban.co.jp` は SPF レコードが3つ(`toushi-kawaraban.com` / `carbon-market.com` は2つ)あり、
+RFC 7208 違反で SPF が事実上無効(permerror)になっている。DMARC が `p=none` のため拒否はされていないが、
+ツールの選定と無関係に**1つに統合すべき**。
+
 ### Resend の受信機能(公式情報で確認済み)
 
 - 受信(Inbound)は **全プランで利用可**(2025-11 提供開始)。送信は Free 3,000通/月、Pro $20/月で50,000通
@@ -95,14 +121,13 @@ Resend 送信 API ── From: ad@kawaraban.co.jp(kawaraban.co.jp の DKIM で�
 既存規約どおり: 論理削除(`deleted_at`)、`created_at`/`updated_at`、RLS 必須、可変項目は jsonb。
 
 ### 3.1 mail_boxes(共有アドレス)
-1行 = 会社側の公開アドレス1つ。最初は1行でも、`info@` `sales@` と増えたときに画面を変えずに済む。
+1行 = 会社側の公開アドレス1つ(数百件を想定)。受信用アドレス(転送先)は受信箱ごとには持たず、全体で1つを環境変数 `MAIL_INBOUND_ADDRESS` で持つ。どの受信箱かは元の宛先と `address` の一致で判定する。
 
 | カラム | 型 | 内容 |
 |---|---|---|
 | `id` | serial PK | |
 | `address` | text unique | 公開アドレス(`ad@kawaraban.co.jp`)。送信時の From |
 | `display_name` | text | 送信時の表示名(「KAWARA版」等) |
-| `inbound_address` | text unique | Xserver の転送先に登録したアドレス(R1: `inbox@<id>.resend.app`)。受信 Webhook の宛先判定に使う。R2 へ移行するときはここを書き換えるだけ |
 | `signature` | text | 返信時に付ける署名 |
 | `is_active` | boolean | |
 
@@ -208,7 +233,7 @@ Resend 送信 API ── From: ad@kawaraban.co.jp(kawaraban.co.jp の DKIM で�
 |---|---|---|---|
 | 1 | 開発側 | Vercel Marketplace から Resend を導入(`vercel integration add resend/resend-email`) | API キーは環境変数に自動投入。**Resend アカウントが Vercel チームに紐づく(課金主体)** |
 | 2 | 開発側 | Resend で受信を有効化し、受信用アドレス(R1: `inbox@<id>.resend.app`)を控える。Webhook URL **`https://crm.hirapro.com/api/mail/inbound`** を登録(イベント: `email.received` / `email.sent` / `email.delivered` / `email.bounced` / `email.failed`)。署名シークレットを Vercel 環境変数 `RESEND_WEBHOOK_SECRET` に設定 | 本番の安定 URL は `crm.hirapro.com`(確認済み) |
-| 3 | **Xserver 管理者** | サーバーパネル > メールアカウント設定 > `ad@kawaraban.co.jp` の転送 > 「転送先アドレス」に **2 の受信用アドレスを1行追加** > 追加する。「メールボックスに残すかどうか」は **残す** のまま | 添付画面の操作そのまま。メールディーラーの2件は当面残す(並行稼働) |
+| 3 | **各サーバーの管理者** | 取り込みたい共有アドレスごとに、転送先へ **2 の受信用アドレス(全アドレス共通)を1行追加**。Xserver ならサーバーパネル > メールアカウント設定 > 転送。「メールボックスに残す」のまま | 数百アドレスでも貼るアドレスは同じ1つ。メールディーラーの転送は当面残す(並行稼働)。CRM 側は `mail_boxes` に同じアドレスを登録しておく |
 | 4 | 開発側 | テストメールを `ad@kawaraban.co.jp` に送り、CRM に届くこと・**元の From / Message-ID が保持されていること**を確認 | Xserver の転送でヘッダーが書き換わらないかは公式マニュアルに記載がない【要確認: M1 の最初の検証項目】 |
 | 5 | 開発側 → Xserver 管理者 | Resend に `kawaraban.co.jp` を送信ドメインとして追加すると DNS レコード(DKIM の TXT 等)が表示されるので、それを **Xserver の DNS 設定**に追加 | 送信用。MX は変えない。Resend は Return-Path 用に `send.` サブドメインを使う設計のため、Xserver が自動設定済みの `kawaraban.co.jp` の SPF とは通常衝突しない【要確認: 実際に表示されたレコードで判断】 |
 | 6 | 開発側 | CRM から `ad@kawaraban.co.jp` 差出人でテスト送信し、DKIM 署名が有効で迷惑メール判定されないことを確認 | |
@@ -237,7 +262,8 @@ M3 の「対応歴への自動記録」が、この CRM にメールを載せる
 3. **共有アドレスの数** — まず `ad@kawaraban.co.jp` の1つで開始(データモデルは複数対応済みなので後から追加可)。既定: **1つ**
 4. **閲覧権限** — 全ロールに見せるか、admin / manager / support に限定するか。既定: **既存テーブルと同じ「全ロール閲覧可・書込は viewer 以外」**
 5. **対応歴への自動記録(M3)** — 必要か。必要なら「受信も記録するか / 送信だけか」。既定: **M1/M2 では行わず、M3 で判断**
-6. **Resend 導入の実行許可** — Marketplace 経由の導入は Vercel チームに Resend アカウント(課金主体)を作る操作になるため、**実行前に許可をいただきたい**。Free プランで開始可(送信 3,000通/月。受信は全プラン利用可だが通数上限は【要確認】)
+6. **共有アドレスが分かれているドメイン数** — DNS(送信用 DKIM)の作業はアドレス単位ではなくドメイン単位。数百アドレスが何ドメインかで送信方式の現実解が決まる【回答待ち】
+7. **Resend 導入の実行許可** — Marketplace 経由の導入は Vercel チームに Resend アカウント(課金主体)を作る操作になるため、**実行前に許可をいただきたい**。Free プランで開始可(送信 3,000通/月。受信は全プラン利用可だが通数上限は【要確認】)
 
 ---
 
