@@ -16,6 +16,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // メール受信 Webhook (/api/mail/*) も同様に対象外。AWS SNS がセッション無しで
+  // 呼び出すため、ここで弾くと /login へ 307 リダイレクトされ SNS の購読確認・
+  // 受信通知が届かない。認証は route 側の SNS 署名検証 + TopicArn 一致確認で行う
+  // (app/api/mail/inbound/route.ts)。CLAUDE.md §5.15
+  if (request.nextUrl.pathname.startsWith('/api/mail/')) {
+    return NextResponse.next();
+  }
+
   const devAuth = process.env.DEV_AUTH_BYPASS === '1';
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
