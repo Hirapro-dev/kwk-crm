@@ -214,8 +214,16 @@ RFC 7208 違反で SPF が事実上無効(permerror)になっている。DMARC �
 
 ### 5.0 ドメイン構成と段階的な送信対応(2026-09-08 提案)
 
-前提(ヒアリング): 共有アドレスは **約20ドメイン**に分かれ、**主要で稼働中なのは5〜6ドメイン**。
+前提(2026-09-08 のドメイン一覧 CSV より): 共有アドレスは **43 ドメイン**、うち「メインドメイン」は **17**
+(Xserver 14 / ムームードメイン・Z.com・お名前.com 各 1)。追加の可能性あり。
 DNS の作業はアドレス単位ではなく**ドメイン単位**なので、規模はこの「ドメイン数」で決まる。
+SES はドメイン数に上限・課金が無いため、17 でも 43 でも費用は変わらない。
+
+Tier 1(送信を先に有効化): toushi-kawaraban.com / kawaraban.co.jp / asec-project-partners.jp /
+sir-project-partners.co.jp / global-project-partners.co.jp / otosen-project-partners.com / hirayama-toshihiro.co.jp /
+gpp-sg-payment.co.jp / sc-project-partners.co.jp / hirapro.com / scpp.jp / toushi-no-kawaraban.com / mrt.co.jp /
+biovault.co.jp / biovault.jp(ムームー)/ gpp-singapore.com(Z.com)/ carbon-market.com(お名前.com)。
+構築の実手順は docs/MAIL_AWS_SETUP.md。
 
 Resend のプラン別上限(公式ページ、2026-09 確認):
 
