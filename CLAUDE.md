@@ -621,7 +621,7 @@ IMAP ポーリング・独自メールサーバー・生 MIME の保存は持た
   `is_read` boolean (スレッド単位。ユーザー別既読は持たない) / `deleted_at`。
 - `mail_messages` — 1通。`id` uuid PK / `thread_id` FK / `direction` text check in (`in`, `out`) /
   `message_id` text **unique** (RFC 5322 Message-ID。Webhook 再送の二重登録防止 = 冪等キー) /
-  `in_reply_to` text / `references` text / `from_address` / `from_name` text / `to_addresses` / `cc_addresses` text[] /
+  `in_reply_to` text / `references_header` text (`references` は SQL 予約語のため) / `from_address` / `from_name` text / `to_addresses` / `cc_addresses` text[] /
   `subject` text / `text_body` text / `html_body` text / `sent_at` timestamptz /
   `provider_message_id` text (Resend 側 ID。配信状態 Webhook との突合) /
   `delivery_status` text (送信のみ: `queued` / `sent` / `delivered` / `bounced` / `failed`) /
