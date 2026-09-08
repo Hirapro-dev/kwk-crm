@@ -595,6 +595,59 @@ Phase 1 では:
 - **注意**: 監査ログ(migration 41)のトリガー対象は members / applications / activities / users のみ。
   inquiries・出金管理・記事リアクションの削除は**監査ログに残らない**(将来の課題)。
 
+### 5.15 メール一元管理 (mail_boxes / mail_threads / mail_messages / mail_attachments) ★2026-09 追加
+設計の経緯・代替案比較・導入手順は `docs/MAIL_DESIGN.md` を参照。ここでは確定仕様のみ。
+
+**目的**: Xserver の共有アドレス `ad@kawaraban.co.jp` 宛のメールを CRM の受信箱(`/mail`)で一元管理し
+(担当割当・ステータス・会員紐付け)、同アドレスを差出人として返信・新規送信する。メールディーラーの置き換え。
+
+**基盤**: Resend (Vercel Marketplace `resend/resend-email`)。**送信は API、受信は Webhook**。
+IMAP ポーリング・独自メールサーバー・生 MIME の保存は持たない。
+- 受信経路: 顧客 → `ad@kawaraban.co.jp` (Xserver) → Xserver の転送設定(「メールボックスに残す」) →
+  Resend 提供の受信用アドレス `inbox@<id>.resend.app` (R1: DNS 作業なし) → Webhook `email.received` →
+  `POST /api/mail/inbound`。Webhook は**メタデータのみ**のため、本文は Resend API で取得し、
+  添付は**期限付き URL** から受信時に即座に Supabase Storage へ保存する。
+- 送信経路: `/mail` から Resend API。From は `mail_boxes.address`。`kawaraban.co.jp` を Resend の
+  送信ドメインとして検証(DKIM 等の DNS レコードを Xserver の DNS 設定に追加。MX は変えない)。
+- `kawaraban.co.jp` 本体の MX には触らない。Xserver の転送先を外せば元に戻る。
+
+**テーブル**(共通規約: `created_at` / `updated_at`、論理削除は `mail_threads` のみ `deleted_at`):
+- `mail_boxes` — 共有アドレス。`id` serial PK / `address` text unique (公開アドレス = 送信時の From) /
+  `display_name` text / `inbound_address` text unique (Xserver の転送先に登録したアドレス。Webhook の宛先判定) /
+  `signature` text / `is_active` boolean。まず1行 (`ad@kawaraban.co.jp`)。
+- `mail_threads` — 対応単位 (受信箱の1行)。`id` uuid PK / `mail_box_id` FK / `subject` text (先頭メールの件名、`Re:` 除去) /
+  `member_id` text FK → members nullable / `status` text check in (`未対応`, `対応中`, `完了`) /
+  `assignee_id` uuid FK → users nullable / `last_message_at` timestamptz / `last_direction` text check in (`in`, `out`) /
+  `is_read` boolean (スレッド単位。ユーザー別既読は持たない) / `deleted_at`。
+- `mail_messages` — 1通。`id` uuid PK / `thread_id` FK / `direction` text check in (`in`, `out`) /
+  `message_id` text **unique** (RFC 5322 Message-ID。Webhook 再送の二重登録防止 = 冪等キー) /
+  `in_reply_to` text / `references` text / `from_address` / `from_name` text / `to_addresses` / `cc_addresses` text[] /
+  `subject` text / `text_body` text / `html_body` text / `sent_at` timestamptz /
+  `provider_message_id` text (Resend 側 ID。配信状態 Webhook との突合) /
+  `delivery_status` text (送信のみ: `queued` / `sent` / `delivered` / `bounced` / `failed`) /
+  `sender_user_id` uuid FK → users (送信のみ)。
+- `mail_attachments` — `id` uuid PK / `message_id` FK / `filename` / `content_type` text / `size_bytes` bigint /
+  `storage_path` text (Supabase Storage 非公開バケット `mail-attachments`。閲覧は短期署名 URL)。
+
+**決定論的ルール** (コードで実装、AI 判断に任せない / §0.1 R6):
+- スレッド判定: 受信メールの `In-Reply-To` / `References` に含まれる Message-ID が `mail_messages.message_id` に
+  存在すれば同スレッド、無ければ新規。**件名では結合しない**(別件が混ざるため)。
+- 会員突合: 差出人アドレスを小文字化し `members.email1/2/3` と**完全一致**。1件一致→`member_id`、
+  複数一致→先頭 + 要確認表示、0件→NULL (画面で手動紐付け)。あいまい一致はしない。
+- 受信の宛先検証: Webhook の宛先が `mail_boxes.inbound_address` と一致しないものは無視。
+- 送信時: `In-Reply-To` / `References` を付与し顧客側でもスレッド化。送信後 `status`→`対応中`、`last_direction`→`out`。
+  既定では BCC しない (Xserver の転送で戻ってきても `message_id` UNIQUE で二重登録されない)。
+
+**セキュリティ**: Webhook は Resend の署名 (Svix 形式) を検証、不一致は 401。HTML 本文は表示時にサニタイズし
+**画像の自動読み込みをブロック**(開封トラッキング対策)。本文・アドレスをログに出さない (§12.4)。
+**RLS**: migration 33 と同方針 (SELECT 全ロール / INSERT・UPDATE は viewer 以外 / DELETE は admin)。
+**メニュー**: `nav_items` に `mail` (「メール」, `/mail`) を追加。
+**環境変数** (§13): `RESEND_API_KEY` (Marketplace が自動投入) / `RESEND_WEBHOOK_SECRET` (Webhook 署名検証用)。
+
+**段階**: M1 受信箱(受信・スレッド・会員突合・担当/ステータス) → M2 送信(返信・新規・配信状態・`/settings/mail`) →
+M3 CRM 連携(受信/送信を対応歴 `d_bunrui=メール` に自動記録、会員詳細「メール」タブ、定型文、添付送信、スレッド結合)。
+M3 の対応歴自動記録の要否は M2 完了後に判断。
+
 ---
 
 ## 6. データ移行計画
@@ -672,6 +725,11 @@ Supabase RLSで以下を実装:
 | `/applications/[id]` | 申込詳細 | 全項目編集、ステータス遷移 |
 | `/activities` | 活動一覧(ログ中心) | **本システムの主役画面**。新規入力フォーム上部固定。CSV出力ボタンあり(`/activities/export`。画面の絞り込み条件をそのまま引き継ぎ、UTF-8 BOM付き。上限50,000件を超える場合は出力せず絞り込みを促す) |
 | `/projects` | 案件マスタ | admin のみ編集可 |
+| `/mail` | メール受信箱 | スレッド一覧(状態/件名/差出人/会員/担当/最終受信)。フィルタ(状態/担当/受信箱/未読)、既存と同じ分割ビュー (§5.15) |
+| `/mail/[id]` | メールスレッド | メッセージ時系列表示、返信(引用・署名付き)、担当・ステータス変更、会員紐付け |
+| `/mail/new` | メール新規作成 | 宛先(会員検索 or 直接入力)・件名・本文 |
+| `/settings/mail` | メール設定 | 受信箱(mail_boxes)の管理。admin のみ (M2) |
+| `/api/mail/inbound` | (Webhook) | Resend からの受信通知。署名検証必須。画面ではない |
 | `/reports` | レポート一覧 | フォルダ、お気に入り、標準レポート(§9参照) |
 | `/reports/new` | レポート新規作成 | レポートタイプ選択→ビルダー |
 | `/reports/[id]` | レポート実行・表示 | 結果テーブル、グラフ、CSV/Excel出力 |
@@ -1126,6 +1184,10 @@ SUPABASE_SERVICE_ROLE_KEY=        # サーバー専用
 # 移行スクリプト用
 MIGRATE_SOURCE_DIR=./csv          # CSV配置ディレクトリ
 MIGRATE_ERROR_DIR=./errors
+
+# メール一元管理 (§5.15) — サーバー専用
+RESEND_API_KEY=                   # Vercel Marketplace 導入時に自動投入
+RESEND_WEBHOOK_SECRET=            # Resend の Webhook 署名検証用
 ```
 
 ---
