@@ -9,15 +9,18 @@
  *   MAIL_AWS_ACCESS_KEY_ID=... MAIL_AWS_SECRET_ACCESS_KEY=... \
  *   npx tsx scripts/mail/setup_aws.ts \
  *     --bucket kwk-crm-mail-inbound \
- *     --inbound inbox@crm-mail.kawaraban.co.jp \
+ *     --inbound inbox@mail.crm.hirapro.com \
  *     --endpoint https://crm.hirapro.com/api/mail/inbound \
- *     [--subscribe] [--dry-run]
+ *     [--subscribe] [--domain kawaraban.co.jp ...] [--dry-run]
  *
  * 作るもの:
  *   1. S3 バケット(公開ブロック / SES からの書込ポリシー / 30日で自動削除)
  *   2. SNS トピック(SES からの Publish を許可)
  *   3. SES 受信ルールセット + ルール(宛先 = 受信用アドレス → スパム・ウイルス判定 → S3 に保存 → SNS 通知)+ 有効化
- *   4. --subscribe を付けたとき: SNS トピックに Webhook(HTTPS)を購読登録
+ *   4. SES 設定セット kwk-crm-mail(送信の Send/Delivery/Bounce/Complaint/Reject を同じ SNS トピックへ)
+ *   5. --domain を付けたとき: 送信ドメインを SES に ID 登録し、DNS に追加する DKIM の CNAME 3本を表示
+ *      (複数指定可。Tier 1 のドメインから順に)
+ *   6. --subscribe を付けたとき: SNS トピックに Webhook(HTTPS)を購読登録
  *      ※ Webhook 側で MAIL_SNS_TOPIC_ARN が設定済みでないと購読確認を拒否するため、
  *        先に 1〜3 を実行して出力された環境変数を Vercel に設定し、再デプロイしてから --subscribe を付けて再実行する
  *
@@ -41,6 +44,14 @@ import {
   SetActiveReceiptRuleSetCommand,
 } from '@aws-sdk/client-ses';
 import {
+  CreateConfigurationSetCommand,
+  CreateConfigurationSetEventDestinationCommand,
+  CreateEmailIdentityCommand,
+  GetConfigurationSetCommand,
+  GetEmailIdentityCommand,
+  SESv2Client,
+} from '@aws-sdk/client-sesv2';
+import {
   CreateTopicCommand,
   ListSubscriptionsByTopicCommand,
   SNSClient,
@@ -53,6 +64,7 @@ const RULE_SET_NAME = 'kwk-crm-mail';
 const RULE_NAME = 'kwk-crm-inbound';
 const TOPIC_NAME = 'kwk-crm-mail';
 const OBJECT_KEY_PREFIX = 'inbound/';
+const CONFIGURATION_SET = 'kwk-crm-mail';
 const RETENTION_DAYS = 30;
 
 function arg(name: string): string | undefined {
@@ -61,6 +73,14 @@ function arg(name: string): string | undefined {
 }
 function flag(name: string): boolean {
   return process.argv.includes(`--${name}`);
+}
+/** 同じオプションが複数回指定された値をすべて返す(--domain a --domain b) */
+function args(name: string): string[] {
+  const out: string[] = [];
+  process.argv.forEach((v, i) => {
+    if (v === `--${name}` && process.argv[i + 1]) out.push(process.argv[i + 1] as string);
+  });
+  return out;
 }
 
 async function main() {
@@ -72,6 +92,7 @@ async function main() {
   const endpoint = arg('endpoint');
   const dryRun = flag('dry-run');
   const doSubscribe = flag('subscribe');
+  const domains = args('domain').map((d) => d.trim().toLowerCase());
 
   if (!accessKeyId || !secretAccessKey) {
     throw new Error(
@@ -93,6 +114,7 @@ async function main() {
   const s3 = new S3Client({ region, credentials });
   const sns = new SNSClient({ region, credentials });
   const ses = new SESClient({ region, credentials });
+  const sesv2 = new SESv2Client({ region, credentials });
 
   const { Account: accountId } = await sts.send(new GetCallerIdentityCommand({}));
   if (!accountId) throw new Error('AWS アカウント ID を取得できませんでした');
@@ -243,7 +265,62 @@ async function main() {
     await ses.send(new SetActiveReceiptRuleSetCommand({ RuleSetName: RULE_SET_NAME }));
   }
 
-  // ---------------------------------------------------------------- 4. Webhook の購読(任意)
+  // ---------------------------------------------------------------- 4. SES 設定セット(送信の配信状態 → SNS)
+  let csExists = false;
+  try {
+    await sesv2.send(new GetConfigurationSetCommand({ ConfigurationSetName: CONFIGURATION_SET }));
+    csExists = true;
+  } catch {
+    csExists = false;
+  }
+  console.log(`[SES] 設定セット ${CONFIGURATION_SET}: ${csExists ? '既存' : '作成'}`);
+  if (!dryRun && !csExists) {
+    await sesv2.send(
+      new CreateConfigurationSetCommand({ ConfigurationSetName: CONFIGURATION_SET }),
+    );
+    await sesv2.send(
+      new CreateConfigurationSetEventDestinationCommand({
+        ConfigurationSetName: CONFIGURATION_SET,
+        EventDestinationName: 'sns-webhook',
+        EventDestination: {
+          Enabled: true,
+          MatchingEventTypes: [
+            'SEND',
+            'DELIVERY',
+            'BOUNCE',
+            'COMPLAINT',
+            'REJECT',
+            'RENDERING_FAILURE',
+          ],
+          SnsDestination: { TopicArn: topicArn },
+        },
+      }),
+    );
+  }
+
+  // ---------------------------------------------------------------- 5. 送信ドメインの ID 登録(任意)
+  const dkimLines: string[] = [];
+  for (const domain of domains) {
+    let tokens: string[] = [];
+    let verified = false;
+    try {
+      const r = await sesv2.send(new GetEmailIdentityCommand({ EmailIdentity: domain }));
+      tokens = r.DkimAttributes?.Tokens ?? [];
+      verified = r.VerifiedForSendingStatus === true;
+      console.log(`[SES] ドメイン ${domain}: 登録済み(送信可=${verified ? 'はい' : 'まだ'})`);
+    } catch {
+      console.log(`[SES] ドメイン ${domain}: ${dryRun ? '登録(dry-run)' : '登録'}`);
+      if (!dryRun) {
+        const r = await sesv2.send(new CreateEmailIdentityCommand({ EmailIdentity: domain }));
+        tokens = r.DkimAttributes?.Tokens ?? [];
+      }
+    }
+    for (const t of tokens) {
+      dkimLines.push(`${t}._domainkey.${domain}.  CNAME  ${t}.dkim.amazonses.com.`);
+    }
+  }
+
+  // ---------------------------------------------------------------- 6. Webhook の購読(任意)
   if (doSubscribe && !dryRun) {
     const subs = await sns.send(new ListSubscriptionsByTopicCommand({ TopicArn: topicArn }));
     const already = (subs.Subscriptions ?? []).find((s) => s.Endpoint === endpoint);
@@ -278,13 +355,26 @@ async function main() {
   console.log(`MAIL_INBOUND_BUCKET=${bucket}`);
   console.log(`MAIL_SNS_TOPIC_ARN=${topicArn}`);
   console.log(`MAIL_INBOUND_ADDRESS=${inbound}`);
+  console.log(`MAIL_SES_CONFIGURATION_SET=${CONFIGURATION_SET}`);
   console.log('\n===== DNS(受信用サブドメイン。既存の MX には触らない) =====');
   console.log(`${inboundDomain}.  MX  10  inbound-smtp.${region}.amazonaws.com.`);
+  if (dkimLines.length > 0) {
+    console.log(
+      '\n===== DNS(送信ドメインの DKIM。各ドメインの DNS に CNAME を追加。既存の SPF/MX は変えない) =====',
+    );
+    for (const l of dkimLines) console.log(l);
+  }
   console.log('\n===== 次の手順 =====');
   console.log('1. 上の環境変数を Vercel に設定して再デプロイ');
-  console.log(`2. 本スクリプトを --subscribe 付きで再実行(Webhook が購読確認を自動で行う)`);
+  console.log('2. 本スクリプトを --subscribe 付きで再実行(Webhook が購読確認を自動で行う)');
   console.log(`3. 各サーバーの転送先に ${inbound} を追加`);
   console.log(`4. ${inbound} 宛にテストメールを送り、/mail に表示されることを確認`);
+  console.log(
+    '5. 送信: --domain で Tier 1 ドメインを登録 → DKIM CNAME を DNS に追加 → SES の検証完了後に返信可',
+  );
+  console.log(
+    '6. 本番送信にはサンドボックス解除の申請(SES コンソール > Account dashboard > Request production access)',
+  );
 }
 
 main().catch((e) => {

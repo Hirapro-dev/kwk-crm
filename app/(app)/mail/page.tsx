@@ -96,6 +96,12 @@ export default async function MailPage({ searchParams }: PageProps) {
     return qs ? `/mail?${qs}` : '/mail';
   })();
 
+  const newButton = (
+    <Link href="/mail/new">
+      <Button size="sm">新規作成</Button>
+    </Link>
+  );
+
   const filterBar = (
     <PanelFilterBar>
       <MailFilterBar
@@ -126,11 +132,14 @@ export default async function MailPage({ searchParams }: PageProps) {
               viewName="メール"
               totalCount={result.total}
               actions={
-                <Link href={toListHref}>
-                  <Button variant="outline" size="sm">
-                    一覧表示
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-2">
+                  {newButton}
+                  <Link href={toListHref}>
+                    <Button variant="outline" size="sm">
+                      一覧表示
+                    </Button>
+                  </Link>
+                </div>
               }
             />
             {filterBar}
@@ -171,11 +180,14 @@ export default async function MailPage({ searchParams }: PageProps) {
           viewName="メール"
           totalCount={result.total}
           actions={
-            <Link href={toSplitHref}>
-              <Button variant="outline" size="sm">
-                分割ビュー
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              {newButton}
+              <Link href={toSplitHref}>
+                <Button variant="outline" size="sm">
+                  分割ビュー
+                </Button>
+              </Link>
+            </div>
           }
         />
         {filterBar}

@@ -13,10 +13,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { getMailAttachmentSignedUrl, getMailThread } from '@/lib/domain/mail';
 import { listAllUsers } from '@/lib/domain/users_admin';
+import { getMailAwsConfig } from '@/lib/mail/aws';
+import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { MailHtmlViewer } from './MailHtmlViewer';
+import { MailReplyForm } from './MailReplyForm';
 import { MailThreadControls } from './MailThreadControls';
 import { MarkThreadRead } from './MarkThreadRead';
 
@@ -53,6 +56,19 @@ export async function MailThreadPanel({ threadId, embedded }: Props) {
   const assigneeOptions = users.map((u) => ({ id: u.id, name: u.full_name ?? u.email }));
   const canEdit = me.role !== 'viewer';
 
+  // 送信可否: SES でドメイン検証済みの受信箱だけ返信できる(M2)
+  const cfg = getMailAwsConfig();
+  const boxDomain = thread.mail_box ? domainOf(thread.mail_box.address) : null;
+  const sendable =
+    !!cfg &&
+    !!boxDomain &&
+    !!thread.mail_box?.is_active &&
+    (await isDomainSendable(cfg, boxDomain));
+  const disabledReason = !cfg
+    ? '送信基盤(SES)が未設定です。'
+    : `送信元ドメイン ${boxDomain ?? ''} が SES で未検証です。検証(DKIM 設定)後に送信できるようになります。`;
+  const lastInbound = [...thread.messages].reverse().find((m) => m.direction === 'in');
+
   // 添付の署名 URL をまとめて発行
   const signedUrls = new Map<string, string>();
   await Promise.all(
@@ -85,6 +101,11 @@ export async function MailThreadPanel({ threadId, embedded }: Props) {
               )}
             </span>
             <span>{thread.messages.length} 通</span>
+            {!sendable && (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                受信専用
+              </Badge>
+            )}
           </div>
         </CardHeader>
         <CardContent className="p-3">
@@ -184,6 +205,16 @@ export async function MailThreadPanel({ threadId, embedded }: Props) {
           </Card>
         );
       })}
+
+      {canEdit && (
+        <MailReplyForm
+          threadId={thread.id}
+          replyTo={lastInbound?.from_address ?? null}
+          sendable={sendable}
+          disabledReason={disabledReason}
+          signature={thread.mail_box?.signature ?? null}
+        />
+      )}
     </div>
   );
 }

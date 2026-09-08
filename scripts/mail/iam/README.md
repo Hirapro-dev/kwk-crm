@@ -20,7 +20,7 @@ MAIL_AWS_REGION=ap-northeast-1 \
 MAIL_AWS_ACCESS_KEY_ID=<setup のキー> MAIL_AWS_SECRET_ACCESS_KEY=<setup のシークレット> \
 npx tsx scripts/mail/setup_aws.ts \
   --bucket kwk-crm-mail-inbound \
-  --inbound inbox@crm-mail.kawaraban.co.jp \
+  --inbound inbox@mail.crm.hirapro.com \
   --endpoint https://crm.hirapro.com/api/mail/inbound \
   --dry-run
 
