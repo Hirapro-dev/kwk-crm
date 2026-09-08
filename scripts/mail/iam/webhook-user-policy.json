@@ -5,7 +5,7 @@
       "Sid": "ReadInboundMail",
       "Effect": "Allow",
       "Action": ["s3:GetObject"],
-      "Resource": "arn:aws:s3:::kwk-crm-mail-inbound/inbound/*"
+      "Resource": "arn:aws:s3:::hirapro-crm-mail-inbound/inbound/*"
     },
     {
       "Sid": "SendMail",

@@ -5,10 +5,10 @@ AWS コンソール > IAM > ユーザー > 「ユーザーを作成」で2つ作
 
 | ユーザー名(例) | ポリシー | 用途 | キーの置き場所 |
 |---|---|---|---|
-| `kwk-crm-mail-setup` | `setup-user-policy.json` | `scripts/mail/setup_aws.ts` の実行(S3 / SNS / SES 受信ルール等の**作成**) | 実行する人の手元のみ。Vercel には置かない |
-| `kwk-crm-mail-webhook` | `webhook-user-policy.json` | 本番の Webhook(受信 MIME の読取)と送信(`ses:SendEmail`) | Vercel の環境変数 `MAIL_AWS_ACCESS_KEY_ID` / `MAIL_AWS_SECRET_ACCESS_KEY` |
+| `hirapro-crm-mail-setup` | `setup-user-policy.json` | `scripts/mail/setup_aws.ts` の実行(S3 / SNS / SES 受信ルール等の**作成**) | 実行する人の手元のみ。Vercel には置かない |
+| `hirapro-crm-mail-webhook` | `webhook-user-policy.json` | 本番の Webhook(受信 MIME の読取)と送信(`ses:SendEmail`) | Vercel の環境変数 `MAIL_AWS_ACCESS_KEY_ID` / `MAIL_AWS_SECRET_ACCESS_KEY` |
 
-- バケット名(`kwk-crm-mail-inbound`)やリージョン(`ap-northeast-1`)を変える場合は JSON 内の ARN も合わせて変更する。
+- バケット名(`hirapro-crm-mail-inbound`)やリージョン(`ap-northeast-1`)を変える場合は JSON 内の ARN も合わせて変更する。
 - `setup` ユーザーのキーは構築が終わったら削除してよい(再実行が必要になったら作り直す)。
 - `webhook` ユーザーはバケットの `inbound/` 配下の読取と送信だけ。受信ルールや他のバケットには触れない。
 
@@ -19,7 +19,7 @@ AWS コンソール > IAM > ユーザー > 「ユーザーを作成」で2つ作
 MAIL_AWS_REGION=ap-northeast-1 \
 MAIL_AWS_ACCESS_KEY_ID=<setup のキー> MAIL_AWS_SECRET_ACCESS_KEY=<setup のシークレット> \
 npx tsx scripts/mail/setup_aws.ts \
-  --bucket kwk-crm-mail-inbound \
+  --bucket hirapro-crm-mail-inbound \
   --inbound inbox@mail.crm.hirapro.com \
   --endpoint https://crm.hirapro.com/api/mail/inbound \
   --dry-run

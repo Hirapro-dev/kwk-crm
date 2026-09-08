@@ -9,8 +9,8 @@
 |---|---|
 | リージョン | **東京 `ap-northeast-1`**(コンソール右上で必ず切り替える) |
 | 受信用サブドメイン / アドレス | **`mail.crm.hirapro.com`** / **`inbox@mail.crm.hirapro.com`**(DNS は Xserver の `hirapro.com`) |
-| S3 バケット名 | `kwk-crm-mail-inbound` |
-| SNS トピック / SES 設定セット | `kwk-crm-mail` |
+| S3 バケット名 | `hirapro-crm-mail-inbound` |
+| SNS トピック / SES 設定セット | `hirapro-crm-mail` |
 | Webhook URL | `https://crm.hirapro.com/api/mail/inbound` |
 | 送信を先に有効化するドメイン(Tier 1) | CSV で〇の 17 ドメイン(Step 7 に一覧) |
 
@@ -22,15 +22,15 @@
 
 1. AWS コンソールにログイン → 検索窓に `IAM` → **IAM** を開く(IAM はリージョン非依存)
 2. 左メニュー **ユーザー** → **ユーザーの作成**
-3. ユーザー名 `kwk-crm-mail-setup` → 「AWS マネジメントコンソールへのユーザーアクセスを提供する」は**チェックしない** → 次へ
+3. ユーザー名 `hirapro-crm-mail-setup` → 「AWS マネジメントコンソールへのユーザーアクセスを提供する」は**チェックしない** → 次へ
 4. 許可の設定は何も付けずに **次へ** → **ユーザーの作成**
 5. 作成したユーザーを開く → **許可** タブ → **許可を追加 ▾** → **インラインポリシーを作成**
-6. **JSON** タブに切り替え、リポジトリの `scripts/mail/iam/setup-user-policy.json` の内容を貼り付け → 次へ → ポリシー名 `kwk-crm-mail-setup` → **ポリシーの作成**
+6. **JSON** タブに切り替え、リポジトリの `scripts/mail/iam/setup-user-policy.json` の内容を貼り付け → 次へ → ポリシー名 `hirapro-crm-mail-setup` → **ポリシーの作成**
 7. **セキュリティ認証情報** タブ → **アクセスキーを作成** → ユースケース「**コマンドラインインターフェイス (CLI)**」→ 確認のチェック → 次へ → 作成
 8. 表示された **アクセスキー** と **シークレットアクセスキー** を保存(シークレットはこの画面でしか見られない。閉じたら作り直し)
-9. 同じ手順で `kwk-crm-mail-webhook` を作成。ポリシーは `scripts/mail/iam/webhook-user-policy.json`、アクセスキーも同様に作成
+9. 同じ手順で `hirapro-crm-mail-webhook` を作成。ポリシーは `scripts/mail/iam/webhook-user-policy.json`、アクセスキーも同様に作成
 
-> ポリシー内のバケット名(`kwk-crm-mail-inbound`)やリージョンを変える場合は JSON 内の ARN も直す。
+> ポリシー内のバケット名(`hirapro-crm-mail-inbound`)やリージョンを変える場合は JSON 内の ARN も直す。
 
 ---
 
@@ -47,7 +47,7 @@ MAIL_AWS_REGION=ap-northeast-1 \
 MAIL_AWS_ACCESS_KEY_ID=<setup のアクセスキー> \
 MAIL_AWS_SECRET_ACCESS_KEY=<setup のシークレット> \
 npx tsx scripts/mail/setup_aws.ts \
-  --bucket kwk-crm-mail-inbound \
+  --bucket hirapro-crm-mail-inbound \
   --inbound inbox@mail.crm.hirapro.com \
   --endpoint https://crm.hirapro.com/api/mail/inbound \
   --domain mail.crm.hirapro.com \
@@ -62,7 +62,7 @@ MAIL_AWS_REGION=ap-northeast-1 \
 MAIL_AWS_ACCESS_KEY_ID=<setup のアクセスキー> \
 MAIL_AWS_SECRET_ACCESS_KEY=<setup のシークレット> \
 npx tsx scripts/mail/setup_aws.ts \
-  --bucket kwk-crm-mail-inbound \
+  --bucket hirapro-crm-mail-inbound \
   --inbound inbox@mail.crm.hirapro.com \
   --endpoint https://crm.hirapro.com/api/mail/inbound \
   --domain mail.crm.hirapro.com
@@ -89,10 +89,10 @@ npx tsx scripts/mail/setup_aws.ts \
 | `MAIL_AWS_REGION` | `ap-northeast-1` |
 | `MAIL_AWS_ACCESS_KEY_ID` | **Step 1 の webhook ユーザー**のアクセスキー(setup のキーは入れない) |
 | `MAIL_AWS_SECRET_ACCESS_KEY` | 同シークレット |
-| `MAIL_INBOUND_BUCKET` | `kwk-crm-mail-inbound` |
-| `MAIL_SNS_TOPIC_ARN` | 出力の `arn:aws:sns:ap-northeast-1:<アカウントID>:kwk-crm-mail` |
+| `MAIL_INBOUND_BUCKET` | `hirapro-crm-mail-inbound` |
+| `MAIL_SNS_TOPIC_ARN` | 出力の `arn:aws:sns:ap-northeast-1:<アカウントID>:hirapro-crm-mail` |
 | `MAIL_INBOUND_ADDRESS` | `inbox@mail.crm.hirapro.com` |
-| `MAIL_SES_CONFIGURATION_SET` | `kwk-crm-mail` |
+| `MAIL_SES_CONFIGURATION_SET` | `hirapro-crm-mail` |
 
 3. **Deployments** → 最新の Production デプロイの **…** → **Redeploy**(環境変数は再デプロイで反映される)
 4. 反映確認: `https://crm.hirapro.com/api/mail/inbound` に GET でアクセス → `405` なら OK(POST 専用のため)。**503** が出る場合は環境変数のどれかが欠けている
@@ -108,7 +108,7 @@ MAIL_AWS_REGION=ap-northeast-1 \
 MAIL_AWS_ACCESS_KEY_ID=<setup のアクセスキー> \
 MAIL_AWS_SECRET_ACCESS_KEY=<setup のシークレット> \
 npx tsx scripts/mail/setup_aws.ts \
-  --bucket kwk-crm-mail-inbound \
+  --bucket hirapro-crm-mail-inbound \
   --inbound inbox@mail.crm.hirapro.com \
   --endpoint https://crm.hirapro.com/api/mail/inbound \
   --subscribe
@@ -159,7 +159,7 @@ SES 側の確認: コンソール → **Amazon SES** → **ID** → `mail.crm.hi
 
 | 表示されない場合の切り分け | 見る場所 |
 |---|---|
-| S3 にファイルが無い | AWS → S3 → `kwk-crm-mail-inbound` → `inbound/` に新しいオブジェクトがあるか。無ければ MX 未反映 or 転送設定の不備 |
+| S3 にファイルが無い | AWS → S3 → `hirapro-crm-mail-inbound` → `inbound/` に新しいオブジェクトがあるか。無ければ MX 未反映 or 転送設定の不備 |
 | S3 にはあるが CRM に出ない | Vercel → kwk-crm → **Logs** で `/api/mail/inbound` の応答。`ignored: no matching mail box…` なら CRM の `mail_boxes` に宛先アドレスが未登録 |
 | 「迷惑メール」等に分類された | 受信箱の「分類」を「すべて」にして探す(削除はされない) |
 
@@ -183,7 +183,7 @@ MAIL_AWS_REGION=ap-northeast-1 \
 MAIL_AWS_ACCESS_KEY_ID=<setup のアクセスキー> \
 MAIL_AWS_SECRET_ACCESS_KEY=<setup のシークレット> \
 npx tsx scripts/mail/setup_aws.ts \
-  --bucket kwk-crm-mail-inbound \
+  --bucket hirapro-crm-mail-inbound \
   --inbound inbox@mail.crm.hirapro.com \
   --endpoint https://crm.hirapro.com/api/mail/inbound \
   --domain toushi-kawaraban.com \

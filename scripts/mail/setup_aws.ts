@@ -8,7 +8,7 @@
  *   MAIL_AWS_REGION=ap-northeast-1 \
  *   MAIL_AWS_ACCESS_KEY_ID=... MAIL_AWS_SECRET_ACCESS_KEY=... \
  *   npx tsx scripts/mail/setup_aws.ts \
- *     --bucket kwk-crm-mail-inbound \
+ *     --bucket hirapro-crm-mail-inbound \
  *     --inbound inbox@mail.crm.hirapro.com \
  *     --endpoint https://crm.hirapro.com/api/mail/inbound \
  *     [--subscribe] [--domain kawaraban.co.jp ...] [--dry-run]
@@ -17,7 +17,7 @@
  *   1. S3 バケット(公開ブロック / SES からの書込ポリシー / 30日で自動削除)
  *   2. SNS トピック(SES からの Publish を許可)
  *   3. SES 受信ルールセット + ルール(宛先 = 受信用アドレス → スパム・ウイルス判定 → S3 に保存 → SNS 通知)+ 有効化
- *   4. SES 設定セット kwk-crm-mail(送信の Send/Delivery/Bounce/Complaint/Reject を同じ SNS トピックへ)
+ *   4. SES 設定セット hirapro-crm-mail(送信の Send/Delivery/Bounce/Complaint/Reject を同じ SNS トピックへ)
  *   5. --domain を付けたとき: 送信ドメインを SES に ID 登録し、DNS に追加する DKIM の CNAME 3本を表示
  *      (複数指定可。Tier 1 のドメインから順に)
  *   6. --subscribe を付けたとき: SNS トピックに Webhook(HTTPS)を購読登録
@@ -61,11 +61,11 @@ import {
 } from '@aws-sdk/client-sns';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 
-const RULE_SET_NAME = 'kwk-crm-mail';
-const RULE_NAME = 'kwk-crm-inbound';
-const TOPIC_NAME = 'kwk-crm-mail';
+const RULE_SET_NAME = 'hirapro-crm-mail';
+const RULE_NAME = 'hirapro-crm-inbound';
+const TOPIC_NAME = 'hirapro-crm-mail';
 const OBJECT_KEY_PREFIX = 'inbound/';
-const CONFIGURATION_SET = 'kwk-crm-mail';
+const CONFIGURATION_SET = 'hirapro-crm-mail';
 const RETENTION_DAYS = 30;
 
 function arg(name: string): string | undefined {

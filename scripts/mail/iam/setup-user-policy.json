@@ -20,7 +20,7 @@
         "s3:PutLifecycleConfiguration",
         "s3:GetLifecycleConfiguration"
       ],
-      "Resource": "arn:aws:s3:::kwk-crm-mail-inbound"
+      "Resource": "arn:aws:s3:::hirapro-crm-mail-inbound"
     },
     {
       "Sid": "MailTopic",
@@ -32,7 +32,7 @@
         "sns:Subscribe",
         "sns:ListSubscriptionsByTopic"
       ],
-      "Resource": "arn:aws:sns:ap-northeast-1:*:kwk-crm-mail"
+      "Resource": "arn:aws:sns:ap-northeast-1:*:hirapro-crm-mail"
     },
     {
       "Sid": "SesReceivingAndSending",
