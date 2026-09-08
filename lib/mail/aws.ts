@@ -16,6 +16,8 @@ export interface MailAwsConfig {
   inboundBucket: string;
   snsTopicArn: string;
   inboundAddress: string;
+  /** 送信の配信状態を SNS に流すための SES 設定セット名(任意) */
+  configurationSet?: string;
 }
 
 /** 必要な環境変数が揃っていれば設定を返す。1つでも欠けていれば null(呼び出し側で 503 等にする) */
@@ -26,6 +28,7 @@ export function getMailAwsConfig(): MailAwsConfig | null {
   const inboundBucket = process.env.MAIL_INBOUND_BUCKET;
   const snsTopicArn = process.env.MAIL_SNS_TOPIC_ARN;
   const inboundAddress = process.env.MAIL_INBOUND_ADDRESS;
+  const configurationSet = process.env.MAIL_SES_CONFIGURATION_SET || undefined;
   if (
     !region ||
     !accessKeyId ||
@@ -36,7 +39,15 @@ export function getMailAwsConfig(): MailAwsConfig | null {
   ) {
     return null;
   }
-  return { region, accessKeyId, secretAccessKey, inboundBucket, snsTopicArn, inboundAddress };
+  return {
+    region,
+    accessKeyId,
+    secretAccessKey,
+    inboundBucket,
+    snsTopicArn,
+    inboundAddress,
+    configurationSet,
+  };
 }
 
 export function createS3Client(cfg: MailAwsConfig): S3Client {

@@ -44,10 +44,14 @@ import MessageValidator from 'sns-validator';
 /** 保存する添付の上限。これを超えるものは本文だけ取り込み、添付は保存しない。 */
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
+// 設定セット経由(eventType)と ID 通知経由(notificationType)の両方の名前に対応する
 const DELIVERY_STATUS_BY_TYPE: Record<string, string> = {
+  Send: 'sent',
   Delivery: 'delivered',
   Bounce: 'bounced',
   Complaint: 'failed',
+  Reject: 'failed',
+  RenderingFailure: 'failed',
 };
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -92,7 +96,9 @@ interface SesReceivedNotification {
 }
 
 interface SesDeliveryNotification {
-  notificationType: 'Bounce' | 'Delivery' | 'Complaint';
+  notificationType?: string;
+  /** 設定セットのイベント発行ではこちらに種別が入る */
+  eventType?: string;
   mail: { messageId: string };
 }
 
@@ -142,23 +148,26 @@ export async function POST(request: Request): Promise<Response> {
   const supabase = createServiceRoleClient();
 
   // ---- 送信メールの配信状態(M2) ----
-  const deliveryStatus = DELIVERY_STATUS_BY_TYPE[payload.notificationType];
+  const kind = (payload as SesDeliveryNotification).eventType ?? payload.notificationType ?? '';
+  const deliveryStatus = DELIVERY_STATUS_BY_TYPE[kind];
   if (deliveryStatus) {
     const messageId = payload.mail?.messageId;
     if (messageId) {
-      await supabase
+      // 配信済みの後に「送信」通知が遅れて届いても格下げしない
+      const q = supabase
         .from('mail_messages')
         .update({ delivery_status: deliveryStatus })
         .eq('provider_message_id', messageId)
         .eq('direction', 'out');
+      await (deliveryStatus === 'sent' ? q.eq('delivery_status', 'queued') : q);
     }
-    return json({ ok: true, type: payload.notificationType });
+    return json({ ok: true, type: kind });
   }
-  if (payload.notificationType !== 'Received') {
-    return json({ ok: true, ignored: payload.notificationType });
+  if (kind !== 'Received') {
+    return json({ ok: true, ignored: kind });
   }
 
-  const { mail, receipt } = payload;
+  const { mail, receipt } = payload as SesReceivedNotification;
 
   // ---- 受信用アドレス宛の受信だけを取り込む(他所からの流入は無視) ----
   if (!isInboundTarget(receipt.recipients ?? [], cfg.inboundAddress)) {
@@ -252,6 +261,24 @@ export async function POST(request: Request): Promise<Response> {
       .limit(1)
       .maybeSingle();
     threadId = (parent as { thread_id: string } | null)?.thread_id ?? null;
+
+    // CRM から SES で送ったメールへの返信: SES が付ける Message-ID のドメイン部は
+    // リージョンで異なるため、ローカル部(SES の MessageId)で provider_message_id とも突合する
+    if (!threadId) {
+      const localParts = refIds
+        .map((id) => id.replace(/^<|>$/g, '').split('@')[0] ?? '')
+        .filter((s) => s.length >= 20);
+      if (localParts.length > 0) {
+        const { data: sentParent } = await supabase
+          .from('mail_messages')
+          .select('thread_id')
+          .in('provider_message_id', localParts)
+          .eq('direction', 'out')
+          .limit(1)
+          .maybeSingle();
+        threadId = (sentParent as { thread_id: string } | null)?.thread_id ?? null;
+      }
+    }
   }
 
   // ---- 会員突合: 差出人アドレスと members.email1/2/3 の完全一致(大文字小文字は無視) ----

@@ -58,7 +58,7 @@ Resend 送信 API ── From: ad@kawaraban.co.jp(kawaraban.co.jp の DKIM で�
 | 案 | 転送先アドレス | 必要な DNS 作業 | 判定 |
 |---|---|---|---|
 | **R1. Resend 提供ドメイン(推奨・まずこれで開始)** | `inbox@<id>.resend.app`(Resend がアカウントごとに発行) | **なし** | ◎ 最短。顧客の目には触れないアドレスなので見た目は問題にならない |
-| R2. 自社サブドメイン | `inbox@crm-mail.kawaraban.co.jp` | Xserver の DNS 設定で `crm-mail` サブドメインの **MX** を Resend に向ける | ○ 見た目が自社ドメインになる。R1 で運用開始後、`mail_boxes.inbound_address` を書き換えるだけで移行可能 |
+| R2. 自社サブドメイン | `inbox@mail.crm.hirapro.com` | Xserver の DNS 設定で `crm-mail` サブドメインの **MX** を Resend に向ける | ○ 見た目が自社ドメインになる。R1 で運用開始後、`mail_boxes.inbound_address` を書き換えるだけで移行可能 |
 
 どちらも `kawaraban.co.jp` 本体の MX には触らない。R1 なら受信側の DNS 作業がゼロになるため、**送信用の DNS(DKIM)だけ**を Xserver の DNS 設定に追加すれば済む。
 
@@ -214,8 +214,16 @@ RFC 7208 違反で SPF が事実上無効(permerror)になっている。DMARC �
 
 ### 5.0 ドメイン構成と段階的な送信対応(2026-09-08 提案)
 
-前提(ヒアリング): 共有アドレスは **約20ドメイン**に分かれ、**主要で稼働中なのは5〜6ドメイン**。
+前提(2026-09-08 のドメイン一覧 CSV より): 共有アドレスは **43 ドメイン**、うち「メインドメイン」は **17**
+(Xserver 14 / ムームードメイン・Z.com・お名前.com 各 1)。追加の可能性あり。
 DNS の作業はアドレス単位ではなく**ドメイン単位**なので、規模はこの「ドメイン数」で決まる。
+SES はドメイン数に上限・課金が無いため、17 でも 43 でも費用は変わらない。
+
+Tier 1(送信を先に有効化): toushi-kawaraban.com / kawaraban.co.jp / asec-project-partners.jp /
+sir-project-partners.co.jp / global-project-partners.co.jp / otosen-project-partners.com / hirayama-toshihiro.co.jp /
+gpp-sg-payment.co.jp / sc-project-partners.co.jp / hirapro.com / scpp.jp / toushi-no-kawaraban.com / mrt.co.jp /
+biovault.co.jp / biovault.jp(ムームー)/ gpp-singapore.com(Z.com)/ carbon-market.com(お名前.com)。
+構築の実手順は docs/MAIL_AWS_SETUP.md。
 
 Resend のプラン別上限(公式ページ、2026-09 確認):
 
@@ -274,7 +282,7 @@ Resend のプラン別上限(公式ページ、2026-09 確認):
 | 2 | AWS 管理者 | `scripts/mail/setup_aws.ts` を手元で実行(S3 バケット・SNS トピック・SES 受信ルールセットを冪等に作成) | 認証情報をチャットや画面に貼らずに済む。`--dry-run` で内容確認可 |
 | 3 | 開発側 | スクリプトが出力した環境変数(`MAIL_*`)を Vercel に設定して再デプロイ | `AWS_*` は Vercel の予約名のため `MAIL_` 接頭辞 |
 | 4 | AWS 管理者 | スクリプトを `--subscribe` 付きで再実行(SNS → `https://crm.hirapro.com/api/mail/inbound` の購読。Webhook が署名検証のうえ自動確認) | 3 の後でないと購読確認を拒否する |
-| 5 | **DNS 管理者(Xserver)** | 受信用サブドメイン(例 `crm-mail.kawaraban.co.jp`)の **MX** を `inbound-smtp.ap-northeast-1.amazonaws.com` に向ける | サブドメインのみ。`kawaraban.co.jp` 本体の MX・SPF には触らない |
+| 5 | **DNS 管理者(hirapro.com の DNS)** | 受信用サブドメイン **`mail.crm.hirapro.com`** の **MX** を `inbound-smtp.ap-northeast-1.amazonaws.com` に向ける(2026-09-08 決定: CRM の `crm.hirapro.com` 配下にする) | サブドメインのみ。各共有アドレスのドメイン本体の MX・SPF には触らない |
 | 6 | **各サーバーの管理者** | 取り込みたい共有アドレスごとに、転送先へ **受信用アドレス(全アドレス共通)を1行追加**。「メールボックスに残す」のまま | 数百アドレスでも貼るアドレスは同じ1つ。メールディーラーの転送は残す(併用)。CRM 側は `mail_boxes` に同じアドレスを登録 |
 | 7 | 開発側 | テストメールで受信を確認(Xserver 転送の `Return-Path: <>` を SES が受け付けるか、会員突合・分類が想定どおりか) | |
 | 8 | AWS 管理者 | **送信(M2)の準備**: SES の**サンドボックス解除**を申請(用途: 顧客対応メールの返信、月1,000通未満)。Tier 1 のドメインを SES に ID 登録し、表示された **Easy DKIM の CNAME 3本**を各ドメインの DNS に追加 | 承認は通常1〜2日。既存の SPF・MX は変えない |

@@ -673,7 +673,8 @@ IMAP ポーリング・独自メールサーバーは持たない。
 **環境変数** (§13): `MAIL_AWS_REGION` / `MAIL_AWS_ACCESS_KEY_ID` / `MAIL_AWS_SECRET_ACCESS_KEY` (SES・S3 用の IAM ユーザー。
 Vercel では `AWS_*` が予約名のため `MAIL_` 接頭辞を付け、SDK クライアントに明示的に渡す) /
 `MAIL_INBOUND_BUCKET` (受信 MIME の S3 バケット) / `MAIL_SNS_TOPIC_ARN` (受信・配信状態通知のトピック) /
-`MAIL_INBOUND_ADDRESS` (全アドレス共通の受信用アドレス。各サーバーの転送先に登録するもの)。
+`MAIL_INBOUND_ADDRESS` (全アドレス共通の受信用アドレス。各サーバーの転送先に登録するもの) /
+`MAIL_SES_CONFIGURATION_SET` (任意。送信の配信状態 Send/Delivery/Bounce/Complaint を SNS 経由で Webhook に流す設定セット)。
 
 **段階**: M1 受信箱(受信・スレッド・会員突合・担当/ステータス) → M2 送信(返信・新規・配信状態・`/settings/mail`) →
 M3 CRM 連携(受信/送信を対応歴 `d_bunrui=メール` に自動記録、会員詳細「メール」タブ、定型文、添付送信、スレッド結合)。
@@ -1223,6 +1224,7 @@ MAIL_AWS_SECRET_ACCESS_KEY=
 MAIL_INBOUND_BUCKET=              # SES 受信ルールが生 MIME を置く S3 バケット
 MAIL_SNS_TOPIC_ARN=               # 受信・配信状態の SNS トピック (Webhook で TopicArn を検証)
 MAIL_INBOUND_ADDRESS=             # 全共有アドレス共通の受信用アドレス(各サーバーの転送先に登録)
+MAIL_SES_CONFIGURATION_SET=       # 送信の配信状態を SNS に流す SES 設定セット名(任意。setup_aws.ts が作る)
 ```
 
 ---

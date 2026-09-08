@@ -1,0 +1,56 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Identity",
+      "Effect": "Allow",
+      "Action": ["sts:GetCallerIdentity"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "InboundBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:PutBucketPolicy",
+        "s3:GetBucketPolicy",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutLifecycleConfiguration",
+        "s3:GetLifecycleConfiguration"
+      ],
+      "Resource": "arn:aws:s3:::hirapro-crm-mail-inbound"
+    },
+    {
+      "Sid": "MailTopic",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:SetTopicAttributes",
+        "sns:GetTopicAttributes",
+        "sns:Subscribe",
+        "sns:ListSubscriptionsByTopic"
+      ],
+      "Resource": "arn:aws:sns:ap-northeast-1:*:hirapro-crm-mail"
+    },
+    {
+      "Sid": "SesReceivingAndSending",
+      "Effect": "Allow",
+      "Action": [
+        "ses:CreateReceiptRuleSet",
+        "ses:DescribeReceiptRuleSet",
+        "ses:DescribeActiveReceiptRuleSet",
+        "ses:CreateReceiptRule",
+        "ses:SetActiveReceiptRuleSet",
+        "ses:CreateConfigurationSet",
+        "ses:CreateConfigurationSetEventDestination",
+        "ses:GetConfigurationSet",
+        "ses:CreateEmailIdentity",
+        "ses:GetEmailIdentity",
+        "ses:PutEmailIdentityMailFromAttributes"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
