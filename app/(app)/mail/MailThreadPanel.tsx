@@ -91,6 +91,7 @@ export async function MailThreadPanel({ threadId, embedded }: Props) {
           <MailThreadControls
             threadId={thread.id}
             status={thread.status}
+            category={thread.category}
             assigneeId={thread.assignee_id}
             memberId={thread.member_id}
             assigneeOptions={assigneeOptions}

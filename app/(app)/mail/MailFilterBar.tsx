@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { MAIL_STATUSES } from '@/lib/domain/mail_types';
+import { MAIL_CATEGORIES, MAIL_STATUSES } from '@/lib/domain/mail_types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
@@ -14,6 +14,7 @@ import { useState, useTransition } from 'react';
 export function MailFilterBar({
   initialQ,
   initialStatus,
+  initialCategory,
   initialAssignee,
   initialBox,
   initialUnread,
@@ -23,6 +24,8 @@ export function MailFilterBar({
 }: {
   initialQ: string;
   initialStatus: string;
+  /** '' = すべて / それ以外 = MailCategory。画面の既定は「通常」 */
+  initialCategory: string;
   /** '' = 全員 / 'me' = 自分 / 'none' = 未割当 / それ以外 = users.id */
   initialAssignee: string;
   initialBox: string;
@@ -37,6 +40,7 @@ export function MailFilterBar({
 
   const [q, setQ] = useState(initialQ);
   const [status, setStatus] = useState(initialStatus);
+  const [category, setCategory] = useState(initialCategory);
   const [assignee, setAssignee] = useState(initialAssignee);
   const [box, setBox] = useState(initialBox);
   const [unread, setUnread] = useState(initialUnread);
@@ -44,6 +48,7 @@ export function MailFilterBar({
   const push = (next: {
     q: string;
     status: string;
+    category: string;
     assignee: string;
     box: string;
     unread: boolean;
@@ -55,6 +60,8 @@ export function MailFilterBar({
     };
     set('q', next.q.trim());
     set('status', next.status);
+    // 既定(通常)は URL に載せず、それ以外(すべて含む)だけ載せる
+    set('cat', next.category === '通常' ? '' : next.category || 'all');
     set('assignee', next.assignee === 'me' ? currentUserId : next.assignee);
     set('box', next.box);
     set('unread', next.unread ? '1' : '');
@@ -65,15 +72,16 @@ export function MailFilterBar({
     startTransition(() => router.push(qs ? `/mail?${qs}` : '/mail'));
   };
 
-  const submit = () => push({ q, status, assignee, box, unread });
+  const submit = () => push({ q, status, category, assignee, box, unread });
 
   const reset = () => {
     setQ('');
     setStatus('');
+    setCategory('通常');
     setAssignee('');
     setBox('');
     setUnread(false);
-    push({ q: '', status: '', assignee: '', box: '', unread: false });
+    push({ q: '', status: '', category: '通常', assignee: '', box: '', unread: false });
   };
 
   return (
@@ -91,6 +99,14 @@ export function MailFilterBar({
             {s}
           </option>
         ))}
+      </Select>
+      <Select className="w-32" value={category} onChange={(e) => setCategory(e.target.value)}>
+        {MAIL_CATEGORIES.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+        <option value="">すべて</option>
       </Select>
       <Select className="w-40" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
         <option value="">担当: 全員</option>

@@ -22,7 +22,7 @@ export * from './mail_types';
 const DEFAULT_PAGE_SIZE = 50;
 
 const THREAD_SELECT = `
-  id, mail_box_id, subject, member_id, status, assignee_id,
+  id, mail_box_id, subject, member_id, status, category, assignee_id,
   last_message_at, last_direction, is_read, created_at, updated_at,
   member:members!mail_threads_member_id_fkey(id, name),
   assignee:users!mail_threads_assignee_id_fkey(id, full_name)
@@ -63,6 +63,7 @@ export async function listMailThreads(
     .range(from, to);
 
   if (params.status) query = query.eq('status', params.status);
+  if (params.category) query = query.eq('category', params.category);
   if (params.assigneeId === 'none') query = query.is('assignee_id', null);
   else if (params.assigneeId) query = query.eq('assignee_id', params.assigneeId);
   if (params.mailBoxId) query = query.eq('mail_box_id', params.mailBoxId);
@@ -131,7 +132,7 @@ export async function getMailThread(id: string): Promise<MailThreadDetail | null
         id, thread_id, direction, message_id, in_reply_to, references_header,
         from_address, from_name, to_addresses, cc_addresses, subject,
         text_body, html_body, sent_at, provider_message_id, delivery_status,
-        sender_user_id, created_at,
+        sender_user_id, source, created_at,
         sender:users!mail_messages_sender_user_id_fkey(id, full_name),
         attachments:mail_attachments(id, message_id, filename, content_type, size_bytes, storage_path)
       `,

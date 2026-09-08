@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { TableCell } from '@/components/ui/table';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { loadMoreMailThreads } from '@/lib/domain/list_more_actions';
-import type { MailStatus, MailThreadListItem } from '@/lib/domain/mail_types';
+import type { MailCategory, MailStatus, MailThreadListItem } from '@/lib/domain/mail_types';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -21,6 +21,7 @@ interface Props {
   params: {
     q?: string;
     status?: MailStatus;
+    category?: MailCategory;
     assigneeId?: string;
     mailBoxId?: number;
     unreadOnly?: boolean;
@@ -69,6 +70,11 @@ export function MailInfinite({ initialRows, total, params, splitMode, selectedId
         <Badge variant="outline" className={`text-[11px] ${STATUS_CLASS[t.status] ?? ''}`}>
           {t.status}
         </Badge>
+        {t.category !== '通常' && (
+          <Badge variant="outline" className="ml-1 text-[10px] text-muted-foreground">
+            {t.category}
+          </Badge>
+        )}
         {t.last_direction === 'in' && t.status !== '完了' && (
           <span className="ml-1 text-[10px] text-red-600" title="顧客からのメールが最後">
             ●

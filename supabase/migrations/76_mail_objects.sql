@@ -3,8 +3,8 @@
 --               mail_attachments) を追加 (2026-09) / CLAUDE.md §5.15
 --
 -- 目的:
---   Xserver の共有アドレス(ad@kawaraban.co.jp)宛メールを Resend 経由の Webhook で
---   受け取り、受信箱(/mail)で担当・ステータス・会員紐付けを管理する。
+--   各サーバーの共有アドレス(ad@kawaraban.co.jp 等)宛メールを AWS SES(受信ルール→S3→SNS)
+--   経由の Webhook で受け取り、受信箱(/mail)で担当・ステータス・会員紐付けを管理する。
 --   送信(返信・新規)も同アドレスを差出人として行う。設計は docs/MAIL_DESIGN.md。
 --
 -- 方針(既存テーブル共通):
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.mail_boxes (
   id               serial PRIMARY KEY,
   address          text NOT NULL UNIQUE,   -- 公開アドレス(= 送信時の From)
   display_name     text,                   -- 送信時の表示名
-  -- 受信用アドレス(各サーバーの転送先に登録する inbox@<id>.resend.app)は受信箱ごとには持たない。
+  -- 受信用アドレス(各サーバーの転送先に登録する、受信用サブドメインのアドレス)は受信箱ごとには持たない。
   -- 全体で1つを環境変数 MAIL_INBOUND_ADDRESS で持ち、どの受信箱かは元の宛先と address の一致で判定する。
   signature        text,                   -- 返信時に付ける署名
   is_active        boolean NOT NULL DEFAULT true,
@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS public.mail_threads (
   member_id        text REFERENCES public.members(id),          -- 会員突合結果。未一致は NULL
   status           text NOT NULL DEFAULT '未対応'
                    CHECK (status IN ('未対応', '対応中', '完了')),
+  -- 受信時にヘッダで自動分類。既定表示は「通常」のみ。削除はしない(誤判定を後から見つけられるように)
+  category         text NOT NULL DEFAULT '通常'
+                   CHECK (category IN ('通常', 'メルマガ', '自動応答', '迷惑メール')),
   assignee_id      uuid REFERENCES public.users(id),            -- 担当
   last_message_at  timestamptz,                                 -- 一覧の並び順
   last_direction   text CHECK (last_direction IN ('in', 'out')),-- 最後が受信か送信か
@@ -69,9 +72,12 @@ CREATE TABLE IF NOT EXISTS public.mail_messages (
   text_body           text,
   html_body           text,
   sent_at             timestamptz,                -- 受信: ヘッダの Date / 送信: 送信時刻
-  provider_message_id text,                       -- Resend 側の ID(配信状態 Webhook との突合)
+  provider_message_id text,                       -- SES 側の MessageId(受信は S3 キー、送信は SendEmail の戻り値)
   delivery_status     text CHECK (delivery_status IN ('queued', 'sent', 'delivered', 'bounced', 'failed')),
   sender_user_id      uuid REFERENCES public.users(id), -- 送信のみ: 誰が送ったか
+  -- 来源。将来の過去データ取込(M4)で入れたものを区別し、やり直しを安全にする
+  source              text NOT NULL DEFAULT 'ses'
+                      CHECK (source IN ('ses', 'import_maildealer', 'import_server')),
   created_at          timestamptz NOT NULL DEFAULT now(),
   updated_at          timestamptz NOT NULL DEFAULT now()
 );
@@ -96,6 +102,8 @@ CREATE INDEX IF NOT EXISTS idx_mail_threads_member
   ON public.mail_threads(member_id) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_mail_threads_status
   ON public.mail_threads(status) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_mail_threads_category
+  ON public.mail_threads(category) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_mail_threads_assignee
   ON public.mail_threads(assignee_id) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_mail_messages_thread

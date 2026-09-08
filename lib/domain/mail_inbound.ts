@@ -86,7 +86,7 @@ export function extractReferencedMessageIds(
  * Message-ID を正規化する。前後空白を除き、山括弧が無ければ付ける。
  * 空なら <uuid@crm.local> を生成する(NOT NULL UNIQUE を満たすため。
  * ただし生成した ID では Webhook 再送の重複検出はできないので、
- * 呼び出し側は Resend の email_id でも重複を見ること)。
+ * 呼び出し側は SES の messageId でも重複を見ること)。
  */
 export function ensureMessageId(raw: string | null | undefined): string {
   const s = (raw ?? '').trim();
@@ -108,7 +108,7 @@ function toAddressSet(recipients: Array<string | null | undefined>): Set<string>
 }
 
 /**
- * Webhook の宛先(received_for / to)に、運用中の受信用アドレス(MAIL_INBOUND_ADDRESS)が
+ * 受信通知の宛先(SES の receipt.recipients)に、運用中の受信用アドレス(MAIL_INBOUND_ADDRESS)が
  * 含まれるか。各サーバーからの転送はすべてこの1アドレスに集まる。
  * 含まれない受信は他所からの流入とみなして無視する(§5.15)。
  */
@@ -138,6 +138,67 @@ export function matchMailBox<T extends { address: string; is_active?: boolean }>
     if (set.has(b.address.trim().toLowerCase())) return b;
   }
   return active.length === 1 ? (active[0] ?? null) : null;
+}
+
+/**
+ * mailparser の headerLines("Key: value" の生行)を、小文字キーの Record にする。
+ * 同名ヘッダが複数ある場合は最初の値を採用する(Received 等は判定に使わない)。
+ */
+export function headerLinesToRecord(
+  lines: ReadonlyArray<{ key: string; line: string }> | null | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const l of lines ?? []) {
+    const key = (l.key ?? '').toLowerCase();
+    if (!key || key in out) continue;
+    const idx = l.line.indexOf(':');
+    out[key] = (idx >= 0 ? l.line.slice(idx + 1) : l.line).replace(/\s+/g, ' ').trim();
+  }
+  return out;
+}
+
+export interface ClassifyInput {
+  /** 小文字キーのヘッダ(headerLinesToRecord の戻り値) */
+  headers: Record<string, string>;
+  /** 小文字化済みの差出人アドレス */
+  fromAddress: string;
+  subject: string | null | undefined;
+  /** SES 受信ルールのスパム判定が FAIL か */
+  sesSpamFail: boolean;
+  /** 差出人が会員として登録済みか(登録済みなら常に「通常」) */
+  isKnownMember: boolean;
+}
+
+/**
+ * 受信メールの自動分類(CLAUDE.md §5.15)。上から順に評価し最初に一致したものを返す。
+ * 会員として登録済みの差出人は、他の条件に当てはまっても「通常」にする
+ * (顧客からのメールを誤判定で埋もれさせない)。
+ */
+export function classifyInbound(
+  input: ClassifyInput,
+): '通常' | 'メルマガ' | '自動応答' | '迷惑メール' {
+  if (input.isKnownMember) return '通常';
+  const h = input.headers;
+  const from = input.fromAddress;
+  const subject = input.subject ?? '';
+
+  // 自動応答・不達通知
+  const autoSubmitted = (h['auto-submitted'] ?? '').toLowerCase();
+  if (autoSubmitted && autoSubmitted !== 'no') return '自動応答';
+  if (/^(mailer-daemon|postmaster)@/.test(from)) return '自動応答';
+
+  // 迷惑メール(SES の判定、Xserver 等の SpamAssassin ヘッダ、件名の [SPAM])
+  if (input.sesSpamFail) return '迷惑メール';
+  if ((h['x-spam-flag'] ?? '').toUpperCase() === 'YES') return '迷惑メール';
+  if (/^yes\b/i.test(h['x-spam-status'] ?? '')) return '迷惑メール';
+  if (/^\s*\[spam\]/i.test(subject)) return '迷惑メール';
+
+  // メルマガ・一斉配信
+  if (h['list-unsubscribe'] || h['list-id']) return 'メルマガ';
+  const precedence = (h.precedence ?? '').toLowerCase();
+  if (precedence === 'bulk' || precedence === 'list') return 'メルマガ';
+
+  return '通常';
 }
 
 /**

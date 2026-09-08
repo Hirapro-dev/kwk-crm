@@ -4,7 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { type UpdateMailThreadInput, updateMailThread } from '@/lib/domain/mail_actions';
-import { MAIL_STATUSES, type MailStatus } from '@/lib/domain/mail_types';
+import {
+  MAIL_CATEGORIES,
+  MAIL_STATUSES,
+  type MailCategory,
+  type MailStatus,
+} from '@/lib/domain/mail_types';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
@@ -15,6 +20,7 @@ import { useState, useTransition } from 'react';
 export function MailThreadControls({
   threadId,
   status,
+  category,
   assigneeId,
   memberId,
   assigneeOptions,
@@ -22,6 +28,7 @@ export function MailThreadControls({
 }: {
   threadId: string;
   status: MailStatus;
+  category: MailCategory;
   assigneeId: string | null;
   memberId: string | null;
   assigneeOptions: { id: string; name: string }[];
@@ -66,6 +73,22 @@ export function MailThreadControls({
           {MAIL_STATUSES.map((s) => (
             <option key={s} value={s}>
               {s}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div className="flex items-center gap-1 text-xs">
+        <span>分類</span>
+        <Select
+          aria-label="分類"
+          className="w-28"
+          value={category}
+          disabled={pending}
+          onChange={(e) => apply({ category: e.target.value as MailCategory })}
+        >
+          {MAIL_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {c}
             </option>
           ))}
         </Select>

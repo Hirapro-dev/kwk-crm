@@ -11,7 +11,7 @@ import { listArticleReactions } from './article_reactions';
 import { listInquiries } from './inquiries';
 import { LIST_PAGE_SIZE } from './list_constants';
 import { listMailThreads } from './mail';
-import type { MailStatus } from './mail_types';
+import type { MailCategory, MailStatus } from './mail_types';
 import { listMembers } from './members';
 import { listWithdrawalChildren, listWithdrawalParents } from './withdrawals';
 
@@ -84,6 +84,7 @@ export async function loadMoreMailThreads(
   params: {
     q?: string;
     status?: MailStatus;
+    category?: MailCategory;
     assigneeId?: string;
     mailBoxId?: number;
     unreadOnly?: boolean;

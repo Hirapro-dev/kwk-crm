@@ -7,6 +7,14 @@
 export const MAIL_STATUSES = ['未対応', '対応中', '完了'] as const;
 export type MailStatus = (typeof MAIL_STATUSES)[number];
 
+/** 受信時の自動分類。受信箱の既定表示は「通常」のみ。削除はしない */
+export const MAIL_CATEGORIES = ['通常', 'メルマガ', '自動応答', '迷惑メール'] as const;
+export type MailCategory = (typeof MAIL_CATEGORIES)[number];
+
+/** メッセージの来源。将来の過去データ取込(M4)を区別する */
+export const MAIL_SOURCES = ['ses', 'import_maildealer', 'import_server'] as const;
+export type MailSource = (typeof MAIL_SOURCES)[number];
+
 export interface MailBox {
   id: number;
   /** 公開アドレス。受信時の宛先判定キーであり、送信時の From */
@@ -22,6 +30,7 @@ export interface MailThreadListItem {
   subject: string | null;
   member_id: string | null;
   status: MailStatus;
+  category: MailCategory;
   assignee_id: string | null;
   last_message_at: string | null;
   last_direction: 'in' | 'out' | null;
@@ -62,6 +71,7 @@ export interface MailMessage {
   provider_message_id: string | null;
   delivery_status: string | null;
   sender_user_id: string | null;
+  source: MailSource;
   created_at: string;
   sender: { id: string; full_name: string | null } | null;
   attachments: MailAttachment[];
@@ -76,6 +86,8 @@ export interface MailThreadListParams {
   /** 件名の部分一致 */
   q?: string;
   status?: MailStatus;
+  /** 未指定なら絞らない。画面側は既定で「通常」を渡す */
+  category?: MailCategory;
   /** users.id / 'none' = 未割当 */
   assigneeId?: string;
   mailBoxId?: number;

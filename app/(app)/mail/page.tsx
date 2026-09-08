@@ -11,7 +11,13 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
-import { MAIL_STATUSES, type MailStatus, listMailBoxes, listMailThreads } from '@/lib/domain/mail';
+import { listMailBoxes, listMailThreads } from '@/lib/domain/mail';
+import {
+  MAIL_CATEGORIES,
+  MAIL_STATUSES,
+  type MailCategory,
+  type MailStatus,
+} from '@/lib/domain/mail_types';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import Link from 'next/link';
 import { MailFilterBar } from './MailFilterBar';
@@ -22,6 +28,8 @@ interface PageProps {
   searchParams: Promise<{
     q?: string;
     status?: string;
+    /** 分類。未指定 = 通常 / 'all' = すべて */
+    cat?: string;
     assignee?: string;
     box?: string;
     unread?: string;
@@ -38,10 +46,18 @@ export default async function MailPage({ searchParams }: PageProps) {
     ? (sp.status as MailStatus)
     : undefined;
   const mailBoxId = sp.box && /^\d+$/.test(sp.box) ? Number(sp.box) : undefined;
+  // 分類: 未指定なら「通常」だけを表示する(メルマガ・迷惑メール等は絞り込みで見る)
+  const category: MailCategory | undefined =
+    sp.cat === 'all'
+      ? undefined
+      : MAIL_CATEGORIES.includes(sp.cat as MailCategory)
+        ? (sp.cat as MailCategory)
+        : '通常';
 
   const listParams = {
     q: sp.q || undefined,
     status,
+    category,
     assigneeId: sp.assignee || undefined,
     mailBoxId,
     unreadOnly: sp.unread === '1',
@@ -58,12 +74,13 @@ export default async function MailPage({ searchParams }: PageProps) {
 
   const isSplit = sp.view === 'split';
   const selected = sp.selected;
-  const listKey = `${sp.q ?? ''}|${sp.status ?? ''}|${sp.assignee ?? ''}|${sp.box ?? ''}|${sp.unread ?? ''}`;
+  const listKey = `${sp.q ?? ''}|${sp.status ?? ''}|${sp.cat ?? ''}|${sp.assignee ?? ''}|${sp.box ?? ''}|${sp.unread ?? ''}`;
 
   const baseParams = () => {
     const p = new URLSearchParams();
     if (sp.q) p.set('q', sp.q);
     if (sp.status) p.set('status', sp.status);
+    if (sp.cat) p.set('cat', sp.cat);
     if (sp.assignee) p.set('assignee', sp.assignee);
     if (sp.box) p.set('box', sp.box);
     if (sp.unread) p.set('unread', sp.unread);
@@ -84,6 +101,7 @@ export default async function MailPage({ searchParams }: PageProps) {
       <MailFilterBar
         initialQ={sp.q ?? ''}
         initialStatus={status ?? ''}
+        initialCategory={category ?? ''}
         initialAssignee={sp.assignee === me.id ? 'me' : (sp.assignee ?? '')}
         initialBox={mailBoxId ? String(mailBoxId) : ''}
         initialUnread={sp.unread === '1'}

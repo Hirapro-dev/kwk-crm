@@ -8,11 +8,13 @@
 import { getCurrentUser } from '@/lib/domain/auth';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { MAIL_STATUSES, type MailStatus } from './mail_types';
+import { MAIL_CATEGORIES, MAIL_STATUSES, type MailCategory, type MailStatus } from './mail_types';
 
 export interface UpdateMailThreadInput {
   id: string;
   status?: MailStatus;
+  /** 自動分類の手直し(誤判定を「通常」に戻す等) */
+  category?: MailCategory;
   /** 担当。null で担当解除 */
   assigneeId?: string | null;
   /** 紐付ける会員ID(K-XXXXXXX)。null で解除 */
@@ -40,6 +42,12 @@ export async function updateMailThread(
       return { error: `不正なステータスです: ${input.status}` };
     }
     patch.status = input.status;
+  }
+  if (input.category !== undefined) {
+    if (!MAIL_CATEGORIES.includes(input.category)) {
+      return { error: `不正な分類です: ${input.category}` };
+    }
+    patch.category = input.category;
   }
   if (input.assigneeId !== undefined) {
     patch.assignee_id = input.assigneeId || null;
