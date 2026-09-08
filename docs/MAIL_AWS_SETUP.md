@@ -171,6 +171,11 @@ SES 側の確認: コンソール → **Amazon SES** → **ID** → `mail.crm.hi
 
 ### 7-1. 送信ドメインを SES に登録(Tier 1 の 17 ドメイン)
 
+> **2026-09-08 確認**: 東京リージョンの SES に、Tier 1 のうち **4 ドメインが既に検証済み(DKIM 設定済み)**でした:
+> `mrt.co.jp` / `kawaraban.co.jp` / `sc-project-partners.co.jp` / `biovault.jp`。
+> この4つは **7-2 の DNS 作業が不要**です(コマンドには含めても実害なし。「登録済み(送信可=はい)」と表示されるだけ)。
+> 残り **13 ドメイン**だけ DKIM の CNAME 追加が必要です。
+
 CSV で〇の 17 ドメインを一括登録し、各ドメインに追加する DKIM の CNAME を出力します。
 
 ```bash
