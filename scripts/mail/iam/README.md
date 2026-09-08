@@ -31,5 +31,5 @@ npx tsx scripts/mail/setup_aws.ts \
 #    上と同じコマンドに --subscribe を付けて再実行
 ```
 
-出力される MX レコード(受信用サブドメイン)を Xserver の DNS 設定に追加する。
-`kawaraban.co.jp` 本体の MX・SPF は変更しない。
+出力される MX レコード(受信用サブドメイン `mail.crm.hirapro.com`)を **hirapro.com の DNS** に追加する。
+各共有アドレスのドメイン本体(`kawaraban.co.jp` 等)の MX・SPF は変更しない。
