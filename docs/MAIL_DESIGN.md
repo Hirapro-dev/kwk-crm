@@ -207,7 +207,7 @@ Resend 送信 API ── From: ad@kawaraban.co.jp(kawaraban.co.jp の DKIM で�
 | 順 | 誰が | 作業 | 備考 |
 |---|---|---|---|
 | 1 | 開発側 | Vercel Marketplace から Resend を導入(`vercel integration add resend/resend-email`) | API キーは環境変数に自動投入。**Resend アカウントが Vercel チームに紐づく(課金主体)** |
-| 2 | 開発側 | Resend で受信を有効化し、受信用アドレス(R1: `inbox@<id>.resend.app`)を控える。Webhook URL(`https://<本番ドメイン>/api/mail/inbound`)を登録 | |
+| 2 | 開発側 | Resend で受信を有効化し、受信用アドレス(R1: `inbox@<id>.resend.app`)を控える。Webhook URL **`https://crm.hirapro.com/api/mail/inbound`** を登録(イベント: `email.received` / `email.sent` / `email.delivered` / `email.bounced` / `email.failed`)。署名シークレットを Vercel 環境変数 `RESEND_WEBHOOK_SECRET` に設定 | 本番の安定 URL は `crm.hirapro.com`(確認済み) |
 | 3 | **Xserver 管理者** | サーバーパネル > メールアカウント設定 > `ad@kawaraban.co.jp` の転送 > 「転送先アドレス」に **2 の受信用アドレスを1行追加** > 追加する。「メールボックスに残すかどうか」は **残す** のまま | 添付画面の操作そのまま。メールディーラーの2件は当面残す(並行稼働) |
 | 4 | 開発側 | テストメールを `ad@kawaraban.co.jp` に送り、CRM に届くこと・**元の From / Message-ID が保持されていること**を確認 | Xserver の転送でヘッダーが書き換わらないかは公式マニュアルに記載がない【要確認: M1 の最初の検証項目】 |
 | 5 | 開発側 → Xserver 管理者 | Resend に `kawaraban.co.jp` を送信ドメインとして追加すると DNS レコード(DKIM の TXT 等)が表示されるので、それを **Xserver の DNS 設定**に追加 | 送信用。MX は変えない。Resend は Return-Path 用に `send.` サブドメインを使う設計のため、Xserver が自動設定済みの `kawaraban.co.jp` の SPF とは通常衝突しない【要確認: 実際に表示されたレコードで判断】 |
