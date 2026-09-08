@@ -39,6 +39,7 @@ import {
 import {
   CreateReceiptRuleCommand,
   CreateReceiptRuleSetCommand,
+  DescribeActiveReceiptRuleSetCommand,
   DescribeReceiptRuleSetCommand,
   SESClient,
   SetActiveReceiptRuleSetCommand,
@@ -222,26 +223,44 @@ async function main() {
   console.log(`[SNS] トピック: ${topicArn}`);
 
   // ---------------------------------------------------------------- 3. SES 受信ルール
+  // SES の受信ルールセットはリージョンに1つしか「有効」にできない。
+  // 既に別システムのルールセットが有効なら、それを無効化せず、その中に CRM のルールを追加する。
+  // 有効なものが無ければ CRM 用のルールセットを作って有効化する。
+  let targetRuleSet = RULE_SET_NAME;
+  let activateNeeded = true;
+  try {
+    const active = await ses.send(new DescribeActiveReceiptRuleSetCommand({}));
+    const activeName = active.Metadata?.Name;
+    if (activeName) {
+      targetRuleSet = activeName;
+      activateNeeded = false;
+      console.log(
+        `[SES] 有効な受信ルールセット「${activeName}」が既にあるため、そこに CRM のルールを追加します(既存ルールは変更しない)`,
+      );
+    }
+  } catch {
+    /* 有効なルールセットなし */
+  }
   let ruleSetExists = false;
   let ruleExists = false;
   try {
-    const rs = await ses.send(new DescribeReceiptRuleSetCommand({ RuleSetName: RULE_SET_NAME }));
+    const rs = await ses.send(new DescribeReceiptRuleSetCommand({ RuleSetName: targetRuleSet }));
     ruleSetExists = true;
     ruleExists = (rs.Rules ?? []).some((r) => r.Name === RULE_NAME);
   } catch {
     ruleSetExists = false;
   }
   console.log(
-    `[SES] ルールセット ${RULE_SET_NAME}: ${ruleSetExists ? '既存' : '作成'} / ルール ${RULE_NAME}: ${ruleExists ? '既存(変更しない)' : '作成'}`,
+    `[SES] ルールセット ${targetRuleSet}: ${ruleSetExists ? '既存' : '作成'} / ルール ${RULE_NAME}: ${ruleExists ? '既存(変更しない)' : '作成'}`,
   );
   if (!dryRun) {
     if (!ruleSetExists) {
-      await ses.send(new CreateReceiptRuleSetCommand({ RuleSetName: RULE_SET_NAME }));
+      await ses.send(new CreateReceiptRuleSetCommand({ RuleSetName: targetRuleSet }));
     }
     if (!ruleExists) {
       await ses.send(
         new CreateReceiptRuleCommand({
-          RuleSetName: RULE_SET_NAME,
+          RuleSetName: targetRuleSet,
           Rule: {
             Name: RULE_NAME,
             Enabled: true,
@@ -262,7 +281,9 @@ async function main() {
         }),
       );
     }
-    await ses.send(new SetActiveReceiptRuleSetCommand({ RuleSetName: RULE_SET_NAME }));
+    if (activateNeeded) {
+      await ses.send(new SetActiveReceiptRuleSetCommand({ RuleSetName: targetRuleSet }));
+    }
   }
 
   // ---------------------------------------------------------------- 4. SES 設定セット(送信の配信状態 → SNS)

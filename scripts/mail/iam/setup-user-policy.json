@@ -40,6 +40,7 @@
       "Action": [
         "ses:CreateReceiptRuleSet",
         "ses:DescribeReceiptRuleSet",
+        "ses:DescribeActiveReceiptRuleSet",
         "ses:CreateReceiptRule",
         "ses:SetActiveReceiptRuleSet",
         "ses:CreateConfigurationSet",
