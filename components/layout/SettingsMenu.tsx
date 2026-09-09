@@ -37,11 +37,6 @@ interface ExternalLinkItem {
 
 const EXTERNAL_LINKS: ExternalLinkItem[] = [
   {
-    // CRM 内蔵メーラー(/mail)。独立画面のため外部ツールと同じく別タブで開く
-    label: 'メーラー',
-    url: '/mail',
-  },
-  {
     label: 'Notion',
     url: 'https://www.notion.so/URL-1ac67ba4c2398040b767e79592e13d44',
   },
