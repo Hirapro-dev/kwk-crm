@@ -18,6 +18,7 @@ import {
   buildReplyHeaders,
   buildReplySubject,
   parseAddressList,
+  sanitizeDisplayName,
   sesMessageIdHeader,
 } from '@/lib/domain/mail_compose';
 import { getMailAwsConfig } from '@/lib/mail/aws';
@@ -64,6 +65,8 @@ export async function replyToMailThread(input: {
   threadId: string;
   body: string;
   cc?: string;
+  /** 差出人表示名の上書き。未指定(undefined)なら受信箱の既定値を使う */
+  fromName?: string;
 }): Promise<SendResult> {
   const me = await getCurrentUser();
   if (me.role === 'viewer') return { error: '閲覧専用ユーザーは送信できません' };
@@ -100,12 +103,15 @@ export async function replyToMailThread(input: {
   const subject = buildReplySubject(thread.subject ?? parent.subject);
   const headers = buildReplyHeaders(parent);
   const text = appendSignature(input.body, box.signature);
+  // 差出人表示名: フォームで指定があればそれ、無指定なら受信箱の既定値
+  const fromName =
+    input.fromName !== undefined ? sanitizeDisplayName(input.fromName) : box.display_name;
 
   let sesMessageId: string;
   try {
     sesMessageId = await sendViaSes(cfg, {
       fromAddress: box.address,
-      fromName: box.display_name,
+      fromName,
       to,
       cc: cc.addresses,
       subject,
@@ -125,7 +131,7 @@ export async function replyToMailThread(input: {
     in_reply_to: headers.inReplyTo,
     references_header: headers.references,
     from_address: box.address,
-    from_name: box.display_name,
+    from_name: fromName,
     to_addresses: to,
     cc_addresses: cc.addresses,
     subject,
@@ -158,6 +164,8 @@ export async function createMailThreadAndSend(input: {
   cc?: string;
   subject: string;
   body: string;
+  /** 差出人表示名の上書き。未指定(undefined)なら受信箱の既定値を使う */
+  fromName?: string;
 }): Promise<SendResult> {
   const me = await getCurrentUser();
   if (me.role === 'viewer') return { error: '閲覧専用ユーザーは送信できません' };
@@ -200,11 +208,13 @@ export async function createMailThreadAndSend(input: {
   }
 
   const text = appendSignature(input.body, box.signature);
+  const fromName =
+    input.fromName !== undefined ? sanitizeDisplayName(input.fromName) : box.display_name;
   let sesMessageId: string;
   try {
     sesMessageId = await sendViaSes(cfg, {
       fromAddress: box.address,
-      fromName: box.display_name,
+      fromName,
       to: to.addresses,
       cc: cc.addresses,
       subject,
@@ -241,7 +251,7 @@ export async function createMailThreadAndSend(input: {
     direction: 'out',
     message_id: sesMessageIdHeader(sesMessageId, cfg.region),
     from_address: box.address,
-    from_name: box.display_name,
+    from_name: fromName,
     to_addresses: to.addresses,
     cc_addresses: cc.addresses,
     subject,
