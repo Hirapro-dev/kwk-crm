@@ -4,19 +4,27 @@
     {
       "Sid": "ReadInboundMail",
       "Effect": "Allow",
-      "Action": ["s3:GetObject"],
+      "Action": [
+        "s3:GetObject"
+      ],
       "Resource": "arn:aws:s3:::hirapro-crm-mail-inbound/inbound/*"
     },
     {
       "Sid": "SendMail",
       "Effect": "Allow",
-      "Action": ["ses:SendEmail", "ses:SendRawEmail"],
+      "Action": [
+        "ses:SendEmail",
+        "ses:SendRawEmail"
+      ],
       "Resource": "*"
     },
     {
-      "Sid": "CheckSendingDomain",
+      "Sid": "ManageSendingDomains",
       "Effect": "Allow",
-      "Action": ["ses:GetEmailIdentity"],
+      "Action": [
+        "ses:GetEmailIdentity",
+        "ses:CreateEmailIdentity"
+      ],
       "Resource": "*"
     }
   ]
