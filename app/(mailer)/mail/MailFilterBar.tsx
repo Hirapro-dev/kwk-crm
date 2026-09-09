@@ -3,85 +3,58 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { MAIL_CATEGORIES, MAIL_STATUSES } from '@/lib/domain/mail_types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
 /**
- * メール受信箱の絞り込み(状態 / 担当 / 受信箱 / 未読 / 件名)。
- * 対応歴の ActivitiesFilterBar と同じ方式で、URL クエリに反映して再取得する。
+ * メーラー一覧の絞り込み(担当 / 未読 / 件名)。
+ * 状態・分類は MailStatusTabs、受信箱は左のフォルダで選ぶため、ここでは扱わない。
+ * URL クエリに反映して再取得する(対応歴の ActivitiesFilterBar と同じ方式)。
  */
 export function MailFilterBar({
   initialQ,
-  initialStatus,
-  initialCategory,
   initialAssignee,
-  initialBox,
   initialUnread,
   currentUserId,
   assigneeOptions,
-  boxOptions,
 }: {
   initialQ: string;
-  initialStatus: string;
-  /** '' = すべて / それ以外 = MailCategory。画面の既定は「通常」 */
-  initialCategory: string;
   /** '' = 全員 / 'me' = 自分 / 'none' = 未割当 / それ以外 = users.id */
   initialAssignee: string;
-  initialBox: string;
   initialUnread: boolean;
   currentUserId: string;
   assigneeOptions: { id: string; name: string }[];
-  boxOptions: { id: number; address: string }[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
 
   const [q, setQ] = useState(initialQ);
-  const [status, setStatus] = useState(initialStatus);
-  const [category, setCategory] = useState(initialCategory);
   const [assignee, setAssignee] = useState(initialAssignee);
-  const [box, setBox] = useState(initialBox);
   const [unread, setUnread] = useState(initialUnread);
 
-  const push = (next: {
-    q: string;
-    status: string;
-    category: string;
-    assignee: string;
-    box: string;
-    unread: boolean;
-  }) => {
+  const push = (next: { q: string; assignee: string; unread: boolean }) => {
+    // タブ・受信箱は維持する
     const params = new URLSearchParams(searchParams?.toString() ?? '');
     const set = (k: string, v: string) => {
       if (v) params.set(k, v);
       else params.delete(k);
     };
     set('q', next.q.trim());
-    set('status', next.status);
-    // 既定(通常)は URL に載せず、それ以外(すべて含む)だけ載せる
-    set('cat', next.category === '通常' ? '' : next.category || 'all');
     set('assignee', next.assignee === 'me' ? currentUserId : next.assignee);
-    set('box', next.box);
     set('unread', next.unread ? '1' : '');
     params.delete('page');
-    // 条件を変えたら分割ビューの選択は解除する(別スレッドが右に残らないように)
-    params.delete('selected');
     const qs = params.toString();
     startTransition(() => router.push(qs ? `/mail?${qs}` : '/mail'));
   };
 
-  const submit = () => push({ q, status, category, assignee, box, unread });
+  const submit = () => push({ q, assignee, unread });
 
   const reset = () => {
     setQ('');
-    setStatus('');
-    setCategory('通常');
     setAssignee('');
-    setBox('');
     setUnread(false);
-    push({ q: '', status: '', category: '通常', assignee: '', box: '', unread: false });
+    push({ q: '', assignee: '', unread: false });
   };
 
   return (
@@ -92,22 +65,6 @@ export function MailFilterBar({
         submit();
       }}
     >
-      <Select className="w-28" value={status} onChange={(e) => setStatus(e.target.value)}>
-        <option value="">全状態</option>
-        {MAIL_STATUSES.map((s) => (
-          <option key={s} value={s}>
-            {s}
-          </option>
-        ))}
-      </Select>
-      <Select className="w-32" value={category} onChange={(e) => setCategory(e.target.value)}>
-        {MAIL_CATEGORIES.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-        <option value="">すべて</option>
-      </Select>
       <Select className="w-40" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
         <option value="">担当: 全員</option>
         <option value="me">担当: 自分</option>
@@ -118,16 +75,6 @@ export function MailFilterBar({
           </option>
         ))}
       </Select>
-      {boxOptions.length > 1 && (
-        <Select className="w-52" value={box} onChange={(e) => setBox(e.target.value)}>
-          <option value="">全受信箱</option>
-          {boxOptions.map((b) => (
-            <option key={b.id} value={String(b.id)}>
-              {b.address}
-            </option>
-          ))}
-        </Select>
-      )}
       <label className="flex items-center gap-1 text-xs">
         <input type="checkbox" checked={unread} onChange={(e) => setUnread(e.target.checked)} />
         未読のみ
@@ -139,7 +86,7 @@ export function MailFilterBar({
         onChange={(e) => setQ(e.target.value)}
       />
       <Button type="submit" size="sm" disabled={pending}>
-        絞り込む
+        検索
       </Button>
       <Button type="button" size="sm" variant="ghost" onClick={reset} disabled={pending}>
         クリア

@@ -1,10 +1,10 @@
 /**
  * メールスレッドの表示(仕様書 §5.15 / §8.1)
  *
- * /mail/[id](全画面)と /mail?view=split(右ペイン)の両方から使うサーバーコンポーネント。
+ * /mail/[id] から使うサーバーコンポーネント。
  * - メッセージを古い順に並べる(受信/送信を色分け)
  * - 担当・ステータス・会員紐付けの操作は MailThreadControls(クライアント)
- * - HTML 本文は MailHtmlViewer(サンドボックス iframe + 画像自動読み込み禁止)
+ * - 本文は MailBodyViewer(HTML 版を既定表示。サンドボックス iframe + 画像は明示操作でのみ読み込み)
  * - 添付は短期署名 URL(サーバー側で発行)
  */
 
@@ -18,14 +18,14 @@ import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { MailHtmlViewer } from './MailHtmlViewer';
+import { MailBodyViewer } from './MailBodyViewer';
 import { MailReplyForm } from './MailReplyForm';
 import { MailThreadControls } from './MailThreadControls';
 import { MarkThreadRead } from './MarkThreadRead';
 
 interface Props {
   threadId: string;
-  /** 分割ビューの右ペインに埋め込む場合 */
+  /** 他画面に埋め込む場合(見つからないときに notFound() を出さない) */
   embedded?: boolean;
 }
 
@@ -162,16 +162,7 @@ export async function MailThreadPanel({ threadId, embedded }: Props) {
               </div>
             </CardHeader>
             <CardContent className="px-3 py-3">
-              {m.text_body ? (
-                <pre className="whitespace-pre-wrap break-words font-sans text-sm">
-                  {m.text_body}
-                </pre>
-              ) : m.html_body ? (
-                <MailHtmlViewer html={m.html_body} />
-              ) : (
-                <p className="text-sm text-muted-foreground">(本文なし)</p>
-              )}
-              {m.text_body && m.html_body && <MailHtmlViewer html={m.html_body} collapsed />}
+              <MailBodyViewer text={m.text_body} html={m.html_body} />
 
               {m.attachments && m.attachments.length > 0 && (
                 <ul className="mt-3 flex flex-wrap gap-2 border-t pt-2 text-xs">

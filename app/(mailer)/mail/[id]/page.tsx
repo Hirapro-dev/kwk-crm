@@ -1,5 +1,6 @@
 /**
- * メールスレッド画面(仕様書 §8.1)。表示本体は MailThreadPanel(分割ビューと共通)。
+ * メールスレッド画面(仕様書 §8.1)。左のフォルダはそのまま、右ペインにスレッドを表示する。
+ * 表示本体は MailThreadPanel。
  */
 
 import { Button } from '@/components/ui/button';
@@ -17,7 +18,7 @@ export default async function MailThreadPage({ params }: PageProps) {
       <div>
         <Link href="/mail">
           <Button variant="ghost" size="sm">
-            ← 受信箱へ戻る
+            ← 一覧へ戻る
           </Button>
         </Link>
       </div>

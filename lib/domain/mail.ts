@@ -8,6 +8,7 @@
  */
 
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import type { MailBoxCount } from './mail_folders';
 import type {
   MailBox,
   MailMessage,
@@ -42,6 +43,59 @@ export async function listMailBoxes(): Promise<MailBox[]> {
 }
 
 /**
+ * 受信箱ごとの件数(未対応 / 未読。通常分類のみ)。メーラー左ペインのフォルダ表示用。
+ * migration 77 の mail_box_counts() を1回呼ぶ(受信箱が数百件でも1クエリ)。
+ * 関数未適用(migration 77 前)のときは空配列を返し、件数なしで画面を出す。
+ */
+export async function listMailBoxCounts(): Promise<MailBoxCount[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('mail_box_counts');
+  if (error) return [];
+  return (data ?? []) as unknown as MailBoxCount[];
+}
+
+type ThreadFilterParams = Omit<MailThreadListParams, 'page' | 'pageSize'>;
+
+/** 一覧と件数で同じ絞り込みを使うための共通部分 */
+// biome-ignore lint/suspicious/noExplicitAny: PostgREST ビルダーの型はメソッドチェーンで変わるため
+function applyThreadFilters<Q extends Record<string, any>>(
+  query: Q,
+  params: ThreadFilterParams,
+): Q {
+  let q = query;
+  if (params.status) q = q.eq('status', params.status);
+  if (params.category) q = q.eq('category', params.category);
+  if (params.assigneeId === 'none') q = q.is('assignee_id', null);
+  else if (params.assigneeId) q = q.eq('assignee_id', params.assigneeId);
+  if (params.mailBoxId) q = q.eq('mail_box_id', params.mailBoxId);
+  if (params.unreadOnly) q = q.eq('is_read', false);
+  if (params.memberId) q = q.eq('member_id', params.memberId);
+  if (params.q?.trim()) {
+    const kw = params.q.trim().replace(/[%_]/g, '\\$&');
+    q = q.ilike('subject', `%${kw}%`);
+  }
+  return q;
+}
+
+/**
+ * 条件に一致するスレッド件数だけを返す(行は取得しない)。
+ * メーラーの状態タブ(新着 / 対応中 / 完了 …)に件数を出すために使う。
+ */
+export async function countMailThreads(params: ThreadFilterParams = {}): Promise<number> {
+  const supabase = await createClient();
+  const query = applyThreadFilters(
+    supabase
+      .from('mail_threads')
+      .select('id', { count: 'exact', head: true })
+      .is('deleted_at', null),
+    params,
+  );
+  const { count, error } = await query;
+  if (error) return 0;
+  return count ?? 0;
+}
+
+/**
  * 受信箱のスレッド一覧。最終メッセージ日時の降順。
  * 同時刻の並びを決定論的にするため id を第2キーにする(対応歴と同じ理由)。
  */
@@ -54,25 +108,16 @@ export async function listMailThreads(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  let query = supabase
-    .from('mail_threads')
-    .select(THREAD_SELECT, { count: 'exact' })
-    .is('deleted_at', null)
-    .order('last_message_at', { ascending: false, nullsFirst: false })
-    .order('id', { ascending: false })
-    .range(from, to);
-
-  if (params.status) query = query.eq('status', params.status);
-  if (params.category) query = query.eq('category', params.category);
-  if (params.assigneeId === 'none') query = query.is('assignee_id', null);
-  else if (params.assigneeId) query = query.eq('assignee_id', params.assigneeId);
-  if (params.mailBoxId) query = query.eq('mail_box_id', params.mailBoxId);
-  if (params.unreadOnly) query = query.eq('is_read', false);
-  if (params.memberId) query = query.eq('member_id', params.memberId);
-  if (params.q?.trim()) {
-    const q = params.q.trim().replace(/[%_]/g, '\\$&');
-    query = query.ilike('subject', `%${q}%`);
-  }
+  const query = applyThreadFilters(
+    supabase
+      .from('mail_threads')
+      .select(THREAD_SELECT, { count: 'exact' })
+      .is('deleted_at', null)
+      .order('last_message_at', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: false })
+      .range(from, to),
+    params,
+  );
 
   const { data, error, count } = await query;
   if (error) {

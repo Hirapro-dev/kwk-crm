@@ -37,7 +37,7 @@ export default async function MailNewPage({ searchParams }: PageProps) {
       <div>
         <Link href="/mail">
           <Button variant="ghost" size="sm">
-            ← 受信箱へ戻る
+            ← 一覧へ戻る
           </Button>
         </Link>
       </div>
