@@ -4,8 +4,10 @@ import {
   Activity,
   BarChart3,
   ClipboardList,
+  ExternalLink,
   FileBarChart,
   Home,
+  Mail,
   MessageSquare,
   Settings,
   Sparkles,
@@ -28,9 +30,14 @@ const ICON_MAP: Record<string, ReactNode> = {
   '/reports':      <FileBarChart  className="h-6 w-6" />,
   '/settings':     <Settings     className="h-6 w-6" />,
   '/ai':           <Sparkles     className="h-6 w-6" />,
+  '/mail':         <Mail         className="h-6 w-6" />,
 };
 
-const ALL_EXTRA_ITEMS: TabItem[] = [
+/** ランチャー固定項目。newTab=true は別タブで開く(メーラーは独立画面のため) */
+type LauncherItem = TabItem & { newTab?: boolean };
+
+const ALL_EXTRA_ITEMS: LauncherItem[] = [
+  { href: '/mail',     label: 'メーラー', matchPrefix: true, newTab: true },
   { href: '/settings', label: '設定', matchPrefix: true },
   { href: '/ai',       label: 'AI',  matchPrefix: false },
 ];
@@ -47,7 +54,7 @@ export function AppLauncherButton({ tabs }: Props) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  const allItems = [
+  const allItems: LauncherItem[] = [
     ...tabs,
     ...ALL_EXTRA_ITEMS.filter((e) => !tabs.some((t) => t.href === e.href)),
   ];
@@ -103,6 +110,8 @@ export function AppLauncherButton({ tabs }: Props) {
                   <Link
                     key={tab.href}
                     href={tab.href}
+                    target={tab.newTab ? '_blank' : undefined}
+                    rel={tab.newTab ? 'noopener noreferrer' : undefined}
                     onClick={() => setOpen(false)}
                     className={cn(
                       'flex items-center gap-3 px-5 py-3 text-sm font-medium transition-colors',
@@ -115,6 +124,12 @@ export function AppLauncherButton({ tabs }: Props) {
                       {icon}
                     </span>
                     <span>{tab.label}</span>
+                    {tab.newTab && (
+                      <ExternalLink
+                        className="ml-auto h-3.5 w-3.5 text-muted-foreground"
+                        aria-label="別タブで開く"
+                      />
+                    )}
                     {tab.href === '/ai' && (
                       <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
                         Coming Soon
