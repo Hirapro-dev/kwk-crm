@@ -90,6 +90,23 @@ export function parseAddressList(input: string | null | undefined): {
   return { addresses: out };
 }
 
+/** 差出人表示名の上限文字数。長すぎる表示名を防ぐ */
+const MAX_DISPLAY_NAME_LENGTH = 80;
+
+/**
+ * 差出人表示名の正規化(受信箱の既定値の保存時・送信時の上書き両方で使う)。
+ * 改行・制御文字は SES への渡し方次第でヘッダインジェクションになり得るため、
+ * 空白に置き換えたうえで前後の空白を詰め、長さを上限で切り詰める。
+ * 空(空白のみ)は null にする(表示名なし = アドレスのみ表示)。
+ */
+export function sanitizeDisplayName(input: string | null | undefined): string | null {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ヘッダインジェクション対策で制御文字を明示的に除去するため
+  const noControl = (input ?? '').replace(/[\x00-\x1f\x7f]/g, ' ');
+  const collapsed = noControl.replace(/\s+/g, ' ').trim();
+  if (!collapsed) return null;
+  return collapsed.slice(0, MAX_DISPLAY_NAME_LENGTH);
+}
+
 /**
  * 差出人の表示名を SES に渡せる形にする。
  * ASCII のみなら引用符で囲み、非 ASCII(日本語)なら RFC 2047 の encoded-word にする

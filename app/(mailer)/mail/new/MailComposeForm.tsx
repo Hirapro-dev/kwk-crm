@@ -32,7 +32,18 @@ export function MailComposeForm({
   const [cc, setCc] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [fromName, setFromName] = useState(firstSendable?.display_name ?? '');
+  // 差出人表示名を手で書き換えたら、以降は差出人(受信箱)を変えても上書きしない
+  const [fromNameTouched, setFromNameTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleBoxChange = (id: string) => {
+    setBoxId(id);
+    if (!fromNameTouched) {
+      const box = boxes.find((b) => String(b.id) === id);
+      setFromName(box?.display_name ?? '');
+    }
+  };
 
   const submit = () => {
     setError(null);
@@ -43,6 +54,7 @@ export function MailComposeForm({
         cc,
         subject,
         body,
+        fromName,
       });
       if (r.error) {
         setError(r.error);
@@ -76,7 +88,7 @@ export function MailComposeForm({
           className="mt-1 w-full max-w-md"
           value={boxId}
           disabled={pending}
-          onChange={(e) => setBoxId(e.target.value)}
+          onChange={(e) => handleBoxChange(e.target.value)}
         >
           {boxes.map((b) => (
             <option key={b.id} value={String(b.id)} disabled={!b.sendable}>
@@ -85,6 +97,21 @@ export function MailComposeForm({
             </option>
           ))}
         </Select>
+      </div>
+      <div className="block text-xs">
+        差出人表示名(空欄でアドレスのみ表示)
+        <Input
+          aria-label="差出人表示名"
+          className="mt-1"
+          placeholder="例: ひらプロ"
+          maxLength={80}
+          value={fromName}
+          onChange={(e) => {
+            setFromName(e.target.value);
+            setFromNameTouched(true);
+          }}
+          disabled={pending}
+        />
       </div>
       <div className="block text-xs">
         宛先(カンマ区切り)

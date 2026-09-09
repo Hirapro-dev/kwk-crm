@@ -204,6 +204,7 @@ export async function MailThreadPanel({ threadId, embedded }: Props) {
           sendable={sendable}
           disabledReason={disabledReason}
           signature={thread.mail_box?.signature ?? null}
+          defaultFromName={thread.mail_box?.display_name ?? null}
         />
       )}
     </div>

@@ -6,6 +6,7 @@ import {
   buildReplySubject,
   formatFromAddress,
   parseAddressList,
+  sanitizeDisplayName,
   sesMessageIdHeader,
 } from '../../lib/domain/mail_compose';
 
@@ -108,5 +109,35 @@ describe('sesMessageIdHeader', () => {
   it('リージョンに応じた Message-ID ヘッダの期待値を作る', () => {
     expect(sesMessageIdHeader('abc', 'ap-northeast-1')).toBe('<abc@ap-northeast-1.amazonses.com>');
     expect(sesMessageIdHeader('abc', 'us-east-1')).toBe('<abc@email.amazonses.com>');
+  });
+});
+
+describe('sanitizeDisplayName(差出人表示名の正規化)', () => {
+  it('前後の空白を取り除く', () => {
+    expect(sanitizeDisplayName('  ひらプロ  ')).toBe('ひらプロ');
+  });
+
+  it('空・空白のみは null にする(表示名なし = アドレスのみ表示)', () => {
+    expect(sanitizeDisplayName('')).toBeNull();
+    expect(sanitizeDisplayName('   ')).toBeNull();
+    expect(sanitizeDisplayName(null)).toBeNull();
+    expect(sanitizeDisplayName(undefined)).toBeNull();
+  });
+
+  it('改行・制御文字はヘッダインジェクション対策で除去し、空白1つに畳む', () => {
+    expect(sanitizeDisplayName('ひらプロ\r\nBcc: attacker@example.com')).toBe(
+      'ひらプロ Bcc: attacker@example.com',
+    );
+    expect(sanitizeDisplayName('a\tb')).toBe('a b');
+  });
+
+  it('連続する空白は1つに畳む', () => {
+    expect(sanitizeDisplayName('ひら   プロ')).toBe('ひら プロ');
+  });
+
+  it('80文字を超える分は切り詰める', () => {
+    const long = 'あ'.repeat(100);
+    const result = sanitizeDisplayName(long);
+    expect(result).toHaveLength(80);
   });
 });

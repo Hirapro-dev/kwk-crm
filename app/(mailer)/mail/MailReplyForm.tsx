@@ -17,6 +17,7 @@ export function MailReplyForm({
   sendable,
   disabledReason,
   signature,
+  defaultFromName,
 }: {
   threadId: string;
   /** 返信先(表示用) */
@@ -25,11 +26,14 @@ export function MailReplyForm({
   disabledReason?: string;
   /** 送信時に自動で付く署名(表示用) */
   signature: string | null;
+  /** 受信箱の既定の差出人表示名(/settings/mail で設定)。送信前にその場で書き換えられる */
+  defaultFromName: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [body, setBody] = useState('');
   const [cc, setCc] = useState('');
+  const [fromName, setFromName] = useState(defaultFromName ?? '');
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
@@ -45,7 +49,7 @@ export function MailReplyForm({
     setError(null);
     setSent(false);
     startTransition(async () => {
-      const r = await replyToMailThread({ threadId, body, cc });
+      const r = await replyToMailThread({ threadId, body, cc, fromName });
       if (r.error) {
         setError(r.error);
         return;
@@ -68,13 +72,31 @@ export function MailReplyForm({
       <div className="text-xs text-muted-foreground">
         返信先: <span className="font-mono">{replyTo ?? '(不明)'}</span>
       </div>
-      <Input
-        aria-label="CC"
-        placeholder="CC(カンマ区切り、任意)"
-        value={cc}
-        onChange={(e) => setCc(e.target.value)}
-        disabled={pending}
-      />
+      <div className="flex flex-wrap gap-2">
+        <div className="block flex-1 basis-40 text-xs">
+          差出人表示名(空欄でアドレスのみ表示)
+          <Input
+            aria-label="差出人表示名"
+            className="mt-1"
+            placeholder="例: ひらプロ"
+            maxLength={80}
+            value={fromName}
+            onChange={(e) => setFromName(e.target.value)}
+            disabled={pending}
+          />
+        </div>
+        <div className="block flex-1 basis-40 text-xs">
+          CC(任意)
+          <Input
+            aria-label="CC"
+            className="mt-1"
+            placeholder="CC(カンマ区切り、任意)"
+            value={cc}
+            onChange={(e) => setCc(e.target.value)}
+            disabled={pending}
+          />
+        </div>
+      </div>
       <Textarea
         aria-label="本文"
         placeholder="返信本文"
