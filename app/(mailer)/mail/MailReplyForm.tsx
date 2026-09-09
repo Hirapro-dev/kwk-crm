@@ -26,7 +26,7 @@ export function MailReplyForm({
   disabledReason?: string;
   /** 送信時に自動で付く署名(表示用) */
   signature: string | null;
-  /** 受信箱の既定の差出人表示名(/settings/mail で設定)。送信前にその場で書き換えられる */
+  /** 受信箱の既定の差出人表示名(/mail/settings で設定)。送信前にその場で書き換えられる */
   defaultFromName: string | null;
 }) {
   const router = useRouter();

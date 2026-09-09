@@ -1,7 +1,7 @@
 /**
  * SES の送信ドメイン ID(検証状態の取得・登録)。サーバー専用。CLAUDE.md §5.15 M2。
  *
- * `/settings/mail` から使う。ドメインの登録(CreateEmailIdentity)は Easy DKIM(RSA 2048)で行い、
+ * `/mail/settings` から使う。ドメインの登録(CreateEmailIdentity)は Easy DKIM(RSA 2048)で行い、
  * 返ってきた DKIM トークンを画面に出して DNS に貼ってもらう。DNS の追加自体は自動化できない
  * (Xserver 等に API が無い)ため、ここでやるのは「登録」と「状態の確認」まで。
  */

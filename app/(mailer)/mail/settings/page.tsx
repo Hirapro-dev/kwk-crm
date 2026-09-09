@@ -1,12 +1,12 @@
 /**
- * /settings/mail — メール設定 (admin 専用 / CLAUDE.md §5.15 M2)
+ * /mail/settings — メール設定 (admin 専用 / CLAUDE.md §5.15 M2)。メーラーのヘッダーの歯車メニューから開く
  *
  * メールディーラーから CRM への移行で「アドレスを増やす」作業をシステム内で完結に近づける画面。
  *   1. 転送先(受信用アドレス): 各サーバー(Xserver 等)の転送設定に貼る値と手順
  *   2. 受信箱(mail_boxes): 追加・表示名・署名・有効/無効
  *   3. 送信ドメイン: SES への登録(ボタン)と、DNS に貼る DKIM の CNAME 3本、検証状態
  * DNS の追加と各サーバーの転送設定は API が無いため手作業(ここに案内を出す)。
- * /settings 配下のため layout.tsx で admin チェック済 (二重チェックなし)。
+ * メーラー(app/(mailer))のレイアウトは admin 限定ではないため、ここで admin を確認し、それ以外は /mail へ戻す。
  */
 
 import { PanelHeader } from '@/components/layout/PanelHeader';
@@ -19,17 +19,22 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { getCurrentUser } from '@/lib/domain/auth';
 import { listMailBoxes } from '@/lib/domain/mail';
 import { uniqueDomains } from '@/lib/domain/mail_box_settings';
 import { domainOfAddress } from '@/lib/domain/mail_folders';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { type DomainIdentity, getDomainIdentity } from '@/lib/mail/ses_identity';
+import { redirect } from 'next/navigation';
 import { CopyButton } from './CopyButton';
 import { DomainCard } from './DomainCard';
 import { MailBoxRow } from './MailBoxRow';
 import { NewMailBoxForm } from './NewMailBoxForm';
 
-export default async function SettingsMailPage() {
+export default async function MailSettingsPage() {
+  const me = await getCurrentUser();
+  if (me.role !== 'admin') redirect('/mail');
+
   const boxes = await listMailBoxes();
   const cfg = getMailAwsConfig();
   const domains = uniqueDomains(boxes.map((b) => b.address));

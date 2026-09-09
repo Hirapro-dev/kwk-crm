@@ -1,5 +1,5 @@
 /**
- * `/settings/mail`(受信箱・送信ドメインの設定)の決定論的ロジック。CLAUDE.md §5.15 / §0.1 R6。
+ * `/mail/settings`(受信箱・送信ドメインの設定)の決定論的ロジック。CLAUDE.md §5.15 / §0.1 R6。
  * 純粋関数のみ。SES や DB には触れない(それは lib/mail/ses_identity.ts と mail_box_actions.ts)。
  */
 

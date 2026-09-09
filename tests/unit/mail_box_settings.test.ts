@@ -6,7 +6,7 @@ import {
 } from '../../lib/domain/mail_box_settings';
 
 /**
- * `/settings/mail` の決定論的ロジック(CLAUDE.md §5.15)。
+ * `/mail/settings` の決定論的ロジック(CLAUDE.md §5.15)。
  * 受信箱アドレスは受信時の宛先判定キーになるため、正規化(小文字化)と形式チェックを固定する。
  * DKIM の CNAME は利用者が DNS に手で貼るため、SES の仕様どおりの形であることを固定する。
  */

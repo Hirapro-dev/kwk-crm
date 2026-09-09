@@ -171,7 +171,7 @@ SES 側の確認: コンソール → **Amazon SES** → **ID** → `mail.crm.hi
 
 ### 7-1. 送信ドメインを SES に登録(Tier 1 の 17 ドメイン)
 
-> **2026-09-09 追記**: ドメインの SES 登録と DKIM の CNAME の表示は、CRM の **`/settings/mail`(管理者)** からも行えるようになった
+> **2026-09-09 追記**: ドメインの SES 登録と DKIM の CNAME の表示は、メーラーの歯車メニュー → **`/mail/settings`(管理者)** からも行えるようになった
 > (受信箱を追加 → 「送信ドメイン」の「SES に登録」→ 表示された CNAME 3本を DNS に貼る → 「再確認」)。
 > 以下のスクリプトによる一括登録は、最初に多数のドメインをまとめて登録する場合の手段として残す。
 > 画面から登録するには、`hirapro-crm-mail-webhook` の IAM ポリシーに `ses:CreateEmailIdentity` が必要(`scripts/mail/iam/webhook-user-policy.json` を貼り替える)。

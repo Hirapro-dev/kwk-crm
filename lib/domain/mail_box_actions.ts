@@ -2,7 +2,7 @@
 
 /**
  * 受信箱(mail_boxes)と送信ドメインの管理者向け Server Actions。CLAUDE.md §5.15 M2。
- * `/settings/mail`(admin のみ)から呼ぶ。RLS(migration 76: mail_boxes の書込は admin のみ)と二重に確認する。
+ * `/mail/settings`(admin のみ)から呼ぶ。RLS(migration 76: mail_boxes の書込は admin のみ)と二重に確認する。
  *
  * - 受信箱の追加・編集(表示名・署名・有効/無効)。削除はしない(スレッドが参照するため無効化で代替)
  * - 送信ドメインの SES 登録(Easy DKIM)。DNS への CNAME 追加は画面の案内に従って手作業
@@ -59,7 +59,7 @@ export async function createMailBox(input: {
     return { error: `登録に失敗しました: ${error.message}` };
   }
 
-  revalidatePath('/settings/mail');
+  revalidatePath('/mail/settings');
   revalidatePath('/mail');
   return {};
 }
@@ -85,7 +85,7 @@ export async function updateMailBox(input: {
   const { error } = await supabase.from('mail_boxes').update(patch).eq('id', input.id);
   if (error) return { error: `更新に失敗しました: ${error.message}` };
 
-  revalidatePath('/settings/mail');
+  revalidatePath('/mail/settings');
   revalidatePath('/mail');
   return {};
 }
@@ -108,7 +108,7 @@ export async function registerMailDomain(
 
   try {
     const identity = await registerDomainIdentity(cfg, d);
-    revalidatePath('/settings/mail');
+    revalidatePath('/mail/settings');
     return { identity };
   } catch (e) {
     return { error: (e as Error).message };
@@ -120,7 +120,7 @@ export async function recheckMailDomains(): Promise<MailBoxActionResult> {
   const denied = await requireAdmin();
   if (denied) return { error: denied };
   clearSendableCache();
-  revalidatePath('/settings/mail');
+  revalidatePath('/mail/settings');
   revalidatePath('/mail');
   return {};
 }
