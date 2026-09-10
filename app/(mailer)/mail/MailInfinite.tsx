@@ -8,11 +8,12 @@ import { loadMoreMailThreads } from '@/lib/domain/list_more_actions';
 import type { MailCategory, MailStatus, MailThreadListItem } from '@/lib/domain/mail_types';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 /**
  * メーラーのスレッド一覧(無限スクロール)。CLAUDE.md §5.15 / §8.1
  * メールディーラーの一覧に合わせ、列は 状態 / 件名 / From / 受信箱 / 日付 / 担当。
- * 件名クリックでスレッド画面へ。未読は太字。
+ * 件名クリックでスレッド画面へ(一覧の絞り込みを URL で引き継ぎ、前後移動に使う)。未読は太字。
  */
 interface Props {
   initialRows: MailThreadListItem[];
@@ -38,6 +39,8 @@ const STATUS_CLASS: Record<MailStatus, string> = {
 };
 
 export function MailInfinite({ initialRows, total, params, showBoxColumn, boxAddresses }: Props) {
+  const searchParams = useSearchParams();
+  const qs = searchParams.toString();
   const columns: InfiniteCol[] = [
     { header: '状態', headClassName: 'w-28' },
     { header: '件名' },
@@ -48,7 +51,7 @@ export function MailInfinite({ initialRows, total, params, showBoxColumn, boxAdd
   ];
 
   const renderRow = (t: MailThreadListItem) => {
-    const href = `/mail/${t.id}`;
+    const href = qs ? `/mail/${t.id}?${qs}` : `/mail/${t.id}`;
     const unread = !t.is_read;
     const from = t.last_from_name
       ? `${t.last_from_name} <${t.last_from_address ?? ''}>`

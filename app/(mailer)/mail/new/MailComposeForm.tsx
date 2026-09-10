@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { createMailThreadAndSend } from '@/lib/domain/mail_send_actions';
+import { composeOutgoingBody } from '@/lib/domain/mail_text';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
@@ -12,11 +13,15 @@ export interface ComposeBoxOption {
   id: number;
   address: string;
   display_name: string | null;
+  signature: string | null;
   /** SES でドメイン検証済み = 送信可 */
   sendable: boolean;
 }
 
-/** 新規メール作成フォーム(M2)。送信後は作成されたスレッドへ遷移する */
+/**
+ * 新規メール作成フォーム(M2)。送信後は作成されたスレッドへ遷移する。
+ * 署名は返信フォームと同じくプルダウンで選び、本文の下に見える形で付けて送る。
+ */
 export function MailComposeForm({
   boxes,
   initialTo,
@@ -31,18 +36,24 @@ export function MailComposeForm({
   const [to, setTo] = useState(initialTo ?? '');
   const [cc, setCc] = useState('');
   const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
+  const [text, setText] = useState('');
   const [fromName, setFromName] = useState(firstSendable?.display_name ?? '');
-  // 差出人表示名を手で書き換えたら、以降は差出人(受信箱)を変えても上書きしない
+  // 差出人表示名・署名を手で変えたら、以降は差出人(受信箱)を変えても上書きしない
   const [fromNameTouched, setFromNameTouched] = useState(false);
+  const [signatureBoxId, setSignatureBoxId] = useState<string>(
+    firstSendable?.signature ? String(firstSendable.id) : '',
+  );
+  const [signatureTouched, setSignatureTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const signatureText = boxes.find((b) => String(b.id) === signatureBoxId)?.signature ?? '';
+  const signatureOptions = boxes.filter((b) => !!b.signature?.trim());
 
   const handleBoxChange = (id: string) => {
     setBoxId(id);
-    if (!fromNameTouched) {
-      const box = boxes.find((b) => String(b.id) === id);
-      setFromName(box?.display_name ?? '');
-    }
+    const box = boxes.find((b) => String(b.id) === id);
+    if (!fromNameTouched) setFromName(box?.display_name ?? '');
+    if (!signatureTouched) setSignatureBoxId(box?.signature ? id : '');
   };
 
   const submit = () => {
@@ -53,7 +64,7 @@ export function MailComposeForm({
         to,
         cc,
         subject,
-        body,
+        body: composeOutgoingBody({ text, signature: signatureText }),
         fromName,
       });
       if (r.error) {
@@ -145,21 +156,46 @@ export function MailComposeForm({
         />
       </div>
       <div className="block text-xs">
-        本文(署名は自動で末尾に付きます)
+        本文
         <Textarea
           aria-label="本文"
           className="mt-1"
           rows={12}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
           disabled={pending}
         />
+      </div>
+      <div className="block text-xs">
+        署名
+        <Select
+          aria-label="署名"
+          className="mt-1 w-full max-w-md"
+          value={signatureBoxId}
+          disabled={pending}
+          onChange={(e) => {
+            setSignatureBoxId(e.target.value);
+            setSignatureTouched(true);
+          }}
+        >
+          <option value="">署名なし</option>
+          {signatureOptions.map((b) => (
+            <option key={b.id} value={String(b.id)}>
+              {b.display_name ? `${b.display_name} <${b.address}>` : b.address} の署名
+            </option>
+          ))}
+        </Select>
+        {signatureText && (
+          <pre className="mt-1 whitespace-pre-wrap rounded border bg-gray-50 p-2 font-sans text-[11px] text-muted-foreground">
+            {`-- \n${signatureText}`}
+          </pre>
+        )}
       </div>
       <div className="flex items-center gap-2">
         <Button
           type="submit"
           size="sm"
-          disabled={pending || !to.trim() || !subject.trim() || !body.trim()}
+          disabled={pending || !to.trim() || !subject.trim() || !text.trim()}
         >
           {pending ? '送信中…' : '送信'}
         </Button>

@@ -5,12 +5,11 @@
  * ここで決めていること:
  *   - 返信件名(Re: の付け方)
  *   - 顧客側でもスレッド化されるための In-Reply-To / References
- *   - 署名の付け方、引用の付け方
+ *   - 署名・引用・本文合成(実体は mail_text.ts)
  *   - 宛先入力(カンマ・改行区切り)の解析と上限
  *   - 差出人表示名の MIME エンコード(SES は非 ASCII の表示名を encoded-word で要求する)
  */
 
-import { formatDateTime } from '@/lib/utils/date';
 import { extractReferencedMessageIds } from './mail_inbound';
 
 /** 1通あたりの宛先(To + Cc)の上限。誤送信の被害を限定する */
@@ -37,29 +36,9 @@ export function buildReplyHeaders(parent: {
   return { inReplyTo: parent.message_id, references: refs.join(' ') };
 }
 
-/** 本文末尾に署名を付ける。署名が空なら本文のまま。区切りは "-- " (RFC 3676) */
-export function appendSignature(body: string, signature: string | null | undefined): string {
-  const sig = (signature ?? '').trim();
-  const b = body.replace(/\s+$/, '');
-  if (!sig) return `${b}\n`;
-  return `${b}\n\n-- \n${sig}\n`;
-}
-
-/** 返信本文の下に付ける引用(テキスト)。"> " を各行の先頭に付ける */
-export function buildQuotedBody(original: {
-  from_address: string;
-  from_name: string | null;
-  sent_at: string | null;
-  text_body: string | null;
-}): string {
-  const who = original.from_name
-    ? `${original.from_name} <${original.from_address}>`
-    : original.from_address;
-  const when = formatDateTime(original.sent_at);
-  const head = when ? `${when} ${who}:` : `${who}:`;
-  const lines = (original.text_body ?? '').replace(/\r\n/g, '\n').split('\n');
-  return [head, ...lines.map((l) => (l ? `> ${l}` : '>'))].join('\n');
-}
+// 署名・引用・本文合成はクライアント(返信フォーム)からも使うため mail_text.ts に置く。
+// ここから再エクスポートして既存の import を壊さない。
+export { appendSignature, buildQuotedBody, composeOutgoingBody } from './mail_text';
 
 const ADDRESS_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
 

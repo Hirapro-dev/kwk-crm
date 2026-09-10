@@ -11,7 +11,8 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
-import { getMailAttachmentSignedUrl, getMailThread } from '@/lib/domain/mail';
+import { getMailAttachmentSignedUrl, getMailThread, listMailBoxes } from '@/lib/domain/mail';
+import { buildQuotedBody } from '@/lib/domain/mail_text';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
@@ -40,10 +41,11 @@ function formatBytes(n: number | null): string {
 }
 
 export async function MailThreadPanel({ threadId, embedded }: Props) {
-  const [thread, me, users] = await Promise.all([
+  const [thread, me, users, allBoxes] = await Promise.all([
     getMailThread(threadId),
     getCurrentUser(),
     listAllUsers({ activeOnly: true }),
+    listMailBoxes(),
   ]);
 
   if (!thread) {
@@ -68,6 +70,24 @@ export async function MailThreadPanel({ threadId, embedded }: Props) {
     ? '送信基盤(SES)が未設定です。'
     : `送信元ドメイン ${boxDomain ?? ''} が SES で未検証です。検証(DKIM 設定)後に送信できるようになります。`;
   const lastInbound = [...thread.messages].reverse().find((m) => m.direction === 'in');
+
+  // 返信フォームの送信元候補(有効な受信箱すべて。送信可否はドメインの SES 検証状態)
+  const fromOptions = await Promise.all(
+    allBoxes
+      .filter((b) => b.is_active)
+      .map(async (b) => {
+        const d = domainOf(b.address);
+        return {
+          id: b.id,
+          address: b.address,
+          display_name: b.display_name,
+          signature: b.signature,
+          sendable: !!cfg && !!d && (await isDomainSendable(cfg, d)),
+        };
+      }),
+  );
+  // 返信本文に最初から入れる引用(直近の受信メール。HTML しか無ければテキスト化)
+  const initialQuote = lastInbound ? buildQuotedBody(lastInbound) : '';
 
   // 添付の署名 URL をまとめて発行
   const signedUrls = new Map<string, string>();
@@ -203,8 +223,9 @@ export async function MailThreadPanel({ threadId, embedded }: Props) {
           replyTo={lastInbound?.from_address ?? null}
           sendable={sendable}
           disabledReason={disabledReason}
-          signature={thread.mail_box?.signature ?? null}
-          defaultFromName={thread.mail_box?.display_name ?? null}
+          defaultBoxId={thread.mail_box_id}
+          boxes={fromOptions}
+          initialQuote={initialQuote}
         />
       )}
     </div>
