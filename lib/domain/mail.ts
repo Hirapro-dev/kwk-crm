@@ -54,7 +54,7 @@ export async function listMailBoxCounts(): Promise<MailBoxCount[]> {
   return (data ?? []) as unknown as MailBoxCount[];
 }
 
-type ThreadFilterParams = Omit<MailThreadListParams, 'page' | 'pageSize'>;
+export type ThreadFilterParams = Omit<MailThreadListParams, 'page' | 'pageSize'>;
 
 /** 一覧と件数で同じ絞り込みを使うための共通部分 */
 // biome-ignore lint/suspicious/noExplicitAny: PostgREST ビルダーの型はメソッドチェーンで変わるため
@@ -153,6 +153,50 @@ export async function listMailThreads(
   }
 
   return { rows, total: count ?? 0, page, pageSize };
+}
+
+/**
+ * 一覧の並び(last_message_at desc, id desc)で、指定スレッドの前(新しい側)と次(古い側)を返す。
+ * 絞り込み条件は一覧と同じものを渡す(タブ・受信箱・担当・未読・件名)。
+ * スレッド画面の「← 前のメール / 次のメール →」用。last_message_at が無いスレッドは対象外。
+ */
+export async function getAdjacentMailThreads(
+  threadId: string,
+  params: ThreadFilterParams = {},
+): Promise<{ prevId: string | null; nextId: string | null }> {
+  const supabase = await createClient();
+  const { data: cur } = await supabase
+    .from('mail_threads')
+    .select('id, last_message_at')
+    .eq('id', threadId)
+    .maybeSingle();
+  const c = cur as { id: string; last_message_at: string | null } | null;
+  if (!c?.last_message_at) return { prevId: null, nextId: null };
+  const at = c.last_message_at;
+
+  const base = () =>
+    applyThreadFilters(
+      supabase
+        .from('mail_threads')
+        .select('id')
+        .is('deleted_at', null)
+        .not('last_message_at', 'is', null),
+      params,
+    );
+  const [prev, next] = await Promise.all([
+    base()
+      .or(`last_message_at.gt.${at},and(last_message_at.eq.${at},id.gt.${c.id})`)
+      .order('last_message_at', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(1),
+    base()
+      .or(`last_message_at.lt.${at},and(last_message_at.eq.${at},id.lt.${c.id})`)
+      .order('last_message_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(1),
+  ]);
+  const pick = (r: { data: unknown }) => ((r.data ?? []) as Array<{ id: string }>)[0]?.id ?? null;
+  return { prevId: pick(prev), nextId: pick(next) };
 }
 
 /** スレッド詳細(メッセージは古い順、添付付き) */

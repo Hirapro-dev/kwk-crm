@@ -28,7 +28,13 @@ export default async function MailNewPage({ searchParams }: PageProps) {
       .map(async (b) => {
         const domain = domainOf(b.address);
         const sendable = cfg && domain ? await isDomainSendable(cfg, domain) : false;
-        return { id: b.id, address: b.address, display_name: b.display_name, sendable };
+        return {
+          id: b.id,
+          address: b.address,
+          display_name: b.display_name,
+          signature: b.signature,
+          sendable,
+        };
       }),
   );
 

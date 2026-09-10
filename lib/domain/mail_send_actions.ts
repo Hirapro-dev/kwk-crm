@@ -6,6 +6,8 @@
  * - 送信は SES。From は受信箱(mail_boxes)の公開アドレス
  * - 送信できるのは SES でドメイン検証済みの受信箱だけ(未検証は「受信専用」)
  * - 返信は直近の受信メールの差出人へ。In-Reply-To / References を付けて顧客側でもスレッド化
+ * - 送信元はスレッドの受信箱が既定。フォームで送信可能な別の受信箱を選ぶこともできる(スレッドの受信箱は変えない)
+ * - 署名・引用はフォーム側で本文に含めて送る(画面で見えるもの = 送るもの)。ここでは付け足さない
  * - 送信後は mail_messages(direction=out)に保存し、スレッドを「対応中」にする
  * - 権限: viewer は不可(RLS と二重)。本文・アドレスはログに出さない(§12.4)
  */
@@ -14,7 +16,6 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import { getMailThread } from '@/lib/domain/mail';
 import {
   MAX_RECIPIENTS,
-  appendSignature,
   buildReplyHeaders,
   buildReplySubject,
   parseAddressList,
@@ -65,8 +66,10 @@ export async function replyToMailThread(input: {
   threadId: string;
   body: string;
   cc?: string;
-  /** 差出人表示名の上書き。未指定(undefined)なら受信箱の既定値を使う */
+  /** 差出人表示名の上書き。未指定(undefined)なら送信元受信箱の既定値を使う */
   fromName?: string;
+  /** 送信元の受信箱。未指定ならスレッドの受信箱 */
+  mailBoxId?: number;
 }): Promise<SendResult> {
   const me = await getCurrentUser();
   if (me.role === 'viewer') return { error: '閲覧専用ユーザーは送信できません' };
@@ -79,7 +82,19 @@ export async function replyToMailThread(input: {
 
   const thread = await getMailThread(input.threadId);
   if (!thread) return { error: 'スレッドが見つかりません' };
-  const box = thread.mail_box;
+
+  // 送信元: 指定があればその受信箱、無ければスレッドの受信箱
+  let box = thread.mail_box;
+  if (input.mailBoxId !== undefined && input.mailBoxId !== thread.mail_box_id) {
+    const supabaseForBox = await createClient();
+    const { data: other } = await supabaseForBox
+      .from('mail_boxes')
+      .select('id, address, display_name, signature, is_active')
+      .eq('id', input.mailBoxId)
+      .maybeSingle();
+    box = (other as typeof box) ?? null;
+    if (!box) return { error: '送信元の受信箱が見つかりません' };
+  }
   if (!box || !box.is_active) return { error: 'この受信箱は無効です' };
 
   const domain = domainOf(box.address);
@@ -102,7 +117,7 @@ export async function replyToMailThread(input: {
 
   const subject = buildReplySubject(thread.subject ?? parent.subject);
   const headers = buildReplyHeaders(parent);
-  const text = appendSignature(input.body, box.signature);
+  const text = `${input.body.replace(/\s+$/, '')}\n`;
   // 差出人表示名: フォームで指定があればそれ、無指定なら受信箱の既定値
   const fromName =
     input.fromName !== undefined ? sanitizeDisplayName(input.fromName) : box.display_name;
@@ -207,7 +222,7 @@ export async function createMailThreadAndSend(input: {
     return { error: `${box.address} のドメインは SES で未検証のため送信できません(受信専用)` };
   }
 
-  const text = appendSignature(input.body, box.signature);
+  const text = `${input.body.replace(/\s+$/, '')}\n`;
   const fromName =
     input.fromName !== undefined ? sanitizeDisplayName(input.fromName) : box.display_name;
   let sesMessageId: string;
