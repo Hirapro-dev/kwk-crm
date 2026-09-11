@@ -6,6 +6,8 @@
 export interface MigrateArgs {
   dryRun: boolean;
   file?: string;
+  /** ディレクトリ配下の *.csv をファイル名の昇順ですべて処理する(--file の代わり) */
+  dir?: string;
   limit?: number;
   /** true の場合、既存ID(主キー衝突)は更新せずスキップ(ON CONFLICT DO NOTHING) */
   skipExisting: boolean;
@@ -25,6 +27,9 @@ export function parseArgs(argv: string[] = process.argv.slice(2)): MigrateArgs {
       args.skipExisting = true;
     } else if (a === '--file' && argv[i + 1]) {
       args.file = argv[i + 1];
+      i++;
+    } else if (a === '--dir' && argv[i + 1]) {
+      args.dir = argv[i + 1];
       i++;
     } else if (a === '--limit' && argv[i + 1]) {
       const n = Number.parseInt(argv[i + 1]!, 10);

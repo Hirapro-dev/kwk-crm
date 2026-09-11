@@ -22,22 +22,29 @@
  *
  * 使い方:
  *   npx tsx scripts/mail/import_maildealer.ts --file <CSVパス> --dry-run
- *   npx tsx scripts/mail/import_maildealer.ts --file <CSVパス>
+ *   npx tsx scripts/mail/import_maildealer.ts --dir <CSVが並ぶディレクトリ> --dry-run
+ *   (--dir はディレクトリ直下の *.csv をファイル名の昇順ですべて処理する。
+ *    メールディーラーのエクスポートが年/月ごとに複数ファイルへ分かれる場合を想定)
  *
- * 冪等性: message_id(RFC 5322 Message-ID)で重複判定するため、同じファイルを
- * 何度実行しても増えない。処理前に対象範囲の message_id を一括で照会し、
- * 既に取り込み済み(SES 経由 or 前回実行分)のものは丸ごとスキップする。
+ * 冪等性: message_id(RFC 5322 Message-ID)で重複判定するため、同じファイル・
+ * 同じディレクトリを何度実行しても増えない。ファイルごとに、その時点の DB を
+ * 見て既に取り込み済み(SES 経由 or 前回実行分)のものは丸ごとスキップするため、
+ * 複数ファイルを跨ぐ返信(In-Reply-To が別ファイルの1通を指す等)も、
+ * ファイル名の昇順(=時系列の想定)で処理すれば解決できる。
  *
  * 文字コード: エクスポートは Shift-JIS。Node の TextDecoder でデコードしてから
  * 汎用 CSV パーサ(scripts/migrate/lib/csv.ts)に渡す(追加ライブラリ不要)。
  *
- * メモリ: 全行を一度に読み込む(22,000件規模を想定)。数十万件規模になる場合は
- * チャンク分割を検討すること(§6.2 と同じ方針)。
+ * メモリ: 1ファイルぶんを一度に読み込む(--dir でも同時に持つのは1ファイルぶんだけ)。
+ * 大きなファイルでは `NODE_OPTIONS="--max-old-space-size=6144"` を付けて実行すること。
+ *
+ * 注意: エクスポート中のファイルを読むと内容が壊れる(読込行数が実際より大きく減る)。
+ * 対象ディレクトリのファイルサイズがしばらく変化しなくなってから実行すること。
  */
 
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { extname, join, resolve } from 'node:path';
 import {
   classifyInbound,
   ensureMessageId,
@@ -84,7 +91,6 @@ interface MailBoxRow {
 }
 
 interface PreparedRow {
-  index: number;
   mailKind: string;
   direction: 'in' | 'out';
   headers: Record<string, string>;
@@ -120,6 +126,94 @@ interface ThreadPlan {
   latestSentAtMs: number;
 }
 
+interface FileStats {
+  total: number;
+  skippedExisting: number;
+  skippedDuplicateInFile: number;
+  inserted: number;
+  otherBoxed: number;
+  byBox: Map<number, number>;
+  byCategory: Map<string, number>;
+  assigneeMatched: number;
+  assigneeUnmatched: Map<string, number>;
+  newThreads: number;
+  updatedThreads: number;
+  memberMatched: number;
+  memberAmbiguousOrNone: number;
+}
+
+interface Ctx {
+  // biome-ignore lint/suspicious/noExplicitAny: createMigrateClient の戻り値は Supabase の生成型に依存する
+  supabase: any;
+  otherBox: MailBoxRow;
+  realBoxes: MailBoxRow[];
+  emailToUserId: Map<string, string>;
+  emailToMemberId: Map<string, string | null>;
+}
+
+function emptyStats(): FileStats {
+  return {
+    total: 0,
+    skippedExisting: 0,
+    skippedDuplicateInFile: 0,
+    inserted: 0,
+    otherBoxed: 0,
+    byBox: new Map(),
+    byCategory: new Map(),
+    assigneeMatched: 0,
+    assigneeUnmatched: new Map(),
+    newThreads: 0,
+    updatedThreads: 0,
+    memberMatched: 0,
+    memberAmbiguousOrNone: 0,
+  };
+}
+
+function addToMap(target: Map<string | number, number>, key: string | number, n = 1): void {
+  target.set(key, (target.get(key) ?? 0) + n);
+}
+
+function mergeStatsInto(target: FileStats, src: FileStats): void {
+  target.total += src.total;
+  target.skippedExisting += src.skippedExisting;
+  target.skippedDuplicateInFile += src.skippedDuplicateInFile;
+  target.inserted += src.inserted;
+  target.otherBoxed += src.otherBoxed;
+  target.assigneeMatched += src.assigneeMatched;
+  target.newThreads += src.newThreads;
+  target.updatedThreads += src.updatedThreads;
+  target.memberMatched += src.memberMatched;
+  target.memberAmbiguousOrNone += src.memberAmbiguousOrNone;
+  for (const [k, v] of src.byBox) addToMap(target.byBox, k, v);
+  for (const [k, v] of src.byCategory) addToMap(target.byCategory, k, v);
+  for (const [k, v] of src.assigneeUnmatched) addToMap(target.assigneeUnmatched, k, v);
+}
+
+function printReport(label: string, s: FileStats): void {
+  logger.info(`=== ${label} ===`);
+  logger.info(`対象行数: ${s.total}`);
+  logger.info(`取込済み(スキップ): ${s.skippedExisting}`);
+  logger.info(`ファイル内重複(スキップ): ${s.skippedDuplicateInFile}`);
+  logger.info(`新規に取り込むメッセージ: ${s.inserted}`);
+  logger.info(`  うち新規スレッド: ${s.newThreads} / 既存スレッドへの追加: ${s.updatedThreads}`);
+  logger.info(`  うち「その他」行き: ${s.otherBoxed}`);
+  logger.info(`会員突合: 一致 ${s.memberMatched} / 不明・あいまい ${s.memberAmbiguousOrNone}`);
+  logger.info(`担当者紐付け: 一致 ${s.assigneeMatched}`);
+  if (s.assigneeUnmatched.size > 0) {
+    logger.info(
+      `担当者紐付け: 未対応の担当者名(要確認) ${[...s.assigneeUnmatched.entries()].map(([k, v]) => `${k}=${v}件`).join(', ')}`,
+    );
+  }
+  logger.info(`分類内訳: ${[...s.byCategory.entries()].map(([k, v]) => `${k}=${v}`).join(', ')}`);
+  logger.info(
+    `受信箱内訳(上位10): ${[...s.byBox.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([id, n]) => `box#${id}=${n}`)
+      .join(', ')}`,
+  );
+}
+
 function parseSentAt(raw: string): number {
   // "2026/06/01 00:06:22" 形式。日本時間(JST, UTC+9)として扱う
   const m = raw.trim().match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
@@ -134,89 +228,55 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-async function main() {
-  const args = parseArgs();
-  if (!args.file) {
-    logger.error('--file <CSVパス> を指定してください');
-    process.exit(1);
+/** 対象ファイルの一覧を決める。--dir はディレクトリ直下の *.csv をファイル名昇順で(時系列想定) */
+function resolveFiles(args: { file?: string; dir?: string }): string[] {
+  if (args.dir) {
+    const dir = resolve(args.dir);
+    if (!existsSync(dir)) throw new Error(`ディレクトリが見つかりません: ${dir}`);
+    return readdirSync(dir)
+      .filter((f) => extname(f).toLowerCase() === '.csv')
+      .sort()
+      .map((f) => join(dir, f));
   }
-  const filepath = resolve(args.file);
-  if (!existsSync(filepath)) {
-    logger.error(`ファイルが見つかりません: ${filepath}`);
-    process.exit(1);
+  if (args.file) {
+    const filepath = resolve(args.file);
+    if (!existsSync(filepath)) throw new Error(`ファイルが見つかりません: ${filepath}`);
+    return [filepath];
+  }
+  throw new Error('--file <CSVパス> または --dir <ディレクトリ> を指定してください');
+}
+
+/**
+ * 直近に更新されたファイルほど、エクスポート処理がまだ書込み中の可能性がある。
+ * ファイルサイズを2回測って変化していないか簡易チェックする(完全な保証ではないが、
+ * 進行中のエクスポートを誤って読む事故を減らす)。
+ */
+function looksStillWriting(filepath: string): boolean {
+  const before = statSync(filepath).size;
+  const start = Date.now();
+  while (Date.now() - start < 300) {
+    /* 300ms 待つ(同期。スクリプト全体の実行時間に対しては無視できる) */
+  }
+  const after = existsSync(filepath) ? statSync(filepath).size : -1;
+  return before !== after;
+}
+
+async function processFile(filepath: string, ctx: Ctx, dryRun: boolean): Promise<FileStats> {
+  logger.info(`--- ファイル: ${filepath} ---`);
+  if (looksStillWriting(filepath)) {
+    throw new Error(
+      `書込み中の可能性があります(サイズが変化中): ${filepath}。時間を置いて再実行してください。`,
+    );
   }
 
-  logger.info('CSV 読込中(Shift-JIS → UTF-8)...');
   const buf = readFileSync(filepath);
   const text = new TextDecoder('shift-jis').decode(buf);
   const rawRows = parseCsvString(text);
   logger.info(`読込完了: ${rawRows.length} 行`);
 
-  const supabase = createMigrateClient();
+  const { supabase, otherBox, realBoxes, emailToUserId, emailToMemberId } = ctx;
 
-  // ---- 受信箱 ----
-  const { data: boxData, error: boxErr } = await supabase
-    .from('mail_boxes')
-    .select('id, address, is_active');
-  if (boxErr) throw new Error(`mail_boxes の取得に失敗: ${boxErr.message}`);
-  const boxes = (boxData ?? []) as MailBoxRow[];
-  const otherBox = boxes.find((b) => b.address === OTHER_MAILBOX_ADDRESS);
-  if (!otherBox) {
-    logger.error('「その他」の受信箱が見つかりません(migration 78 未適用)。先に適用してください。');
-    process.exit(1);
-  }
-  const realBoxes = boxes.filter((b) => b.is_active && b.address !== OTHER_MAILBOX_ADDRESS);
-
-  // ---- 担当者の対応表 → users.id ----
-  const assigneeEmails = Object.values(ASSIGNEE_TOKEN_TO_EMAIL);
-  const { data: assigneeUsers } = await supabase
-    .from('users')
-    .select('id, email')
-    .in('email', assigneeEmails);
-  const emailToUserId = new Map(
-    ((assigneeUsers ?? []) as Array<{ id: string; email: string }>).map((u) => [
-      u.email.toLowerCase(),
-      u.id,
-    ]),
-  );
-
-  // ---- 会員突合用: members.email1/2/3 を全件読み込み、小文字アドレス → memberId の
-  //      マップを作る(あいまい一致はしない。複数会員に一致するアドレスは null にする) ----
-  logger.info('会員一覧を読込中(会員突合用)...');
-  const emailToMemberId = new Map<string, string | null>();
-  {
-    const pageSize = 1000;
-    for (let from = 0; ; from += pageSize) {
-      const { data, error } = await supabase
-        .from('members')
-        .select('id, email1, email2, email3')
-        .is('deleted_at', null)
-        .range(from, from + pageSize - 1);
-      if (error) throw new Error(`members の取得に失敗: ${error.message}`);
-      const page = (data ?? []) as Array<{
-        id: string;
-        email1: string | null;
-        email2: string | null;
-        email3: string | null;
-      }>;
-      for (const m of page) {
-        for (const raw of [m.email1, m.email2, m.email3]) {
-          const e = raw?.trim().toLowerCase();
-          if (!e) continue;
-          if (emailToMemberId.has(e) && emailToMemberId.get(e) !== m.id) {
-            emailToMemberId.set(e, null); // 複数会員に一致 = あいまい
-          } else {
-            emailToMemberId.set(e, m.id);
-          }
-        }
-      }
-      if (page.length < pageSize) break;
-    }
-  }
-  logger.info(`会員メールアドレス ${emailToMemberId.size} 件を読込`);
-
-  // ---- 各行の下ごしらえ(純粋な変換。DB には触れない) ----
-  const prepared: PreparedRow[] = rawRows.map((row, index) => {
+  const prepared: PreparedRow[] = rawRows.map((row) => {
     const mailKind = row.メール種別 ?? '';
     const direction: 'in' | 'out' = mailKind === '送信メール' ? 'out' : 'in';
     const headers = parseRawHeaders(row.メールヘッダ全体 ?? '');
@@ -228,7 +288,6 @@ async function main() {
     const fromAddress =
       parseAddress(row.Fromアドレス ?? '').address || (row.Fromアドレス ?? '').toLowerCase();
     return {
-      index,
       mailKind,
       direction,
       headers,
@@ -316,21 +375,8 @@ async function main() {
   // ---- 本組み立て(すべて in-memory。DB 書込はまだしない) ----
   const messageInserts: Array<Record<string, unknown>> = [];
   const seenMessageIds = new Set<string>();
-  const stats = {
-    total: prepared.length,
-    skippedExisting: 0,
-    skippedDuplicateInFile: 0,
-    inserted: 0,
-    otherBoxed: 0,
-    byBox: new Map<number, number>(),
-    byCategory: new Map<string, number>(),
-    assigneeMatched: 0,
-    assigneeUnmatched: new Map<string, number>(),
-    newThreads: 0,
-    updatedThreads: 0,
-    memberMatched: 0,
-    memberAmbiguousOrNone: 0,
-  };
+  const stats = emptyStats();
+  stats.total = prepared.length;
 
   for (const p of prepared) {
     if (messageIdToThreadId.has(p.messageId)) {
@@ -343,7 +389,6 @@ async function main() {
     }
     seenMessageIds.add(p.messageId);
 
-    // 受信箱の特定
     const box =
       matchMailBox(realBoxes, [
         ...p.toAddresses,
@@ -353,9 +398,8 @@ async function main() {
         p.headers['xsrv-filter'],
       ]) ?? otherBox;
     if (box.id === otherBox.id) stats.otherBoxed++;
-    else stats.byBox.set(box.id, (stats.byBox.get(box.id) ?? 0) + 1);
+    else addToMap(stats.byBox, box.id);
 
-    // スレッド判定
     let threadId: string | null = null;
     for (const id of p.refIds) {
       const found = messageIdToThreadId.get(id);
@@ -379,7 +423,6 @@ async function main() {
         : '通常';
 
     if (!threadId) {
-      // 新規スレッド
       threadId = randomUUID();
       const primaryAddress = p.direction === 'in' ? p.fromAddress : (p.toAddresses[0] ?? '');
       const memberId = emailToMemberId.get(primaryAddress) ?? null;
@@ -391,11 +434,7 @@ async function main() {
         : null;
       if (p.assigneeToken) {
         if (assigneeId) stats.assigneeMatched++;
-        else
-          stats.assigneeUnmatched.set(
-            p.assigneeToken,
-            (stats.assigneeUnmatched.get(p.assigneeToken) ?? 0) + 1,
-          );
+        else addToMap(stats.assigneeUnmatched, p.assigneeToken);
       }
 
       threadPlans.set(threadId, {
@@ -414,7 +453,6 @@ async function main() {
       });
       stats.newThreads++;
     } else {
-      // 既存スレッド更新(巻き戻し防止: このスレッドで見た最新の sent_at より新しい行でのみ進める)
       const plan = threadPlans.get(threadId);
       if (plan) {
         if (p.sentAtMs >= plan.latestSentAtMs) {
@@ -433,7 +471,7 @@ async function main() {
       }
       stats.updatedThreads++;
     }
-    stats.byCategory.set(category, (stats.byCategory.get(category) ?? 0) + 1);
+    addToMap(stats.byCategory, category);
     messageIdToThreadId.set(p.messageId, threadId);
 
     messageInserts.push({
@@ -458,42 +496,10 @@ async function main() {
     stats.inserted++;
   }
 
-  // ---- レポート ----
-  logger.info('=== 取込レポート ===');
-  logger.info(`対象行数: ${stats.total}`);
-  logger.info(`取込済み(スキップ): ${stats.skippedExisting}`);
-  logger.info(`ファイル内重複(スキップ): ${stats.skippedDuplicateInFile}`);
-  logger.info(`新規に取り込むメッセージ: ${stats.inserted}`);
-  logger.info(
-    `  うち新規スレッド: ${stats.newThreads} / 既存スレッドへの追加: ${stats.updatedThreads}`,
-  );
-  logger.info(`  うち「その他」行き: ${stats.otherBoxed}`);
-  logger.info(
-    `会員突合: 一致 ${stats.memberMatched} / 不明・あいまい ${stats.memberAmbiguousOrNone}`,
-  );
-  logger.info(`担当者紐付け: 一致 ${stats.assigneeMatched}`);
-  if (stats.assigneeUnmatched.size > 0) {
-    logger.info(
-      `担当者紐付け: 未対応の担当者名(要確認) ${[...stats.assigneeUnmatched.entries()].map(([k, v]) => `${k}=${v}件`).join(', ')}`,
-    );
-  }
-  logger.info(
-    `分類内訳: ${[...stats.byCategory.entries()].map(([k, v]) => `${k}=${v}`).join(', ')}`,
-  );
-  logger.info(
-    `受信箱内訳(上位10): ${[...stats.byBox.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([id, n]) => `box#${id}=${n}`)
-      .join(', ')}`,
-  );
+  printReport(`ファイルレポート: ${filepath}`, stats);
 
-  if (args.dryRun) {
-    logger.info('--dry-run のため書込みは行いません。');
-    return;
-  }
+  if (dryRun) return stats;
 
-  // ---- 書込み ----
   const newThreadRows = [...threadPlans.values()]
     .filter((t) => t.isNew)
     .map((t) => ({
@@ -538,10 +544,93 @@ async function main() {
       .select('id');
     if (error) throw new Error(`mail_messages の挿入に失敗: ${error.message}`);
     actuallyInserted += (data ?? []).length;
-    logger.progress(actuallyInserted, messageInserts.length, 'メッセージ書込み');
+  }
+  logger.info(`ファイル完了。実際に書き込んだメッセージ: ${actuallyInserted} 件`);
+
+  return stats;
+}
+
+async function main() {
+  const args = parseArgs();
+  const files = resolveFiles(args);
+  logger.info(`対象ファイル: ${files.length} 件`);
+
+  const supabase = createMigrateClient();
+
+  // ---- 受信箱(全ファイル共通) ----
+  const { data: boxData, error: boxErr } = await supabase
+    .from('mail_boxes')
+    .select('id, address, is_active');
+  if (boxErr) throw new Error(`mail_boxes の取得に失敗: ${boxErr.message}`);
+  const boxes = (boxData ?? []) as MailBoxRow[];
+  const otherBox = boxes.find((b) => b.address === OTHER_MAILBOX_ADDRESS);
+  if (!otherBox) {
+    logger.error('「その他」の受信箱が見つかりません(migration 78 未適用)。先に適用してください。');
+    process.exit(1);
+  }
+  const realBoxes = boxes.filter((b) => b.is_active && b.address !== OTHER_MAILBOX_ADDRESS);
+
+  // ---- 担当者の対応表 → users.id(全ファイル共通) ----
+  const assigneeEmails = Object.values(ASSIGNEE_TOKEN_TO_EMAIL);
+  const { data: assigneeUsers } = await supabase
+    .from('users')
+    .select('id, email')
+    .in('email', assigneeEmails);
+  const emailToUserId = new Map(
+    ((assigneeUsers ?? []) as Array<{ id: string; email: string }>).map((u) => [
+      u.email.toLowerCase(),
+      u.id,
+    ]),
+  );
+
+  // ---- 会員突合用(全ファイル共通): members.email1/2/3 を全件読み込む ----
+  logger.info('会員一覧を読込中(会員突合用)...');
+  const emailToMemberId = new Map<string, string | null>();
+  {
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from('members')
+        .select('id, email1, email2, email3')
+        .is('deleted_at', null)
+        .range(from, from + pageSize - 1);
+      if (error) throw new Error(`members の取得に失敗: ${error.message}`);
+      const page = (data ?? []) as Array<{
+        id: string;
+        email1: string | null;
+        email2: string | null;
+        email3: string | null;
+      }>;
+      for (const m of page) {
+        for (const raw of [m.email1, m.email2, m.email3]) {
+          const e = raw?.trim().toLowerCase();
+          if (!e) continue;
+          if (emailToMemberId.has(e) && emailToMemberId.get(e) !== m.id) {
+            emailToMemberId.set(e, null); // 複数会員に一致 = あいまい
+          } else {
+            emailToMemberId.set(e, m.id);
+          }
+        }
+      }
+      if (page.length < pageSize) break;
+    }
+  }
+  logger.info(`会員メールアドレス ${emailToMemberId.size} 件を読込`);
+
+  const ctx: Ctx = { supabase, otherBox, realBoxes, emailToUserId, emailToMemberId };
+  const combined = emptyStats();
+
+  for (const filepath of files) {
+    const stats = await processFile(filepath, ctx, args.dryRun);
+    mergeStatsInto(combined, stats);
   }
 
-  logger.info(`完了。実際に書き込んだメッセージ: ${actuallyInserted} 件`);
+  printReport(`全体レポート(${files.length}ファイル)`, combined);
+  if (args.dryRun) {
+    logger.info('--dry-run のため書込みは行いません。');
+  } else {
+    logger.info('すべてのファイルの取込が完了しました。');
+  }
 }
 
 main().catch((e) => {
