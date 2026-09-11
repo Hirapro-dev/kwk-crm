@@ -91,7 +91,10 @@ export interface MailThreadDetail extends MailThreadListItem {
 }
 
 export interface MailThreadListParams {
-  /** 件名の部分一致 */
+  /**
+   * ヘッダー検索の入力(会員ID / メールアドレス / キーワードを自動判定。
+   * lib/domain/mail_search.ts の classifyMailSearchQuery)。
+   */
   q?: string;
   status?: MailStatus;
   /** 未指定なら絞らない。画面側は既定で「通常」を渡す */
@@ -101,6 +104,9 @@ export interface MailThreadListParams {
   mailBoxId?: number;
   unreadOnly?: boolean;
   memberId?: string;
+  /** 期間(日本時間の "YYYY-MM-DD")。最終メール日時(last_message_at)で絞り込む */
+  dateFrom?: string;
+  dateTo?: string;
   page?: number;
   pageSize?: number;
 }
