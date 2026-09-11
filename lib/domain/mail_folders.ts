@@ -6,7 +6,7 @@
  * サーバー依存を持たない(クライアント部品からも import できる)。
  */
 
-import type { MailBox } from './mail_types';
+import { type MailBox, OTHER_MAILBOX_ADDRESS } from './mail_types';
 
 /** 受信箱ごとの件数(migration 77 の mail_box_counts() の戻り値) */
 export interface MailBoxCount {
@@ -80,6 +80,19 @@ export function groupMailBoxesByDomain(
   for (const g of out) g.items.sort((a, b) => a.address.localeCompare(b.address));
   out.sort((a, b) => a.domain.localeCompare(b.domain));
   return out;
+}
+
+/**
+ * 「その他」(未登録アドレス宛。migration 78)を通常の受信箱一覧から切り離す。
+ * サイドバーではドメイン階層に混ぜず、独立した固定項目として表示する。
+ */
+export function splitOtherMailBox(boxes: readonly MailBox[]): {
+  other: MailBox | null;
+  rest: MailBox[];
+} {
+  const other = boxes.find((b) => b.address === OTHER_MAILBOX_ADDRESS) ?? null;
+  const rest = boxes.filter((b) => b.address !== OTHER_MAILBOX_ADDRESS);
+  return { other, rest };
 }
 
 /** 全受信箱の合計(左ペイン先頭の「すべて」用) */

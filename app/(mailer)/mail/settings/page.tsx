@@ -22,7 +22,7 @@ import {
 import { getCurrentUser } from '@/lib/domain/auth';
 import { listMailBoxes } from '@/lib/domain/mail';
 import { uniqueDomains } from '@/lib/domain/mail_box_settings';
-import { domainOfAddress } from '@/lib/domain/mail_folders';
+import { domainOfAddress, splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { type DomainIdentity, getDomainIdentity } from '@/lib/mail/ses_identity';
 import { redirect } from 'next/navigation';
@@ -30,12 +30,15 @@ import { CopyButton } from './CopyButton';
 import { DomainCard } from './DomainCard';
 import { MailBoxRow } from './MailBoxRow';
 import { NewMailBoxForm } from './NewMailBoxForm';
+import { ReassignOtherButton } from './ReassignOtherButton';
 
 export default async function MailSettingsPage() {
   const me = await getCurrentUser();
   if (me.role !== 'admin') redirect('/mail');
 
-  const boxes = await listMailBoxes();
+  const allBoxes = await listMailBoxes();
+  // 「その他」(未登録アドレス宛。migration 78)はここでは編集対象にしない
+  const { other: otherBox, rest: boxes } = splitOtherMailBox(allBoxes);
   const cfg = getMailAwsConfig();
   const domains = uniqueDomains(boxes.map((b) => b.address));
 
@@ -103,10 +106,12 @@ export default async function MailSettingsPage() {
           iconColor="#5B8DEF"
           viewName="受信箱(共有アドレス)"
           totalCount={boxes.length}
+          actions={otherBox ? <ReassignOtherButton /> : undefined}
         />
         <div className="border-b px-4 py-2 text-xs text-muted-foreground">
           差出人表示名はメーラーの返信・新規作成フォームの初期値になります(送信者がその場で書き換えても、ここでの既定値は変わりません)。
           署名は送信時に本文の末尾に自動で付きます。無効にした受信箱は新しいメールを受け付けず、送信元にも選べません(過去のスレッドは残ります)。
+          まだ登録していないアドレス宛のメールは左の「その他(未振り分け)」に入り、そのアドレスをここに登録すると自動でこの一覧の受信箱へ移ります(「再振り分けを実行」でも手動で移せます)。
         </div>
         <Table>
           <TableHeader>

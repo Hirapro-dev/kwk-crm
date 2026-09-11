@@ -21,6 +21,21 @@ export interface MailBoxActionResult {
   error?: string;
 }
 
+/**
+ * 「その他」(未登録アドレス宛)に溜まっているスレッドのうち、現在有効な受信箱に
+ * 一意に一致するものを移す(migration 78 の RPC)。失敗しても呼び出し元の処理は止めない
+ * (登録・保存自体は成功しているため)。
+ */
+async function reassignOtherMailThreadsBestEffort(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<void> {
+  try {
+    await supabase.rpc('reassign_other_mail_threads');
+  } catch {
+    /* 手動の「再振り分け」ボタンでも実行できるため、ここでの失敗は無視する */
+  }
+}
+
 /** 署名の上限(誤って巨大なテキストを保存しないための安全弁) */
 const MAX_SIGNATURE_CHARS = 2_000;
 
@@ -58,6 +73,9 @@ export async function createMailBox(input: {
     if (error.code === '23505') return { error: `${addr.address} は既に登録されています` };
     return { error: `登録に失敗しました: ${error.message}` };
   }
+
+  // 登録直後に「その他」フォルダを見て、このアドレス宛のメールがあれば自動で移す
+  await reassignOtherMailThreadsBestEffort(supabase);
 
   revalidatePath('/mail/settings');
   revalidatePath('/mail');
@@ -123,4 +141,23 @@ export async function recheckMailDomains(): Promise<MailBoxActionResult> {
   revalidatePath('/mail/settings');
   revalidatePath('/mail');
   return {};
+}
+
+/**
+ * 「その他」フォルダの再振り分けを手動で実行する(受信箱を追加したときは自動でも実行される)。
+ * 移動できた件数を返す。
+ */
+export async function reassignOtherMailThreads(): Promise<
+  MailBoxActionResult & { moved?: number }
+> {
+  const denied = await requireAdmin();
+  if (denied) return { error: denied };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('reassign_other_mail_threads');
+  if (error) return { error: `再振り分けに失敗しました: ${error.message}` };
+
+  revalidatePath('/mail/settings');
+  revalidatePath('/mail');
+  return { moved: (data as number | null) ?? 0 };
 }

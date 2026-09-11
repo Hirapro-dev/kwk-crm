@@ -9,7 +9,11 @@
 
 import { getCurrentUser } from '@/lib/domain/auth';
 import { listMailBoxCounts, listMailBoxes } from '@/lib/domain/mail';
-import { groupMailBoxesByDomain, sumMailBoxCounts } from '@/lib/domain/mail_folders';
+import {
+  groupMailBoxesByDomain,
+  splitOtherMailBox,
+  sumMailBoxCounts,
+} from '@/lib/domain/mail_folders';
 import { MailFolderSidebar, MailFolderSidebarProvider } from './MailFolderSidebar';
 import { MailerTopbar } from './MailerTopbar';
 
@@ -19,15 +23,25 @@ export default async function MailerLayout({ children }: { children: React.React
     listMailBoxes(),
     listMailBoxCounts(),
   ]);
-  const groups = groupMailBoxesByDomain(boxes, counts);
+  // 「その他」(未登録アドレス宛。migration 78)はドメイン階層に混ぜず、固定項目として出す
+  const { other, rest } = splitOtherMailBox(boxes);
+  const groups = groupMailBoxesByDomain(rest, counts);
   const total = sumMailBoxCounts(counts);
+  const otherCount = other ? counts.find((c) => c.mail_box_id === other.id) : undefined;
+  const otherBox = other
+    ? {
+        id: other.id,
+        pendingCount: Number(otherCount?.pending_count ?? 0),
+        unreadCount: Number(otherCount?.unread_count ?? 0),
+      }
+    : null;
 
   return (
     <MailFolderSidebarProvider>
       <div className="flex h-dvh flex-col bg-background">
         <MailerTopbar me={me} />
         <div className="flex min-h-0 flex-1">
-          <MailFolderSidebar groups={groups} total={total} />
+          <MailFolderSidebar groups={groups} total={total} otherBox={otherBox} />
           <main className="min-w-0 flex-1 overflow-y-auto bg-[#f0fffd] p-3">{children}</main>
         </div>
       </div>

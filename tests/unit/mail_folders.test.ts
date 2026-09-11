@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   domainOfAddress,
   groupMailBoxesByDomain,
+  splitOtherMailBox,
   sumMailBoxCounts,
 } from '../../lib/domain/mail_folders';
+import { OTHER_MAILBOX_ADDRESS } from '../../lib/domain/mail_types';
 import type { MailBox } from '../../lib/domain/mail_types';
 
 /**
@@ -73,5 +75,22 @@ describe('sumMailBoxCounts', () => {
         { mail_box_id: 2, pending_count: 2, unread_count: 0 },
       ]),
     ).toEqual({ pendingCount: 3, unreadCount: 1 });
+  });
+});
+
+describe('splitOtherMailBox(未登録アドレス宛の「その他」を切り離す。migration 78)', () => {
+  it('予約アドレスの行を other として切り出し、残りを rest に返す', () => {
+    const other = box(99, OTHER_MAILBOX_ADDRESS);
+    const real = box(1, 'ad@kawaraban.co.jp');
+    const { other: found, rest } = splitOtherMailBox([real, other]);
+    expect(found?.id).toBe(99);
+    expect(rest).toEqual([real]);
+  });
+
+  it('「その他」が未登録(migration 78 未適用)なら other は null、rest はそのまま', () => {
+    const real = box(1, 'ad@kawaraban.co.jp');
+    const { other, rest } = splitOtherMailBox([real]);
+    expect(other).toBeNull();
+    expect(rest).toEqual([real]);
   });
 });

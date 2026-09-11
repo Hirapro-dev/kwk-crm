@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { getMailAttachmentSignedUrl, getMailThread, listMailBoxes } from '@/lib/domain/mail';
+import { splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { buildQuotedBody } from '@/lib/domain/mail_text';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import { getMailAwsConfig } from '@/lib/mail/aws';
@@ -71,10 +72,10 @@ export async function MailThreadPanel({ threadId, embedded }: Props) {
     : `送信元ドメイン ${boxDomain ?? ''} が SES で未検証です。検証(DKIM 設定)後に送信できるようになります。`;
   const lastInbound = [...thread.messages].reverse().find((m) => m.direction === 'in');
 
-  // 返信フォームの送信元候補(有効な受信箱すべて。送信可否はドメインの SES 検証状態)
+  // 返信フォームの送信元候補(有効な受信箱すべて。「その他」は除く。送信可否はドメインの SES 検証状態)
   const fromOptions = await Promise.all(
-    allBoxes
-      .filter((b) => b.is_active)
+    splitOtherMailBox(allBoxes)
+      .rest.filter((b) => b.is_active)
       .map(async (b) => {
         const d = domainOf(b.address);
         return {

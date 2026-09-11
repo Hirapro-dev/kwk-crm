@@ -13,6 +13,14 @@ export type MailCategory = (typeof MAIL_CATEGORIES)[number];
 
 /** メッセージの来源。将来の過去データ取込(M4)を区別する */
 export const MAIL_SOURCES = ['ses', 'import_maildealer', 'import_server'] as const;
+
+/**
+ * まだ mail_boxes に登録していない共有アドレス宛のメールを一時的に集める予約の受信箱(migration 78)。
+ * 実在しないドメイン(.invalid, RFC 2606)を使い、本物の共有アドレスと絶対に衝突しないようにする。
+ * 常に「受信専用」(SES でドメイン検証されることが無いため送信は選べない)。
+ * 該当アドレスを mail_boxes に登録すると、再振り分け(reassign_other_mail_threads)で移動する。
+ */
+export const OTHER_MAILBOX_ADDRESS = 'other@unassigned.invalid';
 export type MailSource = (typeof MAIL_SOURCES)[number];
 
 export interface MailBox {
