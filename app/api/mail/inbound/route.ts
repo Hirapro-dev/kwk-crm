@@ -34,6 +34,7 @@ import {
   parseAddress,
   safeFilename,
 } from '@/lib/domain/mail_inbound';
+import { OTHER_MAILBOX_ADDRESS } from '@/lib/domain/mail_types';
 import { createS3Client, getMailAwsConfig } from '@/lib/mail/aws';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
@@ -224,18 +225,21 @@ export async function POST(request: Request): Promise<Response> {
     .from('mail_boxes')
     .select('id, address, is_active')
     .eq('is_active', true);
-  const box = matchMailBox(
-    (boxes ?? []) as Array<{ id: number; address: string; is_active: boolean }>,
-    [
+  const allBoxes = (boxes ?? []) as Array<{ id: number; address: string; is_active: boolean }>;
+  // 「その他」自体は候補から除く(実在しないアドレスなので通常一致することは無いが、
+  // 有効な受信箱が1つだけのときの救済フォールバックに誤って選ばれないようにするため)
+  const realBoxes = allBoxes.filter((b) => b.address !== OTHER_MAILBOX_ADDRESS);
+  const otherBox = allBoxes.find((b) => b.address === OTHER_MAILBOX_ADDRESS) ?? null;
+  const box =
+    matchMailBox(realBoxes, [
       ...toAddresses,
       ...ccAddresses,
       headers['delivered-to'],
       headers['x-original-to'],
       headers['xsrv-filter'],
-    ],
-  );
+    ]) ?? otherBox;
   if (!box) {
-    // 受信用アドレス宛だが、どの共有アドレス宛か判定できない(未登録のアドレスなど)。
+    // 「その他」も無い(migration 78 未適用)場合のみ従来どおり無視する。
     // 再送させても結果は変わらないため 200 で受け取り、登録漏れは応答で分かるようにする
     return json({ ok: true, ignored: 'no matching mail box for original recipient' });
   }

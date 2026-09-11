@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { listMailBoxes } from '@/lib/domain/mail';
+import { splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
 import Link from 'next/link';
@@ -20,7 +21,7 @@ export default async function MailNewPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   const cfg = getMailAwsConfig();
-  const boxes = await listMailBoxes();
+  const { rest: boxes } = splitOtherMailBox(await listMailBoxes());
 
   const options: ComposeBoxOption[] = await Promise.all(
     boxes

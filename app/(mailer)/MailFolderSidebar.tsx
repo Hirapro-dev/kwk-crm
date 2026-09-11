@@ -2,7 +2,7 @@
 
 import type { MailFolderGroup } from '@/lib/domain/mail_folders';
 import { cn } from '@/lib/utils/cn';
-import { ChevronDown, ChevronRight, Inbox, PanelLeft, X } from 'lucide-react';
+import { Archive, ChevronDown, ChevronRight, Inbox, PanelLeft, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createContext, useContext, useState } from 'react';
@@ -19,6 +19,8 @@ import { createContext, useContext, useState } from 'react';
 interface Props {
   groups: MailFolderGroup[];
   total: { pendingCount: number; unreadCount: number };
+  /** 「その他」(未登録アドレス宛。migration 78)。未適用時は null */
+  otherBox: { id: number; pendingCount: number; unreadCount: number } | null;
 }
 
 /** モバイル用の開閉状態をヘッダーのボタンと共有する */
@@ -63,7 +65,7 @@ function CountBadge({ n, strong }: { n: number; strong?: boolean }) {
   );
 }
 
-function FolderTree({ groups, total, onNavigate }: Props & { onNavigate?: () => void }) {
+function FolderTree({ groups, total, otherBox, onNavigate }: Props & { onNavigate?: () => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentBox = searchParams.get('box') ?? '';
@@ -97,6 +99,19 @@ function FolderTree({ groups, total, onNavigate }: Props & { onNavigate?: () => 
         <span className="truncate">すべての受信箱</span>
         <CountBadge n={total.pendingCount} strong />
       </Link>
+
+      {otherBox && (
+        <Link
+          href={hrefFor(otherBox.id)}
+          onClick={onNavigate}
+          className={itemClass(onList && currentBox === String(otherBox.id))}
+          title="まだ受信箱として登録していないアドレス宛のメール。登録すると自動で振り分けられます"
+        >
+          <Archive className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
+          <span className="truncate">その他(未振り分け)</span>
+          <CountBadge n={otherBox.pendingCount} strong />
+        </Link>
+      )}
 
       {groups.length === 0 && (
         <p className="px-2 py-2 text-xs text-muted-foreground">受信箱が登録されていません。</p>
