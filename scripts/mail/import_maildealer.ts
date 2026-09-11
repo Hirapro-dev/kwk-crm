@@ -66,6 +66,9 @@ import { createMigrateClient } from '../migrate/lib/db';
 import { logger } from '../migrate/lib/logger';
 
 const CHUNK_SIZE = 500;
+// message_id/thread_id の事前照会は RPC(POST body)経由にしたため URL 長の制約は無いが、
+// 1回のクエリが大きくなりすぎないよう分割する(migration 80。詳細は下記コメント参照)。
+const RPC_LOOKUP_CHUNK_SIZE = 5000;
 
 /**
  * 「担当者名」→ users.email。一意に確定できるものだけ列挙する(あいまいなものは含めない)。
@@ -321,12 +324,15 @@ async function processFile(filepath: string, ctx: Ctx, dryRun: boolean): Promise
     idSet.add(p.messageId);
     for (const r of p.refIds) idSet.add(r);
   }
+  // PostgREST の .in() は値を GET リクエストの URL に埋め込むため、message_id
+  // (数千〜数万件、実データは1件あたり40〜70文字程度)を渡すと URL/ヘッダー長の上限
+  // (通常16KB)を超えて失敗する(実測: 200件は成功、300件で HeadersOverflowError、
+  // 500件で 400 Bad Request)。POST body で配列を渡せる RPC (migration 80) に置き換える。
   const messageIdToThreadId = new Map<string, string>();
-  for (const c of chunk([...idSet], CHUNK_SIZE)) {
-    const { data, error } = await supabase
-      .from('mail_messages')
-      .select('message_id, thread_id')
-      .in('message_id', c);
+  for (const c of chunk([...idSet], RPC_LOOKUP_CHUNK_SIZE)) {
+    const { data, error } = await supabase.rpc('lookup_mail_message_thread_ids', {
+      p_message_ids: c,
+    });
     if (error) throw new Error(`mail_messages の事前照会に失敗: ${error.message}`);
     for (const row of (data ?? []) as Array<{ message_id: string; thread_id: string }>) {
       messageIdToThreadId.set(row.message_id, row.thread_id);
@@ -335,15 +341,13 @@ async function processFile(filepath: string, ctx: Ctx, dryRun: boolean): Promise
   logger.info(`既存メッセージ ${messageIdToThreadId.size} 件を事前照会`);
 
   // 上記で見つかった既存スレッドの現在の last_message_at(巻き戻し防止の基準値)
+  // こちらも同じ理由で RPC (migration 80) を使う。
   const existingThreadIds = [...new Set(messageIdToThreadId.values())];
   const threadPlans = new Map<string, ThreadPlan>();
-  for (const c of chunk(existingThreadIds, CHUNK_SIZE)) {
-    const { data, error } = await supabase
-      .from('mail_threads')
-      .select(
-        'id, mail_box_id, status, category, member_id, assignee_id, last_message_at, last_direction',
-      )
-      .in('id', c);
+  for (const c of chunk(existingThreadIds, RPC_LOOKUP_CHUNK_SIZE)) {
+    const { data, error } = await supabase.rpc('lookup_mail_thread_states', {
+      p_thread_ids: c,
+    });
     if (error) throw new Error(`mail_threads の事前照会に失敗: ${error.message}`);
     for (const t of (data ?? []) as Array<{
       id: string;
