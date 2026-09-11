@@ -19,6 +19,8 @@ interface PageProps {
     assignee?: string;
     box?: string;
     unread?: string;
+    from?: string;
+    to?: string;
   }>;
 }
 
@@ -33,6 +35,8 @@ export default async function MailThreadPage({ params, searchParams }: PageProps
     assigneeId: sp.assignee || undefined,
     mailBoxId,
     unreadOnly: sp.unread === '1',
+    dateFrom: sp.from || undefined,
+    dateTo: sp.to || undefined,
     status: tab.status,
     category: tab.category,
   } as const;
@@ -41,7 +45,7 @@ export default async function MailThreadPage({ params, searchParams }: PageProps
 
   const qs = (() => {
     const p = new URLSearchParams();
-    for (const k of ['tab', 'box', 'assignee', 'unread', 'q'] as const) {
+    for (const k of ['tab', 'box', 'assignee', 'unread', 'q', 'from', 'to'] as const) {
       if (sp[k]) p.set(k, sp[k] as string);
     }
     return p.toString();

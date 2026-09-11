@@ -88,6 +88,8 @@ export async function loadMoreMailThreads(
     assigneeId?: string;
     mailBoxId?: number;
     unreadOnly?: boolean;
+    dateFrom?: string;
+    dateTo?: string;
   },
   page: number,
 ) {

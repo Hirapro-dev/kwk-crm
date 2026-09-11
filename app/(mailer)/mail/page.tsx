@@ -23,6 +23,8 @@ interface PageProps {
     assignee?: string;
     box?: string;
     unread?: string;
+    from?: string;
+    to?: string;
   }>;
 }
 
@@ -33,12 +35,14 @@ export default async function MailPage({ searchParams }: PageProps) {
   const tab = resolveMailTab(sp.tab);
   const mailBoxId = sp.box && /^\d+$/.test(sp.box) ? Number(sp.box) : undefined;
 
-  // タブ以外の絞り込み(担当・未読・件名・受信箱)。タブ件数はこの条件で数える
+  // タブ以外の絞り込み(担当・未読・検索語・期間・受信箱)。タブ件数はこの条件で数える
   const baseParams = {
     q: sp.q || undefined,
     assigneeId: sp.assignee || undefined,
     mailBoxId,
     unreadOnly: sp.unread === '1',
+    dateFrom: sp.from || undefined,
+    dateTo: sp.to || undefined,
   } as const;
   const listParams = { ...baseParams, status: tab.status, category: tab.category } as const;
 
@@ -60,7 +64,7 @@ export default async function MailPage({ searchParams }: PageProps) {
       ? `${currentBox.display_name} <${currentBox.address}>`
       : currentBox.address
     : 'すべての受信箱';
-  const listKey = `${tab.key}|${sp.q ?? ''}|${sp.assignee ?? ''}|${sp.box ?? ''}|${sp.unread ?? ''}`;
+  const listKey = `${tab.key}|${sp.q ?? ''}|${sp.assignee ?? ''}|${sp.box ?? ''}|${sp.unread ?? ''}|${sp.from ?? ''}|${sp.to ?? ''}`;
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded border bg-card shadow-sm">
@@ -75,6 +79,8 @@ export default async function MailPage({ searchParams }: PageProps) {
           initialQ={sp.q ?? ''}
           initialAssignee={sp.assignee === me.id ? 'me' : (sp.assignee ?? '')}
           initialUnread={sp.unread === '1'}
+          initialDateFrom={sp.from ?? ''}
+          initialDateTo={sp.to ?? ''}
           currentUserId={me.id}
           assigneeOptions={assigneeOptions}
         />
