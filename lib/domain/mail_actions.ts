@@ -53,9 +53,11 @@ export async function updateMailThread(
     patch.assignee_id = input.assigneeId || null;
   }
   if (input.memberId !== undefined) {
-    const m = input.memberId?.trim() ?? '';
-    if (m && !/^K-\d{7}$/.test(m)) {
-      return { error: '会員IDは K-XXXXXXX 形式で指定してください' };
+    // 実データは K- + 9桁ゼロ埋め(scripts/import/*.ts の検証と同じ形式。
+    // CLAUDE.md §3.1 の「7桁」表記は誤りだったため、こちらに合わせて修正した)
+    const m = (input.memberId?.trim() ?? '').toUpperCase();
+    if (m && !/^K-\d{9}$/.test(m)) {
+      return { error: '会員IDは K-XXXXXXXXX(9桁)形式で指定してください' };
     }
     patch.member_id = m || null;
   }
