@@ -524,19 +524,21 @@ async function processFile(filepath: string, ctx: Ctx, dryRun: boolean): Promise
     if (error) throw new Error(`mail_threads の挿入に失敗: ${error.message}`);
   }
 
+  // 1件ずつ UPDATE すると本実行(数万スレッド規模)で時間がかかりすぎるため、
+  // RPC (migration 81) でまとめて1回の UPDATE にする。
   const existingThreadUpdates = [...threadPlans.values()].filter((t) => !t.isNew);
   logger.info(`既存スレッドを更新中(${existingThreadUpdates.length}件)...`);
-  for (const t of existingThreadUpdates) {
-    const { error } = await supabase
-      .from('mail_threads')
-      .update({
+  for (const c of chunk(existingThreadUpdates, CHUNK_SIZE)) {
+    const { error } = await supabase.rpc('bulk_update_mail_thread_progress', {
+      p_updates: c.map((t) => ({
+        id: t.id,
         status: t.status,
         member_id: t.memberId,
         last_message_at: t.lastMessageAt,
         last_direction: t.lastDirection,
-      })
-      .eq('id', t.id);
-    if (error) logger.warn(`スレッド更新に失敗: ${t.id}`, { error: error.message });
+      })),
+    });
+    if (error) throw new Error(`mail_threads の一括更新に失敗: ${error.message}`);
   }
 
   logger.info(`メッセージを書込み中(${messageInserts.length}件)...`);
