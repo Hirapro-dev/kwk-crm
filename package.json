@@ -38,7 +38,8 @@
     "import:inquiries": "tsx scripts/import/03_inquiries.ts",
     "import:applications": "tsx scripts/import/04_applications.ts",
     "import:members:insider": "tsx scripts/import/05_members_insider_dates.ts",
-    "import:members:remarks": "tsx scripts/import/06_members_remarks.ts"
+    "import:members:remarks": "tsx scripts/import/06_members_remarks.ts",
+    "import:mail:maildealer": "tsx scripts/mail/import_maildealer.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",

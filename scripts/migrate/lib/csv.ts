@@ -104,10 +104,19 @@ function parseCsvText(text: string, delimiter = ','): string[][] {
  * CSV ファイルを読み込み、1行目をヘッダとして CsvRow[] を返す。
  */
 export function readCsv(filepath: string, options: CsvParseOptions = {}): CsvRow[] {
-  const { delimiter = ',', trimValues = false } = options;
   const raw = readFileSync(filepath, 'utf-8');
-  const text = stripBom(raw);
-  const rows = parseCsvText(text, delimiter);
+  return parseCsvString(raw, options);
+}
+
+/**
+ * デコード済みの CSV 文字列(UTF-8 前提の readCsv と異なり、Shift-JIS 等
+ * 他エンコーディングを呼び出し側で先にデコードした文字列も渡せる)を読み込む。
+ * 1行目をヘッダとして CsvRow[] を返す。readCsv と同じ変換ロジックを共有する。
+ */
+export function parseCsvString(text: string, options: CsvParseOptions = {}): CsvRow[] {
+  const { delimiter = ',', trimValues = false } = options;
+  const cleaned = stripBom(text);
+  const rows = parseCsvText(cleaned, delimiter);
 
   if (rows.length === 0) return [];
   const header = rows[0]!.map((h) => h.trim());

@@ -157,6 +157,37 @@ export function headerLinesToRecord(
   return out;
 }
 
+/**
+ * 生のヘッダーテキストブロック(過去データ取込用。Webhook は mailparser の headerLines を使うため
+ * headerLinesToRecord を使う)を、同じ形(小文字キーの Record)にする。
+ * 折り返し行(先頭が空白の継続行)は前のヘッダーの値に連結する(RFC 5322 の unfolding)。
+ * 空行に達したら終了する(ヘッダーの後に本文が続く形式に備える安全策)。
+ * 同名ヘッダーが複数ある場合は最初の値を採用する(headerLinesToRecord と同じ)。
+ */
+export function parseRawHeaders(raw: string | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  const lines = (raw ?? '').replace(/\r\n/g, '\n').split('\n');
+  let currentKey: string | null = null;
+  for (const line of lines) {
+    if (line.trim() === '') break;
+    if (/^[ \t]/.test(line) && currentKey) {
+      if (currentKey in out) out[currentKey] = `${out[currentKey]} ${line.trim()}`.trim();
+      continue;
+    }
+    const idx = line.indexOf(':');
+    if (idx < 0) continue;
+    const key = line.slice(0, idx).trim().toLowerCase();
+    if (!key) continue;
+    currentKey = key;
+    if (key in out) continue;
+    out[key] = line
+      .slice(idx + 1)
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  return out;
+}
+
 export interface ClassifyInput {
   /** 小文字キーのヘッダ(headerLinesToRecord の戻り値) */
   headers: Record<string, string>;
