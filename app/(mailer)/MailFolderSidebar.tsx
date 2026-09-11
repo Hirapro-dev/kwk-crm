@@ -2,7 +2,16 @@
 
 import type { MailFolderGroup } from '@/lib/domain/mail_folders';
 import { cn } from '@/lib/utils/cn';
-import { Archive, ChevronDown, ChevronRight, Inbox, PanelLeft, X } from 'lucide-react';
+import {
+  Archive,
+  ChevronDown,
+  ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
+  Inbox,
+  PanelLeft,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createContext, useContext, useState } from 'react';
@@ -88,6 +97,10 @@ function FolderTree({ groups, total, otherBox, onNavigate }: Props & { onNavigat
       active ? 'bg-primary/10 font-semibold text-primary' : 'hover:bg-accent',
     );
 
+  // ドメインごとのフォルダをまとめて開閉する(個別の開閉状態はそのつど上書き)
+  const expandAll = () => setCollapsed({});
+  const collapseAll = () => setCollapsed(Object.fromEntries(groups.map((g) => [g.domain, true])));
+
   return (
     <nav className="space-y-1 p-2 text-sm">
       <Link
@@ -115,6 +128,28 @@ function FolderTree({ groups, total, otherBox, onNavigate }: Props & { onNavigat
 
       {groups.length === 0 && (
         <p className="px-2 py-2 text-xs text-muted-foreground">受信箱が登録されていません。</p>
+      )}
+
+      {groups.length > 0 && (
+        <div className="flex items-center justify-end gap-2 px-1 pt-1 pb-0.5 text-[11px] text-muted-foreground">
+          <button
+            type="button"
+            onClick={expandAll}
+            className="flex items-center gap-0.5 hover:text-foreground hover:underline"
+          >
+            <ChevronsDown className="h-3 w-3" aria-hidden="true" />
+            すべて展開
+          </button>
+          <span aria-hidden="true">/</span>
+          <button
+            type="button"
+            onClick={collapseAll}
+            className="flex items-center gap-0.5 hover:text-foreground hover:underline"
+          >
+            <ChevronsUp className="h-3 w-3" aria-hidden="true" />
+            すべて閉じる
+          </button>
+        </div>
       )}
 
       {groups.map((g) => {
