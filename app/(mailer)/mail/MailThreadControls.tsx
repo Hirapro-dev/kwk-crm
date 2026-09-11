@@ -121,7 +121,7 @@ export function MailThreadControls({
         <Input
           aria-label="会員ID"
           className="w-36 font-mono"
-          placeholder="K-0000000"
+          placeholder="K-000000000"
           value={memberInput}
           disabled={pending}
           onChange={(e) => setMemberInput(e.target.value)}
