@@ -676,6 +676,12 @@ Webhook(`app/api/mail/inbound/route.ts`)・過去データ取込のどちらも�
 が「その他」のスレッドのうち宛先(to_addresses/cc_addresses)が新しい受信箱と一意に一致するものを移す。
 受信箱の追加時に自動実行するほか、`/mail/settings` の「再振り分けを実行」で手動実行もできる
 (あいまい一致はしない: 複数の受信箱に一致する場合は動かさない)。
+2026-09-14 (migration 83): 過去データ取込後に「その他」へ入った約74万スレッドを振り分けるため、ユーザー指定の
+自社ドメイン(43件)配下で受信メールの宛先(To/Cc)に3通以上現れたアドレス 265 件をまとめて受信箱に登録し、
+「その他」を一括で再振り分けした。同時に再振り分けの本体を範囲指定つきの内部関数
+`reassign_other_mail_threads_range(p_from, p_to)`(権限チェック無し。authenticated からは呼べない。SQL Editor /
+サービスロール専用)に切り出し、宛先を一度展開して受信箱とハッシュ結合する形にした(受信箱が数百件でも速い)。
+既存 RPC `reassign_other_mail_threads()` は権限チェックだけ残して内部関数へ委譲する(呼び出し側の変更なし)。
 
 **取込候補** (2026-09-14 追加, migration 82): 旧 Salesforce の「メール to リード」用アドレス
 (`MAIL_IMPORT_CANDIDATE_ADDRESSES`、`lib/domain/mail_types.ts`)を宛先(To/Cc)に含むメール(フォーム通知など)は、
