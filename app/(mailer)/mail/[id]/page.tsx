@@ -6,7 +6,7 @@
 
 import { Button } from '@/components/ui/button';
 import { getAdjacentMailThreads } from '@/lib/domain/mail';
-import { resolveMailTab } from '@/lib/domain/mail_tabs';
+import { mailTabFilter, resolveMailTab } from '@/lib/domain/mail_tabs';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { MailThreadPanel } from '../MailThreadPanel';
@@ -19,6 +19,7 @@ interface PageProps {
     assignee?: string;
     box?: string;
     unread?: string;
+    folder?: string;
   }>;
 }
 
@@ -33,15 +34,16 @@ export default async function MailThreadPage({ params, searchParams }: PageProps
     assigneeId: sp.assignee || undefined,
     mailBoxId,
     unreadOnly: sp.unread === '1',
-    status: tab.status,
-    category: tab.category,
+    importCandidate: sp.folder === 'candidates',
+    // 「取込候補」では状態タブを適用しない(一覧と同じ並び・条件で前後移動する)
+    ...mailTabFilter(tab, { importCandidate: sp.folder === 'candidates' }),
   } as const;
 
   const { prevId, nextId } = await getAdjacentMailThreads(id, listParams);
 
   const qs = (() => {
     const p = new URLSearchParams();
-    for (const k of ['tab', 'box', 'assignee', 'unread', 'q'] as const) {
+    for (const k of ['tab', 'box', 'folder', 'assignee', 'unread', 'q'] as const) {
       if (sp[k]) p.set(k, sp[k] as string);
     }
     return p.toString();

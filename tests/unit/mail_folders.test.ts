@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   domainOfAddress,
+  expandedDomainForBox,
   groupMailBoxesByDomain,
+  pinnedFolderItems,
   splitOtherMailBox,
   sumMailBoxCounts,
 } from '../../lib/domain/mail_folders';
@@ -92,5 +94,55 @@ describe('splitOtherMailBox(未登録アドレス宛の「その他」を切り�
     const { other, rest } = splitOtherMailBox([real]);
     expect(other).toBeNull();
     expect(rest).toEqual([real]);
+  });
+});
+
+/**
+ * 左フォルダの初期開閉状態(2026-09-14)。受信箱が数百件になったため、既定では
+ * 全ドメインを閉じた状態にする。ただし選択中の受信箱があるドメインだけは開いておく
+ * (選択中のフォルダが隠れて見えないと、どこを見ているのか分からなくなるため)。
+ */
+describe('expandedDomainForBox', () => {
+  const groups = groupMailBoxesByDomain([
+    box(1, 'info@a.example'),
+    box(2, 'sales@a.example'),
+    box(3, 'info@b.example'),
+  ]);
+
+  it('選択中の受信箱があるドメインを返す', () => {
+    expect(expandedDomainForBox(groups, 3)).toBe('b.example');
+  });
+
+  it('受信箱が未選択(null)なら null(=すべて閉じる)', () => {
+    expect(expandedDomainForBox(groups, null)).toBeNull();
+  });
+
+  it('どのグループにも無い受信箱IDなら null', () => {
+    expect(expandedDomainForBox(groups, 999)).toBeNull();
+  });
+});
+
+/**
+ * ユーザーごとの受信箱ピン留め(2026-09-14, migration 84)。
+ * 左フォルダ上部の「ピン留め」区画に、ピン留めした順で受信箱を並べる。
+ */
+describe('pinnedFolderItems', () => {
+  const groups = groupMailBoxesByDomain(
+    [box(1, 'info@a.example'), box(2, 'sales@a.example'), box(3, 'info@b.example')],
+    [{ mail_box_id: 3, pending_count: 4, unread_count: 1 }],
+  );
+
+  it('ピン留めした順に受信箱を返し、件数も引き継ぐ', () => {
+    const items = pinnedFolderItems(groups, [3, 1]);
+    expect(items.map((i) => i.address)).toEqual(['info@b.example', 'info@a.example']);
+    expect(items[0]?.pendingCount).toBe(4);
+  });
+
+  it('存在しない受信箱IDは無視し、重複は1件にする', () => {
+    expect(pinnedFolderItems(groups, [9, 2, 2]).map((i) => i.id)).toEqual([2]);
+  });
+
+  it('ピン留めが無ければ空', () => {
+    expect(pinnedFolderItems(groups, [])).toEqual([]);
   });
 });

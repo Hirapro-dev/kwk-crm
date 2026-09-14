@@ -22,6 +22,7 @@
  * 書込はサービスロール(RLS 対象外)。ユーザーセッションは無い。
  */
 
+import { isImportCandidate } from '@/lib/domain/mail_import_candidates';
 import {
   classifyInbound,
   ensureMessageId,
@@ -219,6 +220,8 @@ export async function POST(request: Request): Promise<Response> {
       : new Date().toISOString();
   const toAddresses = addressesOf(parsed.to);
   const ccAddresses = addressesOf(parsed.cc);
+  // 旧「メール to リード」宛先を含むメールは「取込候補」フォルダに出す(migration 82)
+  const importCandidate = isImportCandidate(toAddresses, ccAddresses);
 
   // ---- 受信箱の特定: 元の宛先(To / Cc / 転送で付くヘッダ)と mail_boxes.address の一致 ----
   const { data: boxes } = await supabase
@@ -324,6 +327,7 @@ export async function POST(request: Request): Promise<Response> {
         last_message_at: sentAt,
         last_direction: 'in',
         is_read: false,
+        is_import_candidate: importCandidate,
       })
       .select('id')
       .single();
@@ -348,6 +352,8 @@ export async function POST(request: Request): Promise<Response> {
         ...(cur?.status === '完了' ? { status: '未対応' } : {}),
         // 未紐付けのスレッドに会員が判明したら紐付ける(既存の紐付けは上書きしない)
         ...(!cur?.member_id && memberId ? { member_id: memberId } : {}),
+        // 既存スレッドに候補メールが加わったら候補にする(候補でないメールでは戻さない)
+        ...(importCandidate ? { is_import_candidate: true } : {}),
         deleted_at: null,
       })
       .eq('id', threadId);

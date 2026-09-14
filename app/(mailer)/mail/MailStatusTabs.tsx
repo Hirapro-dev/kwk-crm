@@ -13,12 +13,13 @@ export function MailStatusTabs({
 }: {
   current: string;
   counts: Record<string, number>;
-  searchParams: { q?: string; assignee?: string; box?: string; unread?: string };
+  searchParams: { q?: string; assignee?: string; box?: string; unread?: string; folder?: string };
 }) {
   const hrefFor = (key: string) => {
     const p = new URLSearchParams();
     if (key !== 'new') p.set('tab', key);
     if (searchParams.box) p.set('box', searchParams.box);
+    if (searchParams.folder) p.set('folder', searchParams.folder);
     if (searchParams.assignee) p.set('assignee', searchParams.assignee);
     if (searchParams.unread) p.set('unread', searchParams.unread);
     if (searchParams.q) p.set('q', searchParams.q);

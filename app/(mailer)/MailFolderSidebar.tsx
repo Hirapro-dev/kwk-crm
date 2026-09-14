@@ -1,11 +1,28 @@
 'use client';
 
-import type { MailFolderGroup } from '@/lib/domain/mail_folders';
+import {
+  type MailFolderGroup,
+  type MailFolderItem,
+  expandedDomainForBox,
+} from '@/lib/domain/mail_folders';
+import { pinMailBox, unpinMailBox } from '@/lib/domain/mail_pin_actions';
 import { cn } from '@/lib/utils/cn';
-import { Archive, ChevronDown, ChevronRight, Inbox, PanelLeft, X } from 'lucide-react';
+import {
+  Archive,
+  ChevronDown,
+  ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
+  Import,
+  Inbox,
+  PanelLeft,
+  Pin,
+  PinOff,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useTransition } from 'react';
 
 /**
  * メーラー左ペイン: 受信箱フォルダ(仕様書 §5.15 / §8.1)。
@@ -21,6 +38,41 @@ interface Props {
   total: { pendingCount: number; unreadCount: number };
   /** 「その他」(未登録アドレス宛。migration 78)。未適用時は null */
   otherBox: { id: number; pendingCount: number; unreadCount: number } | null;
+  /** 「取込候補」(旧「メール to リード」宛先を含むメール。migration 82)の件数 */
+  candidateFolder: { pendingCount: number; unreadCount: number };
+  /** 自分がピン留めした受信箱(ピン留めした順。migration 84) */
+  pinned: MailFolderItem[];
+}
+
+/** ピン留め/解除ボタン(フォルダ行の右端) */
+function PinButton({
+  pinned,
+  disabled,
+  onClick,
+}: {
+  pinned: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={pinned ? 'ピン留めを解除' : 'ピン留め'}
+      title={pinned ? 'ピン留めを解除' : 'ピン留めして上部に表示'}
+      className={cn(
+        'grid h-6 w-6 shrink-0 place-items-center rounded hover:bg-accent disabled:opacity-50',
+        pinned ? 'text-primary' : 'text-muted-foreground opacity-40 hover:opacity-100',
+      )}
+    >
+      {pinned ? (
+        <PinOff className="h-3.5 w-3.5" aria-hidden="true" />
+      ) : (
+        <Pin className="h-3.5 w-3.5" aria-hidden="true" />
+      )}
+    </button>
+  );
 }
 
 /** モバイル用の開閉状態をヘッダーのボタンと共有する */
@@ -65,12 +117,33 @@ function CountBadge({ n, strong }: { n: number; strong?: boolean }) {
   );
 }
 
-function FolderTree({ groups, total, otherBox, onNavigate }: Props & { onNavigate?: () => void }) {
+function FolderTree({
+  groups,
+  total,
+  otherBox,
+  candidateFolder,
+  pinned,
+  onNavigate,
+}: Props & { onNavigate?: () => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentBox = searchParams.get('box') ?? '';
+  const currentFolder = searchParams.get('folder') ?? '';
   const onList = pathname === '/mail';
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // ピン留め/解除(Server Action)。完了後はレイアウトが再取得され、pinned が更新される
+  const [pinPending, startPin] = useTransition();
+  const pinnedIds = new Set(pinned.map((p) => p.id));
+  const togglePin = (boxId: number) =>
+    startPin(async () => {
+      if (pinnedIds.has(boxId)) await unpinMailBox(boxId);
+      else await pinMailBox(boxId);
+    });
+  // 開閉状態(true=閉じる)。受信箱が数百件あるため、記録の無いドメインは閉じた扱いにする
+  // (=既定はすべて閉じる)。初期表示では選択中の受信箱があるドメインだけ開いておく。
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    const domain = expandedDomainForBox(groups, currentBox ? Number(currentBox) : null);
+    return domain === null ? {} : { [domain]: false };
+  });
 
   // フォルダを切り替えるとき、状態タブは維持し、検索語・担当などは解除する
   const hrefFor = (boxId: number | null) => {
@@ -81,6 +154,14 @@ function FolderTree({ groups, total, otherBox, onNavigate }: Props & { onNavigat
     const qs = p.toString();
     return qs ? `/mail?${qs}` : '/mail';
   };
+  // 受信箱をまたぐ固定フォルダ(取込候補)。受信箱の指定は外し、状態タブは維持する
+  const hrefForFolder = (folder: string) => {
+    const p = new URLSearchParams();
+    const tab = searchParams.get('tab');
+    if (tab) p.set('tab', tab);
+    p.set('folder', folder);
+    return `/mail?${p.toString()}`;
+  };
 
   const itemClass = (active: boolean) =>
     cn(
@@ -88,16 +169,31 @@ function FolderTree({ groups, total, otherBox, onNavigate }: Props & { onNavigat
       active ? 'bg-primary/10 font-semibold text-primary' : 'hover:bg-accent',
     );
 
+  // ドメインごとのフォルダをまとめて開閉する(個別の開閉状態はそのつど上書き)
+  const expandAll = () => setCollapsed(Object.fromEntries(groups.map((g) => [g.domain, false])));
+  const collapseAll = () => setCollapsed({});
+
   return (
     <nav className="space-y-1 p-2 text-sm">
       <Link
         href={hrefFor(null)}
         onClick={onNavigate}
-        className={itemClass(onList && currentBox === '')}
+        className={itemClass(onList && currentBox === '' && currentFolder === '')}
       >
         <Inbox className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
         <span className="truncate">すべての受信箱</span>
         <CountBadge n={total.pendingCount} strong />
+      </Link>
+
+      <Link
+        href={hrefForFolder('candidates')}
+        onClick={onNavigate}
+        className={itemClass(onList && currentFolder === 'candidates')}
+        title="旧「メール to リード」宛先を含むメール(フォーム通知など)。リード/問合せへ取り込む候補を確認するためのフォルダです"
+      >
+        <Import className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
+        <span className="truncate">取込候補</span>
+        <CountBadge n={candidateFolder.pendingCount} strong />
       </Link>
 
       {otherBox && (
@@ -113,12 +209,65 @@ function FolderTree({ groups, total, otherBox, onNavigate }: Props & { onNavigat
         </Link>
       )}
 
+      {pinned.length > 0 && (
+        <div className="pt-1">
+          <p className="flex items-center gap-1 px-1 py-1 text-[11px] font-semibold text-muted-foreground">
+            <Pin className="h-3 w-3" aria-hidden="true" />
+            ピン留め
+          </p>
+          <div className="space-y-0.5">
+            {pinned.map((b) => {
+              const active = onList && currentBox === String(b.id);
+              return (
+                <div key={`pin-${b.id}`} className="flex items-center gap-0.5">
+                  <Link
+                    href={hrefFor(b.id)}
+                    onClick={onNavigate}
+                    className={cn(itemClass(active), 'min-w-0 flex-1', !b.isActive && 'opacity-60')}
+                    title={b.displayName ? `${b.displayName} <${b.address}>` : b.address}
+                  >
+                    <span className="truncate">{b.localPart}</span>
+                    <span className="truncate text-[10px] text-muted-foreground">
+                      @{b.address.split('@')[1] ?? ''}
+                    </span>
+                    <CountBadge n={b.pendingCount} strong />
+                  </Link>
+                  <PinButton pinned disabled={pinPending} onClick={() => togglePin(b.id)} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {groups.length === 0 && (
         <p className="px-2 py-2 text-xs text-muted-foreground">受信箱が登録されていません。</p>
       )}
 
+      {groups.length > 0 && (
+        <div className="flex items-center justify-end gap-2 px-1 pt-1 pb-0.5 text-[11px] text-muted-foreground">
+          <button
+            type="button"
+            onClick={expandAll}
+            className="flex items-center gap-0.5 hover:text-foreground hover:underline"
+          >
+            <ChevronsDown className="h-3 w-3" aria-hidden="true" />
+            すべて展開
+          </button>
+          <span aria-hidden="true">/</span>
+          <button
+            type="button"
+            onClick={collapseAll}
+            className="flex items-center gap-0.5 hover:text-foreground hover:underline"
+          >
+            <ChevronsUp className="h-3 w-3" aria-hidden="true" />
+            すべて閉じる
+          </button>
+        </div>
+      )}
+
       {groups.map((g) => {
-        const isCollapsed = collapsed[g.domain] ?? false;
+        const isCollapsed = collapsed[g.domain] ?? true;
         return (
           <div key={g.domain}>
             <button
@@ -140,19 +289,29 @@ function FolderTree({ groups, total, otherBox, onNavigate }: Props & { onNavigat
                 {g.items.map((b) => {
                   const active = onList && currentBox === String(b.id);
                   return (
-                    <Link
-                      key={b.id}
-                      href={hrefFor(b.id)}
-                      onClick={onNavigate}
-                      className={cn(itemClass(active), !b.isActive && 'opacity-60')}
-                      title={b.displayName ? `${b.displayName} <${b.address}>` : b.address}
-                    >
-                      <span className="truncate">{b.localPart}</span>
-                      {!b.isActive && (
-                        <span className="text-[10px] text-muted-foreground">(停止)</span>
-                      )}
-                      <CountBadge n={b.pendingCount} strong />
-                    </Link>
+                    <div key={b.id} className="flex items-center gap-0.5">
+                      <Link
+                        href={hrefFor(b.id)}
+                        onClick={onNavigate}
+                        className={cn(
+                          itemClass(active),
+                          'min-w-0 flex-1',
+                          !b.isActive && 'opacity-60',
+                        )}
+                        title={b.displayName ? `${b.displayName} <${b.address}>` : b.address}
+                      >
+                        <span className="truncate">{b.localPart}</span>
+                        {!b.isActive && (
+                          <span className="text-[10px] text-muted-foreground">(停止)</span>
+                        )}
+                        <CountBadge n={b.pendingCount} strong />
+                      </Link>
+                      <PinButton
+                        pinned={pinnedIds.has(b.id)}
+                        disabled={pinPending}
+                        onClick={() => togglePin(b.id)}
+                      />
+                    </div>
                   );
                 })}
               </div>

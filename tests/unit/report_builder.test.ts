@@ -1,13 +1,81 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildReportQuery,
   BuilderError,
   DEFAULT_ROW_LIMIT,
   MAX_EXCEL_ROW_LIMIT,
+  buildReportQuery,
 } from '../../lib/reports/builder_v2';
-import { isSafeIdentifier } from '../../lib/reports/schema_all';
+import { type AllowedColumnDef, isSafeIdentifier } from '../../lib/reports/schema_all';
 
 const CURRENT_USER = '11111111-1111-1111-1111-111111111111';
+
+/** field_definitions 由来の extra jsonb 列(extra_columns.ts が生成する形)を模したもの */
+function extraCol(key: string): AllowedColumnDef {
+  return {
+    source: `m.extra:${key}`,
+    label: key,
+    dataType: 'text',
+    displayType: 'number',
+    isExtra: true,
+    filterable: true,
+    sortable: true,
+    groupable: true,
+    aggregatable: false,
+  };
+}
+
+/**
+ * 出力列の別名(SQL の AS 句)は、実行結果の行から値を取り出すキーとしてそのまま使う。
+ * Postgres は引用符なしの識別子を小文字に畳むため、別名に大文字が混ざると
+ * 「SQL 上の別名」と「返ってくる行のキー」が食い違い、画面では値が空欄になる
+ * (実例: extra キー "SCPP_0.01%借入利用額" の列だけ値が表示されなかった)。
+ */
+describe('出力列の別名(Postgres の識別子規則との整合)', () => {
+  function buildWithExtra(keys: string[]) {
+    const cols = keys.map(extraCol);
+    return buildReportQuery(
+      'RT01',
+      { columns: cols.map((c, i) => ({ id: `c${i}`, source: c.source, label: c.label })) },
+      CURRENT_USER,
+      cols,
+    );
+  }
+
+  it('大文字を含む extra キーでも別名は小文字の英数字とアンダースコアだけになる', () => {
+    const q = buildWithExtra(['SCPP_0.01%借入利用額']);
+    const [alias] = q.columns.map((c) => c.alias);
+    expect(alias).toMatch(/^[a-z_][a-z0-9_]*$/);
+    expect(q.sql).toContain(`m.extra->>'SCPP_0.01%借入利用額' AS ${alias}`);
+  });
+
+  it('記号や日本語が潰れて同じ形になる extra キー同士でも別名が衝突しない', () => {
+    // 「借入利用額」と「借入出金額」は文字数が同じため、非英数字を '_' に置換するだけだと同一になる
+    const q = buildWithExtra(['SCPP_0.01%借入利用額', 'SCPP_0.01%借入出金額']);
+    const aliases = q.columns.map((c) => c.alias);
+    expect(aliases).toHaveLength(2);
+    expect(new Set(aliases).size).toBe(2);
+  });
+
+  it('別名は Postgres の識別子上限(63文字)を超えない(超えると末尾が切られてキーが一致しなくなる)', () => {
+    const q = buildWithExtra(['とても長い案件名'.repeat(20)]); // 160文字のキー
+    expect(q.columns).toHaveLength(1);
+    for (const c of q.columns) expect(c.alias.length).toBeLessThanOrEqual(63);
+  });
+
+  it('通常カラムの別名は従来どおり変わらない(保存済みダッシュボード等との互換)', () => {
+    const q = buildReportQuery(
+      'RT02',
+      {
+        columns: [
+          { id: 'c1', source: 'm.id', label: '会員ID' },
+          { id: 'c2', source: 'apps.payment_amount', label: '総入金額', aggregate: 'sum' },
+        ],
+      },
+      CURRENT_USER,
+    );
+    expect(q.columns.map((c) => c.alias)).toEqual(['m_id', 'sum_apps_payment_amount']);
+  });
+});
 
 describe('isSafeIdentifier(仕様書 §9.8)', () => {
   it('alias.column のみ許可', () => {
@@ -141,9 +209,7 @@ describe('buildReportQuery(仕様書 §9.8)', () => {
       buildReportQuery(
         'RT01',
         {
-          columns: [
-            { id: 'c1', source: "m.name; DROP TABLE members --", label: '攻撃' },
-          ],
+          columns: [{ id: 'c1', source: 'm.name; DROP TABLE members --', label: '攻撃' }],
         },
         CURRENT_USER,
       ),
