@@ -157,6 +157,37 @@ export function headerLinesToRecord(
   return out;
 }
 
+/**
+ * 生のヘッダーテキストブロック(過去データ取込用。Webhook は mailparser の headerLines を使うため
+ * headerLinesToRecord を使う)を、同じ形(小文字キーの Record)にする。
+ * 折り返し行(先頭が空白の継続行)は前のヘッダーの値に連結する(RFC 5322 の unfolding)。
+ * 空行に達したら終了する(ヘッダーの後に本文が続く形式に備える安全策)。
+ * 同名ヘッダーが複数ある場合は最初の値を採用する(headerLinesToRecord と同じ)。
+ */
+export function parseRawHeaders(raw: string | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  const lines = (raw ?? '').replace(/\r\n/g, '\n').split('\n');
+  let currentKey: string | null = null;
+  for (const line of lines) {
+    if (line.trim() === '') break;
+    if (/^[ \t]/.test(line) && currentKey) {
+      if (currentKey in out) out[currentKey] = `${out[currentKey]} ${line.trim()}`.trim();
+      continue;
+    }
+    const idx = line.indexOf(':');
+    if (idx < 0) continue;
+    const key = line.slice(0, idx).trim().toLowerCase();
+    if (!key) continue;
+    currentKey = key;
+    if (key in out) continue;
+    out[key] = line
+      .slice(idx + 1)
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  return out;
+}
+
 export interface ClassifyInput {
   /** 小文字キーのヘッダ(headerLinesToRecord の戻り値) */
   headers: Record<string, string>;
@@ -240,4 +271,56 @@ const BLOCKED_EXTENSIONS = new Set([
 export function isBlockedAttachment(filename: string | null | undefined): boolean {
   const ext = (filename ?? '').split('.').pop()?.toLowerCase() ?? '';
   return BLOCKED_EXTENSIONS.has(ext);
+}
+
+/**
+ * ヘッダーの To / Cc 行(複数宛先)を、小文字のアドレス配列にする(重複は除く。順序は維持)。
+ * 区切りは引用符("...")と山括弧(<...>)の外側にあるカンマ・セミコロン。引用符内の
+ * バックスラッシュによるエスケープ(\")も考慮する。アドレスの形(@ を含む)でない断片
+ * (例: "undisclosed-recipients:;")は捨てる。
+ * 過去データ取込(メールディーラー CSV のヘッダー)と、その宛先の補正で使う。
+ */
+export function parseAddressList(raw: string | null | undefined): string[] {
+  const s = raw ?? '';
+  const parts: string[] = [];
+  let buf = '';
+  let inQuotes = false;
+  let inAngle = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i] as string;
+    if (inQuotes) {
+      if (ch === '\\' && i + 1 < s.length) {
+        buf += ch + (s[i + 1] as string);
+        i++;
+        continue;
+      }
+      if (ch === '"') inQuotes = false;
+      buf += ch;
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = true;
+      buf += ch;
+      continue;
+    }
+    if (ch === '<') inAngle = true;
+    else if (ch === '>') inAngle = false;
+    if ((ch === ',' || ch === ';') && !inAngle) {
+      parts.push(buf);
+      buf = '';
+      continue;
+    }
+    buf += ch;
+  }
+  parts.push(buf);
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const p of parts) {
+    const address = parseAddress(p).address;
+    if (!address || !address.includes('@') || seen.has(address)) continue;
+    seen.add(address);
+    out.push(address);
+  }
+  return out;
 }
