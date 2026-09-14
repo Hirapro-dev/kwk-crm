@@ -272,3 +272,55 @@ export function isBlockedAttachment(filename: string | null | undefined): boolea
   const ext = (filename ?? '').split('.').pop()?.toLowerCase() ?? '';
   return BLOCKED_EXTENSIONS.has(ext);
 }
+
+/**
+ * ヘッダーの To / Cc 行(複数宛先)を、小文字のアドレス配列にする(重複は除く。順序は維持)。
+ * 区切りは引用符("...")と山括弧(<...>)の外側にあるカンマ・セミコロン。引用符内の
+ * バックスラッシュによるエスケープ(\")も考慮する。アドレスの形(@ を含む)でない断片
+ * (例: "undisclosed-recipients:;")は捨てる。
+ * 過去データ取込(メールディーラー CSV のヘッダー)と、その宛先の補正で使う。
+ */
+export function parseAddressList(raw: string | null | undefined): string[] {
+  const s = raw ?? '';
+  const parts: string[] = [];
+  let buf = '';
+  let inQuotes = false;
+  let inAngle = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i] as string;
+    if (inQuotes) {
+      if (ch === '\\' && i + 1 < s.length) {
+        buf += ch + (s[i + 1] as string);
+        i++;
+        continue;
+      }
+      if (ch === '"') inQuotes = false;
+      buf += ch;
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = true;
+      buf += ch;
+      continue;
+    }
+    if (ch === '<') inAngle = true;
+    else if (ch === '>') inAngle = false;
+    if ((ch === ',' || ch === ';') && !inAngle) {
+      parts.push(buf);
+      buf = '';
+      continue;
+    }
+    buf += ch;
+  }
+  parts.push(buf);
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const p of parts) {
+    const address = parseAddress(p).address;
+    if (!address || !address.includes('@') || seen.has(address)) continue;
+    seen.add(address);
+    out.push(address);
+  }
+  return out;
+}

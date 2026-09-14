@@ -52,6 +52,7 @@ import {
   matchMailBox,
   normalizeSubject,
   parseAddress,
+  parseAddressList,
   parseRawHeaders,
 } from '../../lib/domain/mail_inbound';
 import {
@@ -300,13 +301,13 @@ async function processFile(filepath: string, ctx: Ctx, dryRun: boolean): Promise
       refIds: extractReferencedMessageIds(inReplyTo, references),
       fromAddress,
       fromName: (row.From名前 ?? '').trim() || null,
-      toAddresses: toRaw ? [toRaw.toLowerCase()] : [],
-      ccAddresses: ccRaw
-        ? ccRaw
-            .split(',')
-            .map((s) => parseAddress(s).address)
-            .filter((a): a is string => !!a)
-        : [],
+      // 宛先はヘッダーの To 行(複数宛先)と「Toアドレス」列(受信箱のアドレス)を合わせる。
+      // 列だけだと、フォーム通知に同送されている他の宛先(旧「メール to リード」用アドレス等)が
+      // 落ちる(2026-09-14 に判明。取込済み分は repair_maildealer_recipients.ts で補正)。
+      toAddresses: [
+        ...new Set([...parseAddressList(headers.to), ...(toRaw ? [toRaw.toLowerCase()] : [])]),
+      ],
+      ccAddresses: parseAddressList(ccRaw),
       subjectRaw: row.件名 ?? '',
       isHtml: looksLikeHtmlBody(row.本文),
       bodyRaw: row.本文 ?? '',
