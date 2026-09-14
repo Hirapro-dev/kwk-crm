@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAIL_TABS, resolveMailTab } from '../../lib/domain/mail_tabs';
+import { MAIL_TABS, mailTabFilter, resolveMailTab } from '../../lib/domain/mail_tabs';
 
 /** メーラーの状態タブ解決(CLAUDE.md §8.1)。既定は「新着 = 未対応 / 通常」 */
 describe('resolveMailTab', () => {
@@ -23,5 +23,23 @@ describe('resolveMailTab', () => {
   });
   it('タブのキーは重複しない', () => {
     expect(new Set(MAIL_TABS.map((t) => t.key)).size).toBe(MAIL_TABS.length);
+  });
+});
+
+/**
+ * フォルダ「取込候補」(migration 82)では状態タブを適用しない(2026-09-14)。
+ * 候補は状態・分類を問わず全件を見渡して仕訳したいため。他のフォルダは従来どおり。
+ */
+describe('mailTabFilter', () => {
+  it('通常のフォルダではタブの status / category をそのまま絞り込みに使う', () => {
+    expect(mailTabFilter(resolveMailTab('active'), { importCandidate: false })).toEqual({
+      status: '対応中',
+      category: '通常',
+    });
+  });
+
+  it('「取込候補」では状態タブを適用しない(状態・分類で絞らない)', () => {
+    expect(mailTabFilter(resolveMailTab('new'), { importCandidate: true })).toEqual({});
+    expect(mailTabFilter(resolveMailTab('spam'), { importCandidate: true })).toEqual({});
   });
 });

@@ -33,3 +33,16 @@ export function resolveMailTab(key: string | undefined): MailTab {
   const found = MAIL_TABS.find((t) => t.key === key);
   return found ?? (MAIL_TABS.find((t) => t.key === DEFAULT_MAIL_TAB_KEY) as MailTab);
 }
+
+/**
+ * タブから一覧の絞り込み(status / category)を決める。
+ * フォルダ「取込候補」(migration 82)では状態タブを適用しない
+ * (状態・分類を問わず全件を見渡して仕訳するため)。他のフォルダは従来どおり。
+ */
+export function mailTabFilter(
+  tab: MailTab,
+  opts: { importCandidate: boolean },
+): { status?: MailStatus; category?: MailCategory } {
+  if (opts.importCandidate) return {};
+  return { status: tab.status, category: tab.category };
+}

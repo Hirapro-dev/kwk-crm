@@ -6,7 +6,7 @@
 
 import { Button } from '@/components/ui/button';
 import { getAdjacentMailThreads } from '@/lib/domain/mail';
-import { resolveMailTab } from '@/lib/domain/mail_tabs';
+import { mailTabFilter, resolveMailTab } from '@/lib/domain/mail_tabs';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { MailThreadPanel } from '../MailThreadPanel';
@@ -35,8 +35,8 @@ export default async function MailThreadPage({ params, searchParams }: PageProps
     mailBoxId,
     unreadOnly: sp.unread === '1',
     importCandidate: sp.folder === 'candidates',
-    status: tab.status,
-    category: tab.category,
+    // 「取込候補」では状態タブを適用しない(一覧と同じ並び・条件で前後移動する)
+    ...mailTabFilter(tab, { importCandidate: sp.folder === 'candidates' }),
   } as const;
 
   const { prevId, nextId } = await getAdjacentMailThreads(id, listParams);
