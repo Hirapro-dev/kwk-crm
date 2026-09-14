@@ -10,7 +10,7 @@
 import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { countMailThreads, listMailBoxes, listMailThreads } from '@/lib/domain/mail';
-import { MAIL_TABS, resolveMailTab } from '@/lib/domain/mail_tabs';
+import { MAIL_TABS, mailTabFilter, resolveMailTab } from '@/lib/domain/mail_tabs';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import { MailFilterBar } from './MailFilterBar';
 import { MailInfinite } from './MailInfinite';
@@ -44,17 +44,20 @@ export default async function MailPage({ searchParams }: PageProps) {
     unreadOnly: sp.unread === '1',
     importCandidate,
   } as const;
-  const listParams = { ...baseParams, status: tab.status, category: tab.category } as const;
+  // 「取込候補」では状態タブを適用しない(状態・分類を問わず全件を仕訳の対象にする)
+  const listParams = { ...baseParams, ...mailTabFilter(tab, { importCandidate }) } as const;
 
   const [result, boxes, users, tabCounts] = await Promise.all([
     listMailThreads({ ...listParams, page: 1, pageSize: LIST_PAGE_SIZE }),
     listMailBoxes(),
     listAllUsers({ activeOnly: true }),
-    Promise.all(
-      MAIL_TABS.map((t) =>
-        countMailThreads({ ...baseParams, status: t.status, category: t.category }),
-      ),
-    ),
+    importCandidate
+      ? Promise.resolve([] as number[])
+      : Promise.all(
+          MAIL_TABS.map((t) =>
+            countMailThreads({ ...baseParams, status: t.status, category: t.category }),
+          ),
+        ),
   ]);
 
   const assigneeOptions = users.map((u) => ({ id: u.id, name: u.full_name ?? u.email }));
@@ -74,7 +77,7 @@ export default async function MailPage({ searchParams }: PageProps) {
         <div className="min-w-0">
           <h1 className="truncate text-sm font-bold">{title}</h1>
           <p className="text-[11px] text-muted-foreground">
-            {tab.label}: {result.total.toLocaleString()} 件
+            {importCandidate ? 'すべて' : tab.label}: {result.total.toLocaleString()} 件
           </p>
         </div>
         <MailFilterBar
@@ -86,11 +89,13 @@ export default async function MailPage({ searchParams }: PageProps) {
         />
       </div>
 
-      <MailStatusTabs
-        current={tab.key}
-        counts={Object.fromEntries(MAIL_TABS.map((t, i) => [t.key, tabCounts[i] ?? 0]))}
-        searchParams={sp}
-      />
+      {!importCandidate && (
+        <MailStatusTabs
+          current={tab.key}
+          counts={Object.fromEntries(MAIL_TABS.map((t, i) => [t.key, tabCounts[i] ?? 0]))}
+          searchParams={sp}
+        />
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col">
         <MailInfinite
