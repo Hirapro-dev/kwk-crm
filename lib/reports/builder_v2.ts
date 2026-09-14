@@ -73,22 +73,48 @@ const AGG_SQL: Record<AggregateFunction, (col: string) => string> = {
   max: (c) => `MAX(${c})`,
 };
 
+/** Postgres の識別子の上限(バイト)。超えた分は警告なしに切り捨てられる */
+const PG_IDENTIFIER_MAX_LENGTH = 63;
+
+/** FNV-1a 32bit。依存なし・決定論的な短いハッシュ(別名の衝突回避用) */
+function shortHash(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
 /**
  * 出力列のエイリアスを生成。
  *   通常: 'm.name'                       → 'm_name'
- *   extra: 'm.extra:investing_amount'   → 'm_extra_investing_amount'
+ *   extra: 'm.extra:investing_amount'   → 'm_extra_investing_amount_<hash8>'
  *
  * 集計関数があれば 'sum_apps_payment_amount' のように prefix。
- * 日本語キーや特殊文字は SQL alias で使えないため、英数字とアンダースコア以外の
- * 文字を全て '_' に置換する(衝突可能性は alias の hash 補助を将来検討)。
+ *
+ * この別名は実行結果の行から値を取り出すキーにもそのまま使うため、
+ * Postgres が返す列名と一字一句一致している必要がある。そのために:
+ *   - 必ず小文字にする。Postgres は引用符なしの識別子を小文字に畳むので、
+ *     大文字が混ざると SQL 上の別名と返ってくるキーが食い違い、画面で値が空欄になる
+ *     (実例: extra キー "SCPP_0.01%借入利用額")。
+ *   - extra キーは日本語・記号が '_' に潰れて別のキーが同じ別名になり得るため、
+ *     元の source のハッシュを末尾に付けて区別する。
+ *   - 63文字を超えると Postgres 側で切り捨てられるので、その範囲に収める。
  */
 function aliasFor(col: ReportColumn): string {
-  const base = col.source
+  const prefix = col.aggregate ? `${col.aggregate}_` : '';
+  let body = col.source
     .replace(/\./g, '_')
     .replace(/:/g, '_')
     // SQL の識別子で許可される [a-zA-Z0-9_] 以外を _ にする
-    .replace(/[^a-zA-Z0-9_]/g, '_');
-  return col.aggregate ? `${col.aggregate}_${base}` : base;
+    .replace(/[^a-zA-Z0-9_]/g, '_')
+    .toLowerCase();
+  if (col.source.includes('.extra:')) {
+    const suffix = `_${shortHash(col.source)}`;
+    body = body.slice(0, PG_IDENTIFIER_MAX_LENGTH - prefix.length - suffix.length) + suffix;
+  }
+  return prefix + body;
 }
 
 /**
