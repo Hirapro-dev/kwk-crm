@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   domainOfAddress,
+  expandedDomainForBox,
   groupMailBoxesByDomain,
   splitOtherMailBox,
   sumMailBoxCounts,
@@ -92,5 +93,30 @@ describe('splitOtherMailBox(未登録アドレス宛の「その他」を切り�
     const { other, rest } = splitOtherMailBox([real]);
     expect(other).toBeNull();
     expect(rest).toEqual([real]);
+  });
+});
+
+/**
+ * 左フォルダの初期開閉状態(2026-09-14)。受信箱が数百件になったため、既定では
+ * 全ドメインを閉じた状態にする。ただし選択中の受信箱があるドメインだけは開いておく
+ * (選択中のフォルダが隠れて見えないと、どこを見ているのか分からなくなるため)。
+ */
+describe('expandedDomainForBox', () => {
+  const groups = groupMailBoxesByDomain([
+    box(1, 'info@a.example'),
+    box(2, 'sales@a.example'),
+    box(3, 'info@b.example'),
+  ]);
+
+  it('選択中の受信箱があるドメインを返す', () => {
+    expect(expandedDomainForBox(groups, 3)).toBe('b.example');
+  });
+
+  it('受信箱が未選択(null)なら null(=すべて閉じる)', () => {
+    expect(expandedDomainForBox(groups, null)).toBeNull();
+  });
+
+  it('どのグループにも無い受信箱IDなら null', () => {
+    expect(expandedDomainForBox(groups, 999)).toBeNull();
   });
 });
