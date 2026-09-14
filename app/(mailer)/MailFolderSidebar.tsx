@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ChevronsDown,
   ChevronsUp,
+  Import,
   Inbox,
   PanelLeft,
   X,
@@ -30,6 +31,8 @@ interface Props {
   total: { pendingCount: number; unreadCount: number };
   /** 「その他」(未登録アドレス宛。migration 78)。未適用時は null */
   otherBox: { id: number; pendingCount: number; unreadCount: number } | null;
+  /** 「取込候補」(旧「メール to リード」宛先を含むメール。migration 82)の件数 */
+  candidateFolder: { pendingCount: number; unreadCount: number };
 }
 
 /** モバイル用の開閉状態をヘッダーのボタンと共有する */
@@ -74,10 +77,17 @@ function CountBadge({ n, strong }: { n: number; strong?: boolean }) {
   );
 }
 
-function FolderTree({ groups, total, otherBox, onNavigate }: Props & { onNavigate?: () => void }) {
+function FolderTree({
+  groups,
+  total,
+  otherBox,
+  candidateFolder,
+  onNavigate,
+}: Props & { onNavigate?: () => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentBox = searchParams.get('box') ?? '';
+  const currentFolder = searchParams.get('folder') ?? '';
   const onList = pathname === '/mail';
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
@@ -89,6 +99,14 @@ function FolderTree({ groups, total, otherBox, onNavigate }: Props & { onNavigat
     if (boxId !== null) p.set('box', String(boxId));
     const qs = p.toString();
     return qs ? `/mail?${qs}` : '/mail';
+  };
+  // 受信箱をまたぐ固定フォルダ(取込候補)。受信箱の指定は外し、状態タブは維持する
+  const hrefForFolder = (folder: string) => {
+    const p = new URLSearchParams();
+    const tab = searchParams.get('tab');
+    if (tab) p.set('tab', tab);
+    p.set('folder', folder);
+    return `/mail?${p.toString()}`;
   };
 
   const itemClass = (active: boolean) =>
@@ -106,11 +124,22 @@ function FolderTree({ groups, total, otherBox, onNavigate }: Props & { onNavigat
       <Link
         href={hrefFor(null)}
         onClick={onNavigate}
-        className={itemClass(onList && currentBox === '')}
+        className={itemClass(onList && currentBox === '' && currentFolder === '')}
       >
         <Inbox className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
         <span className="truncate">すべての受信箱</span>
         <CountBadge n={total.pendingCount} strong />
+      </Link>
+
+      <Link
+        href={hrefForFolder('candidates')}
+        onClick={onNavigate}
+        className={itemClass(onList && currentFolder === 'candidates')}
+        title="旧「メール to リード」宛先を含むメール(フォーム通知など)。リード/問合せへ取り込む候補を確認するためのフォルダです"
+      >
+        <Import className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
+        <span className="truncate">取込候補</span>
+        <CountBadge n={candidateFolder.pendingCount} strong />
       </Link>
 
       {otherBox && (

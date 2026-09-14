@@ -25,6 +25,7 @@ interface Props {
     assigneeId?: string;
     mailBoxId?: number;
     unreadOnly?: boolean;
+    importCandidate?: boolean;
   };
   /** 「すべての受信箱」表示のとき受信箱列を出す */
   showBoxColumn?: boolean;

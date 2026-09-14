@@ -23,6 +23,8 @@ interface PageProps {
     assignee?: string;
     box?: string;
     unread?: string;
+    /** 'candidates' = 左フォルダ「取込候補」(migration 82) */
+    folder?: string;
   }>;
 }
 
@@ -32,13 +34,15 @@ export default async function MailPage({ searchParams }: PageProps) {
 
   const tab = resolveMailTab(sp.tab);
   const mailBoxId = sp.box && /^\d+$/.test(sp.box) ? Number(sp.box) : undefined;
+  const importCandidate = sp.folder === 'candidates';
 
-  // タブ以外の絞り込み(担当・未読・件名・受信箱)。タブ件数はこの条件で数える
+  // タブ以外の絞り込み(担当・未読・件名・受信箱・取込候補)。タブ件数はこの条件で数える
   const baseParams = {
     q: sp.q || undefined,
     assigneeId: sp.assignee || undefined,
     mailBoxId,
     unreadOnly: sp.unread === '1',
+    importCandidate,
   } as const;
   const listParams = { ...baseParams, status: tab.status, category: tab.category } as const;
 
@@ -55,12 +59,14 @@ export default async function MailPage({ searchParams }: PageProps) {
 
   const assigneeOptions = users.map((u) => ({ id: u.id, name: u.full_name ?? u.email }));
   const currentBox = mailBoxId ? boxes.find((b) => b.id === mailBoxId) : undefined;
-  const title = currentBox
-    ? currentBox.display_name
-      ? `${currentBox.display_name} <${currentBox.address}>`
-      : currentBox.address
-    : 'すべての受信箱';
-  const listKey = `${tab.key}|${sp.q ?? ''}|${sp.assignee ?? ''}|${sp.box ?? ''}|${sp.unread ?? ''}`;
+  const title = importCandidate
+    ? '取込候補'
+    : currentBox
+      ? currentBox.display_name
+        ? `${currentBox.display_name} <${currentBox.address}>`
+        : currentBox.address
+      : 'すべての受信箱';
+  const listKey = `${tab.key}|${sp.q ?? ''}|${sp.assignee ?? ''}|${sp.box ?? ''}|${sp.unread ?? ''}|${sp.folder ?? ''}`;
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded border bg-card shadow-sm">
