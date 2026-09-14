@@ -9,6 +9,7 @@
 
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import type { MailBoxCount } from './mail_folders';
+import { classifyMailSearchQuery, escapeLikeWildcards, jstDateRangeToUtcIso } from './mail_search';
 import type {
   MailBox,
   MailMessage,
@@ -56,11 +57,43 @@ export async function listMailBoxCounts(): Promise<MailBoxCount[]> {
 
 export type ThreadFilterParams = Omit<MailThreadListParams, 'page' | 'pageSize'>;
 
+/**
+ * ヘッダー検索(q)の解決結果。会員IDは mail_threads.member_id への完全一致で済むが、
+ * メールアドレス・キーワードは mail_messages を横断する必要があるため、
+ * 先に migration 79 の RPC で対象スレッドIDを引いてから絞り込む。
+ */
+type ResolvedMailSearch = { kind: 'member_id'; value: string } | { kind: 'ids'; ids: string[] };
+
+/** 一致するスレッドが無いことを表す実在しない ID(空配列での .in() の代わりに使う) */
+const NO_MATCH_SENTINEL_ID = '00000000-0000-0000-0000-000000000000';
+
+async function resolveMailSearch(
+  // biome-ignore lint/suspicious/noExplicitAny: Supabase クライアントの型は生成型に依存するため
+  supabase: any,
+  q: string | undefined,
+): Promise<ResolvedMailSearch | null> {
+  const parsed = classifyMailSearchQuery(q);
+  if (!parsed) return null;
+  if (parsed.kind === 'member_id') return { kind: 'member_id', value: parsed.value };
+
+  const pattern = `%${escapeLikeWildcards(parsed.value)}%`;
+  const { data, error } = await supabase.rpc('search_mail_thread_ids', {
+    p_pattern: pattern,
+    p_kind: parsed.kind,
+  });
+  if (error) return { kind: 'ids', ids: [] }; // migration 79 未適用等は「一致なし」扱い
+  return {
+    kind: 'ids',
+    ids: ((data ?? []) as Array<{ thread_id: string }>).map((r) => r.thread_id),
+  };
+}
+
 /** 一覧と件数で同じ絞り込みを使うための共通部分 */
 // biome-ignore lint/suspicious/noExplicitAny: PostgREST ビルダーの型はメソッドチェーンで変わるため
 function applyThreadFilters<Q extends Record<string, any>>(
   query: Q,
   params: ThreadFilterParams,
+  search: ResolvedMailSearch | null,
 ): Q {
   let q = query;
   if (params.status) q = q.eq('status', params.status);
@@ -70,9 +103,12 @@ function applyThreadFilters<Q extends Record<string, any>>(
   if (params.mailBoxId) q = q.eq('mail_box_id', params.mailBoxId);
   if (params.unreadOnly) q = q.eq('is_read', false);
   if (params.memberId) q = q.eq('member_id', params.memberId);
-  if (params.q?.trim()) {
-    const kw = params.q.trim().replace(/[%_]/g, '\\$&');
-    q = q.ilike('subject', `%${kw}%`);
+  const { fromIso, toIso } = jstDateRangeToUtcIso(params.dateFrom, params.dateTo);
+  if (fromIso) q = q.gte('last_message_at', fromIso);
+  if (toIso) q = q.lte('last_message_at', toIso);
+  if (search?.kind === 'member_id') q = q.eq('member_id', search.value);
+  else if (search?.kind === 'ids') {
+    q = q.in('id', search.ids.length > 0 ? search.ids : [NO_MATCH_SENTINEL_ID]);
   }
   return q;
 }
@@ -83,12 +119,14 @@ function applyThreadFilters<Q extends Record<string, any>>(
  */
 export async function countMailThreads(params: ThreadFilterParams = {}): Promise<number> {
   const supabase = await createClient();
+  const search = await resolveMailSearch(supabase, params.q);
   const query = applyThreadFilters(
     supabase
       .from('mail_threads')
       .select('id', { count: 'exact', head: true })
       .is('deleted_at', null),
     params,
+    search,
   );
   const { count, error } = await query;
   if (error) return 0;
@@ -108,6 +146,7 @@ export async function listMailThreads(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  const search = await resolveMailSearch(supabase, params.q);
   const query = applyThreadFilters(
     supabase
       .from('mail_threads')
@@ -117,6 +156,7 @@ export async function listMailThreads(
       .order('id', { ascending: false })
       .range(from, to),
     params,
+    search,
   );
 
   const { data, error, count } = await query;
@@ -174,6 +214,7 @@ export async function getAdjacentMailThreads(
   if (!c?.last_message_at) return { prevId: null, nextId: null };
   const at = c.last_message_at;
 
+  const search = await resolveMailSearch(supabase, params.q);
   const base = () =>
     applyThreadFilters(
       supabase
@@ -182,6 +223,7 @@ export async function getAdjacentMailThreads(
         .is('deleted_at', null)
         .not('last_message_at', 'is', null),
       params,
+      search,
     );
   const [prev, next] = await Promise.all([
     base()

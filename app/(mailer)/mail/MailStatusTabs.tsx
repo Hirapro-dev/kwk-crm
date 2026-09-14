@@ -13,7 +13,14 @@ export function MailStatusTabs({
 }: {
   current: string;
   counts: Record<string, number>;
-  searchParams: { q?: string; assignee?: string; box?: string; unread?: string };
+  searchParams: {
+    q?: string;
+    assignee?: string;
+    box?: string;
+    unread?: string;
+    from?: string;
+    to?: string;
+  };
 }) {
   const hrefFor = (key: string) => {
     const p = new URLSearchParams();
@@ -22,6 +29,8 @@ export function MailStatusTabs({
     if (searchParams.assignee) p.set('assignee', searchParams.assignee);
     if (searchParams.unread) p.set('unread', searchParams.unread);
     if (searchParams.q) p.set('q', searchParams.q);
+    if (searchParams.from) p.set('from', searchParams.from);
+    if (searchParams.to) p.set('to', searchParams.to);
     const qs = p.toString();
     return qs ? `/mail?${qs}` : '/mail';
   };

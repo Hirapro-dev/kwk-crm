@@ -686,6 +686,20 @@ Webhook(`app/api/mail/inbound/route.ts`)・過去データ取込のどちらも�
 レイアウトはメールディーラー風の「左: 受信箱フォルダ(ドメイン > アドレス) / 右: 一覧・スレッド」。
 フォルダの未対応・未読件数は migration 77 の関数 `mail_box_counts()` (通常分類のみ、SECURITY INVOKER で RLS 適用) で1クエリで取る。
 状態タブの定義は `lib/domain/mail_tabs.ts`、フォルダの組み立ては `lib/domain/mail_folders.ts` (いずれも純粋関数)。
+
+**ヘッダー検索** (2026-09-11 追加, migration 79): 一覧上部の検索欄に、会員ID・メールアドレス・キーワードの
+どれを入力しても自動判定してヒットする(`lib/domain/mail_search.ts` の `classifyMailSearchQuery`、純粋関数・
+単体テストあり)。
+  - 会員ID(`K-` + 数字。実際の桁数に満たない入力は前ゼロを補って完全一致。あいまい一致はしない)→
+    `mail_threads.member_id` を直接絞り込む
+  - メールアドレス(`@` を含む)/ キーワード(それ以外) → PostgREST の ilike は配列列
+    (`to_addresses`/`cc_addresses`)に使えないため、RPC `search_mail_thread_ids()`
+    (migration 79、SECURITY INVOKER)で `mail_messages` の `from_address`/`to_addresses`/`cc_addresses`
+    (メールアドレス)または `subject`/`text_body`/`html_body`(キーワード)を横断検索し、
+    一致した `thread_id` で `mail_threads` を絞り込む(最大5000件)
+  - **期間**: `<input type="date">` 2つ(開始・終了)。利用者は日本時間のつもりで入力するため、
+    `jstDateRangeToUtcIso`(純粋関数)でその日の JST 00:00:00〜23:59:59.999 を UTC の ISO に変換してから
+    `last_message_at` を `gte`/`lte` で絞り込む
 本文は HTML 版を既定表示(sandbox iframe + CSP)。画像は自動では読み込まず、利用者が「画像を表示」を押したメールに限り https の画像だけ許可する。
 **環境変数** (§13): `MAIL_AWS_REGION` / `MAIL_AWS_ACCESS_KEY_ID` / `MAIL_AWS_SECRET_ACCESS_KEY` (SES・S3 用の IAM ユーザー。
 Vercel では `AWS_*` が予約名のため `MAIL_` 接頭辞を付け、SDK クライアントに明示的に渡す) /

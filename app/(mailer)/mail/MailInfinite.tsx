@@ -25,6 +25,8 @@ interface Props {
     assigneeId?: string;
     mailBoxId?: number;
     unreadOnly?: boolean;
+    dateFrom?: string;
+    dateTo?: string;
   };
   /** 「すべての受信箱」表示のとき受信箱列を出す */
   showBoxColumn?: boolean;
