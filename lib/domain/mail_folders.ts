@@ -123,3 +123,26 @@ export function expandedDomainForBox(
   const g = groups.find((grp) => grp.items.some((b) => b.id === selectedBoxId));
   return g ? g.domain : null;
 }
+
+/**
+ * 左フォルダ上部の「ピン留め」区画(migration 84)。自分がピン留めした受信箱を、
+ * ピン留めした順(pinnedBoxIds の順)で、件数付きの MailFolderItem として返す。
+ * 存在しない ID は無視し、重複は1件にする。
+ */
+export function pinnedFolderItems(
+  groups: readonly MailFolderGroup[],
+  pinnedBoxIds: readonly number[],
+): MailFolderItem[] {
+  const byId = new Map<number, MailFolderItem>();
+  for (const g of groups) for (const item of g.items) byId.set(item.id, item);
+  const out: MailFolderItem[] = [];
+  const seen = new Set<number>();
+  for (const id of pinnedBoxIds) {
+    if (seen.has(id)) continue;
+    const item = byId.get(id);
+    if (!item) continue;
+    seen.add(id);
+    out.push(item);
+  }
+  return out;
+}
