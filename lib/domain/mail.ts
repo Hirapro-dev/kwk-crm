@@ -260,3 +260,19 @@ export async function getMailAttachmentSignedUrl(
   if (error || !data?.signedUrl) return null;
   return data.signedUrl;
 }
+
+/**
+ * 自分がピン留めした受信箱の ID(ピン留めした順)。migration 84。
+ * 行は RLS で実行ユーザー自身のものに限られる。テーブル未適用なら空配列(画面を壊さない)。
+ */
+export async function listMyMailBoxPins(): Promise<number[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('mail_box_pins')
+    .select('mail_box_id, created_at')
+    .order('created_at', { ascending: true });
+  if (error) return [];
+  // mail_box_pins は生成済みの DB 型に無いため、行の形を明示する
+  const rows = (data ?? []) as unknown as Array<{ mail_box_id: number }>;
+  return rows.map((r) => Number(r.mail_box_id));
+}
