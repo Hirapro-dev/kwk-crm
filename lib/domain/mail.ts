@@ -70,6 +70,7 @@ function applyThreadFilters<Q extends Record<string, any>>(
   if (params.mailBoxId) q = q.eq('mail_box_id', params.mailBoxId);
   if (params.unreadOnly) q = q.eq('is_read', false);
   if (params.memberId) q = q.eq('member_id', params.memberId);
+  if (params.importCandidate) q = q.eq('is_import_candidate', true);
   if (params.q?.trim()) {
     const kw = params.q.trim().replace(/[%_]/g, '\\$&');
     q = q.ilike('subject', `%${kw}%`);

@@ -677,6 +677,15 @@ Webhook(`app/api/mail/inbound/route.ts`)・過去データ取込のどちらも�
 受信箱の追加時に自動実行するほか、`/mail/settings` の「再振り分けを実行」で手動実行もできる
 (あいまい一致はしない: 複数の受信箱に一致する場合は動かさない)。
 
+**取込候補** (2026-09-14 追加, migration 82): 旧 Salesforce の「メール to リード」用アドレス
+(`MAIL_IMPORT_CANDIDATE_ADDRESSES`、`lib/domain/mail_types.ts`)を宛先(To/Cc)に含むメール(フォーム通知など)は、
+リード/問合せとして取り込むべき候補。受信時に `isImportCandidate()`(`lib/domain/mail_import_candidates.ts`、純粋関数)で
+判定し、そのスレッドに `mail_threads.is_import_candidate = true` を立てる(既存スレッドに候補メールが加わったときも true にする。
+受信箱・分類・状態は変えない)。メーラーの左フォルダの固定項目「取込候補」(`/mail?folder=candidates`)で受信箱をまたいで
+一覧できる(状態タブ・担当・未読・件名の絞り込みは通常どおり効く)。過去分は migration 82 の再集計 SQL で付与しており、
+判定アドレスを変えたときは同 SQL を実行し直す。リード/問合せへの実際の取込(項目の切り出し・レコード作成)は未実装で、
+まずは候補の確認用。
+
 **セキュリティ**: Webhook は SNS の署名 (署名用証明書は `sns.<region>.amazonaws.com` のものだけ許可) と `TopicArn` を検証、
 不一致は 401/403。HTML 本文は sandbox iframe + CSP で描画し**画像の自動読み込みをブロック**(開封トラッキング対策)。
 本文・アドレスをログに出さない (§12.4)。AWS の認証情報は Vercel の環境変数のみ (クライアント露出禁止 §12.4)。

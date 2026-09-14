@@ -21,6 +21,17 @@ export const MAIL_SOURCES = ['ses', 'import_maildealer', 'import_server'] as con
  * 該当アドレスを mail_boxes に登録すると、再振り分け(reassign_other_mail_threads)で移動する。
  */
 export const OTHER_MAILBOX_ADDRESS = 'other@unassigned.invalid';
+
+/**
+ * 「取込候補」の判定に使う宛先アドレス(migration 82 / CLAUDE.md §5.15)。
+ * 旧 Salesforce の「メール to リード」用アドレス。フォーム通知メールはこれを宛先(To/Cc)に
+ * 含めて送られてくるため、含むメールのスレッドを取込候補として左フォルダに出す。
+ * 判定結果はスレッドに保存されるので、ここを変えたときは migration 82 の再集計 SQL を
+ * 実行し直すこと。
+ */
+export const MAIL_IMPORT_CANDIDATE_ADDRESSES: readonly string[] = [
+  'y3awtd-hirayama-p@hdbronze.htdb.jp',
+];
 export type MailSource = (typeof MAIL_SOURCES)[number];
 
 export interface MailBox {
@@ -101,6 +112,8 @@ export interface MailThreadListParams {
   mailBoxId?: number;
   unreadOnly?: boolean;
   memberId?: string;
+  /** true なら「取込候補」(mail_threads.is_import_candidate)のスレッドだけ */
+  importCandidate?: boolean;
   page?: number;
   pageSize?: number;
 }
