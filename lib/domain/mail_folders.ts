@@ -108,3 +108,18 @@ export function sumMailBoxCounts(counts: readonly MailBoxCount[]): {
   }
   return { pendingCount, unreadCount };
 }
+
+/**
+ * 左フォルダの初期表示で開いておくドメイン(選択中の受信箱があるドメイン)。
+ * 受信箱が数百件あるため既定では全ドメインを閉じるが、選択中の受信箱のフォルダが
+ * 隠れて見えないと現在地が分からなくなるので、そのドメインだけ開く。
+ * 受信箱が未選択、またはどのグループにも無い ID なら null(=すべて閉じる)。
+ */
+export function expandedDomainForBox(
+  groups: readonly MailFolderGroup[],
+  selectedBoxId: number | null,
+): string | null {
+  if (selectedBoxId === null || !Number.isFinite(selectedBoxId)) return null;
+  const g = groups.find((grp) => grp.items.some((b) => b.id === selectedBoxId));
+  return g ? g.domain : null;
+}

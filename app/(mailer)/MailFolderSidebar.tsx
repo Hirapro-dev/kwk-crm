@@ -1,6 +1,6 @@
 'use client';
 
-import type { MailFolderGroup } from '@/lib/domain/mail_folders';
+import { type MailFolderGroup, expandedDomainForBox } from '@/lib/domain/mail_folders';
 import { cn } from '@/lib/utils/cn';
 import {
   Archive,
@@ -89,7 +89,12 @@ function FolderTree({
   const currentBox = searchParams.get('box') ?? '';
   const currentFolder = searchParams.get('folder') ?? '';
   const onList = pathname === '/mail';
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // 開閉状態(true=閉じる)。受信箱が数百件あるため、記録の無いドメインは閉じた扱いにする
+  // (=既定はすべて閉じる)。初期表示では選択中の受信箱があるドメインだけ開いておく。
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    const domain = expandedDomainForBox(groups, currentBox ? Number(currentBox) : null);
+    return domain === null ? {} : { [domain]: false };
+  });
 
   // フォルダを切り替えるとき、状態タブは維持し、検索語・担当などは解除する
   const hrefFor = (boxId: number | null) => {
@@ -116,8 +121,8 @@ function FolderTree({
     );
 
   // ドメインごとのフォルダをまとめて開閉する(個別の開閉状態はそのつど上書き)
-  const expandAll = () => setCollapsed({});
-  const collapseAll = () => setCollapsed(Object.fromEntries(groups.map((g) => [g.domain, true])));
+  const expandAll = () => setCollapsed(Object.fromEntries(groups.map((g) => [g.domain, false])));
+  const collapseAll = () => setCollapsed({});
 
   return (
     <nav className="space-y-1 p-2 text-sm">
@@ -182,7 +187,7 @@ function FolderTree({
       )}
 
       {groups.map((g) => {
-        const isCollapsed = collapsed[g.domain] ?? false;
+        const isCollapsed = collapsed[g.domain] ?? true;
         return (
           <div key={g.domain}>
             <button
