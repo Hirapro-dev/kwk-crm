@@ -29,6 +29,11 @@ interface Props {
   threadId: string;
   /** 他画面に埋め込む場合(見つからないときに notFound() を出さない) */
   embedded?: boolean;
+  /**
+   * 返信フォームを出すか(既定 true)。取込候補(§5.16)から開いたときは false にし、
+   * 返信ではなく取込ルールの設定だけを行う画面にする。
+   */
+  showReply?: boolean;
 }
 
 /** 署名 URL の有効期間。画面を開いたまま添付を開く猶予として 10 分 */
@@ -41,7 +46,7 @@ function formatBytes(n: number | null): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export async function MailThreadPanel({ threadId, embedded }: Props) {
+export async function MailThreadPanel({ threadId, embedded, showReply = true }: Props) {
   const [thread, me, users, allBoxes] = await Promise.all([
     getMailThread(threadId),
     getCurrentUser(),
@@ -218,7 +223,7 @@ export async function MailThreadPanel({ threadId, embedded }: Props) {
         );
       })}
 
-      {canEdit && (
+      {canEdit && showReply && (
         <MailReplyForm
           threadId={thread.id}
           replyTo={lastInbound?.from_address ?? null}

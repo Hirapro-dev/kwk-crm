@@ -87,7 +87,8 @@ export default async function MailThreadPage({ params, searchParams }: PageProps
           )}
         </div>
       </div>
-      <MailThreadPanel threadId={id} />
+      {/* 取込候補から開いたときは返信せず取込ルールの設定だけを行う(§5.16) */}
+      <MailThreadPanel threadId={id} showReply={sp.folder !== 'candidates'} />
     </div>
   );
 }
