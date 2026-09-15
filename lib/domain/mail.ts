@@ -110,10 +110,11 @@ export async function listMailThreads(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  // 総件数は初回(1ページ目)だけ数える。追加読み込みでは不要で、数十万件の候補では数え直しが重いため
   const query = applyThreadFilters(
     supabase
       .from('mail_threads')
-      .select(THREAD_SELECT, { count: 'exact' })
+      .select(THREAD_SELECT, page === 1 ? { count: 'exact' } : undefined)
       .is('deleted_at', null)
       .order('last_message_at', { ascending: false, nullsFirst: false })
       .order('id', { ascending: false })
@@ -123,6 +124,8 @@ export async function listMailThreads(
 
   const { data, error, count } = await query;
   if (error) {
+    // 追加読み込みでは失敗を画面に伝える(空を返すと「全件表示」と誤解される)
+    if (params.strict) throw new Error(`メール一覧の取得に失敗しました: ${error.message}`);
     // migration 76 未適用の場合は空で返す
     return { rows: [], total: 0, page, pageSize };
   }
