@@ -133,9 +133,16 @@ export function matchMailBox<T extends { address: string; is_active?: boolean }>
   recipients: Array<string | null | undefined>,
 ): T | null {
   const active = boxes.filter((b) => b.is_active !== false);
-  const set = toAddressSet(recipients);
-  for (const b of active) {
-    if (set.has(b.address.trim().toLowerCase())) return b;
+  // 宛先の並び(To → Cc → 転送ヘッダ)で最初に一致した受信箱を選ぶ。受信箱の並び(id 順)で選ぶと、
+  // To が quest@ のメールでも転送経路の application@ の方が id が小さいだけでそちらに入ってしまう
+  // (同じメールの2通目の通知が別の受信箱に入り、スレッドが割れる。2026-09-15)
+  const byAddress = new Map(active.map((b) => [b.address.trim().toLowerCase(), b]));
+  for (const r of recipients) {
+    for (const part of (r ?? '').split(',')) {
+      const a = parseAddress(part).address;
+      const hit = a ? byAddress.get(a) : undefined;
+      if (hit) return hit;
+    }
   }
   return active.length === 1 ? (active[0] ?? null) : null;
 }
