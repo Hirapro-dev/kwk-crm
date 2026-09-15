@@ -60,6 +60,11 @@ export interface MailImportRule {
   from_address: string | null;
   /** null = 件名で絞らない。空白区切りのキーワード(すべて含むときに一致。subjectKeywords) */
   subject_contains: string | null;
+  /**
+   * null = 本文で絞らない。空白区切りのキーワード(本文のテキストにすべて含むときに一致。migration 90)。
+   * 「受信データ」「本人確認完了」のように件名に無く本文1行目にしかない区別に使う
+   */
+  body_contains: string | null;
   form_name_source: FormNameSource;
   form_name_param: string | null;
   /** 本文のラベル → 問合せの項目(FieldColumn または "extra:<キー>") */
@@ -93,11 +98,19 @@ export function htmlToText(html: string): string {
 const LABEL_LINE = /^([^:：]{1,40}?)\s*[:：]\s*(.+)$/;
 
 /** 本文(テキスト。無ければ HTML をテキスト化)を行とラベルの辞書にする */
+/** 本文のテキスト(テキスト版があればそれ、無ければ HTML 版をテキスト化。どちらも無ければ空文字) */
+export function mailBodyText(
+  textBody: string | null | undefined,
+  htmlBody: string | null | undefined,
+): string {
+  return textBody?.trim() ? textBody : htmlBody ? htmlToText(htmlBody) : '';
+}
+
 export function parseMailBody(
   textBody: string | null | undefined,
   htmlBody: string | null | undefined,
 ): ParsedMailBody {
-  const text = textBody?.trim() ? textBody : htmlBody ? htmlToText(htmlBody) : '';
+  const text = mailBodyText(textBody, htmlBody);
   const lines = text
     .replace(/\r\n/g, '\n')
     .split('\n')
@@ -272,6 +285,9 @@ export interface RuleMatchInput {
   mailBoxId: number | null;
   fromAddress: string;
   subject: string | null;
+  /** 本文(本文キーワード条件のあるルールだけが見る。省略時は本文条件のあるルールに一致しない) */
+  textBody?: string | null;
+  htmlBody?: string | null;
 }
 
 /**
@@ -286,7 +302,7 @@ export function subjectKeywords(text: string | null | undefined): string[] {
     .filter((t) => t.length > 0);
 }
 
-/** ルールの一致条件(受信箱・差出人・件名キーワード)をすべて満たすか。無効なルールは一致しない */
+/** ルールの一致条件(受信箱・差出人・件名キーワード・本文キーワード)をすべて満たすか。無効なルールは一致しない */
 export function ruleMatches(rule: MailImportRule, msg: RuleMatchInput): boolean {
   if (!rule.is_active) return false;
   if (rule.mail_box_id !== null && rule.mail_box_id !== msg.mailBoxId) return false;
@@ -300,6 +316,11 @@ export function ruleMatches(rule: MailImportRule, msg: RuleMatchInput): boolean 
   if (keywords.length > 0) {
     const subject = msg.subject ?? '';
     if (!keywords.every((k) => subject.includes(k))) return false;
+  }
+  const bodyKeywords = subjectKeywords(rule.body_contains);
+  if (bodyKeywords.length > 0) {
+    const body = mailBodyText(msg.textBody, msg.htmlBody);
+    if (!body || !bodyKeywords.every((k) => body.includes(k))) return false;
   }
   return true;
 }

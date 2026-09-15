@@ -135,7 +135,10 @@ export async function listMailThreads(
     const { data: msgs } = await supabase
       .from('mail_messages')
       .select(
-        'thread_id, from_address, from_name, subject, sent_at, direction, import_status, import_note, inquiry_id',
+        // 取込候補のときはルールの本文キーワード判定のため本文も引く(通常の一覧では引かない)
+        `thread_id, from_address, from_name, subject, sent_at, direction, import_status, import_note, inquiry_id${
+          params.importCandidate ? ', text_body, html_body' : ''
+        }`,
       )
       .in('thread_id', ids)
       .eq('direction', 'in')
@@ -148,6 +151,8 @@ export async function listMailThreads(
       from_address: string;
       from_name: string | null;
       subject: string | null;
+      text_body?: string | null;
+      html_body?: string | null;
       import_status: 'pending' | 'done' | 'error' | null;
       import_note: string | null;
       inquiry_id: string | null;
@@ -166,6 +171,8 @@ export async function listMailThreads(
             mailBoxId: row.mail_box_id,
             fromAddress: m.from_address,
             subject: m.subject ?? '',
+            textBody: m.text_body,
+            htmlBody: m.html_body,
           });
           row.last_import_rule = rule ? { id: rule.id, name: rule.name } : null;
         }
@@ -307,7 +314,7 @@ export async function listMailImportRules(): Promise<MailImportRule[]> {
   const { data, error } = await supabase
     .from('mail_import_rules')
     .select(
-      'id, name, is_active, sort_order, mail_box_id, from_address, subject_contains, form_name_source, form_name_param, field_map',
+      'id, name, is_active, sort_order, mail_box_id, from_address, subject_contains, body_contains, form_name_source, form_name_param, field_map',
     )
     .order('sort_order', { ascending: true })
     .order('id', { ascending: true });
