@@ -32,6 +32,16 @@ export const OTHER_MAILBOX_ADDRESS = 'other@unassigned.invalid';
 export const MAIL_IMPORT_CANDIDATE_ADDRESSES: readonly string[] = [
   'y3awtd-hirayama-p@hdbronze.htdb.jp',
 ];
+
+/**
+ * 「取込候補」の判定に使う件名のキーワード(migration 89 / CLAUDE.md §5.15)。
+ * 判定アドレス宛に来ないフォーム通知(エキスパのフォーム登録通知など)を拾うため、
+ * 件名にこれらのいずれかを含む(部分一致・大文字小文字は区別しない)メールも候補にする。
+ * ここを変えたときは migration 89 の再集計 SQL を実行し直すこと。
+ */
+export const MAIL_IMPORT_CANDIDATE_SUBJECT_KEYWORDS: readonly string[] = [
+  '[エキスパ]フォーム登録通知',
+];
 export type MailSource = (typeof MAIL_SOURCES)[number];
 
 export interface MailBox {
