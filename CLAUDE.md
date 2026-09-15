@@ -694,10 +694,12 @@ Webhook(`app/api/mail/inbound/route.ts`)・過去データ取込のどちらも�
 (`MAIL_IMPORT_CANDIDATE_ADDRESSES`、`lib/domain/mail_types.ts`)を宛先(To/Cc)に含むメール(フォーム通知など)は、
 リード/問合せとして取り込むべき候補。受信時に `isImportCandidate()`(`lib/domain/mail_import_candidates.ts`、純粋関数)で
 判定し、そのスレッドに `mail_threads.is_import_candidate = true` を立てる(既存スレッドに候補メールが加わったときも true にする。
-受信箱・分類・状態は変えない)。メーラーの左フォルダの固定項目「取込候補」(`/mail?folder=candidates`)で受信箱をまたいで
+受信箱・分類・状態は変えない)。**件名のキーワード**(`MAIL_IMPORT_CANDIDATE_SUBJECT_KEYWORDS`。初期値 `[エキスパ]フォーム登録通知`。
+部分一致・大文字小文字は区別しない)を含むメールも、宛先に判定アドレスが無くても候補にする(判定アドレス宛に来ないフォーム通知を
+拾うため。2026-09-15 追加, migration 89 で過去分を再集計)。メーラーの左フォルダの固定項目「取込候補」(`/mail?folder=candidates`)で受信箱をまたいで
 一覧できる。このフォルダでは**状態タブを適用しない**(状態・分類を問わず全件を表示し、タブ自体も出さない。仕訳の対象を
 見渡すため。`mailTabFilter`)。担当・未読・件名の絞り込みは効く。過去分は migration 82 の再集計 SQL で付与しており、
-判定アドレスを変えたときは同 SQL を実行し直す。※ 過去データ取込(メールディーラー)は当初、宛先(To)を CSV の
+判定アドレスを変えたときは同 SQL を、件名キーワードを変えたときは migration 89 の SQL を実行し直す。※ 過去データ取込(メールディーラー)は当初、宛先(To)を CSV の
 「Toアドレス」列(受信箱のアドレス1つ)からしか取っておらず、ヘッダーの To 行に同送されていた判定アドレスが落ちていた
 (2026-09-14 に判明)。取込スクリプトはヘッダーの To 行も読むよう修正し(`parseAddressList`)、取込済み分は
 `scripts/mail/repair_maildealer_recipients.ts`(migration 85 の RPC `repair_mail_message_recipients`)で CSV から

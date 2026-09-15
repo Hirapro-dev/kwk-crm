@@ -221,8 +221,14 @@ export async function POST(request: Request): Promise<Response> {
       : new Date().toISOString();
   const toAddresses = addressesOf(parsed.to);
   const ccAddresses = addressesOf(parsed.cc);
-  // 旧「メール to リード」宛先を含むメールは「取込候補」フォルダに出す(migration 82)
-  const importCandidate = isImportCandidate(toAddresses, ccAddresses);
+  // 旧「メール to リード」宛先を含むメール、または件名に判定キーワード(エキスパのフォーム登録通知など)を
+  // 含むメールは「取込候補」フォルダに出す(migration 82 / 89)
+  const importCandidate = isImportCandidate(
+    toAddresses,
+    ccAddresses,
+    undefined,
+    parsed.subject ?? null,
+  );
 
   // ---- 受信箱の特定: 元の宛先(To / Cc / 転送で付くヘッダ)と mail_boxes.address の一致 ----
   const { data: boxes } = await supabase
