@@ -110,9 +110,13 @@ export function MailImportRulePanel({
   const [subjectContains, setSubjectContains] = useState(
     existingRule?.subject_contains ?? subjectWithoutName(sample.subject),
   );
-  const [bodyContains, setBodyContains] = useState(existingRule?.body_contains ?? '');
-  // 新規作成時、本文に「フォーム名」のラベルがあればそれをフォーム名の取り元にする(エキスパのフォーム通知など)
+  // 新規作成時、本文に「フォーム名」のラベルがあればそれをフォーム名の取り元にし、その値を本文キーワードの
+  // 既定値にする(エキスパのフォーム通知など。フォーム名は件名に無いので、件名ではなく本文で絞る)
   const guessedFormLabel = existingRule ? null : guessFormLabel(labelNames);
+  const [bodyContains, setBodyContains] = useState(
+    existingRule?.body_contains ??
+      (guessedFormLabel ? (parsed.labels[guessedFormLabel] ?? '') : ''),
+  );
   const [source, setSource] = useState<FormNameSource>(
     existingRule?.form_name_source ?? (guessedFormLabel ? 'body_label' : 'body_line'),
   );
@@ -294,7 +298,8 @@ export function MailImportRulePanel({
               />
               <p className="text-[11px] text-muted-foreground">
                 すべてのキーワードを含む件名に一致します(語順は問いません)。例: 「本人確認完了
-                kioxia Google広告経由」
+                kioxia
+                Google広告経由」。件名に無い語(本文のフォーム名など)はここではなく「本文に含むキーワード」に入れてください
               </p>
             </div>
             <div className="space-y-1 sm:col-start-2">
