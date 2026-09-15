@@ -58,7 +58,7 @@ export interface MailImportRule {
   mail_box_id: number | null;
   /** null = 差出人で絞らない。小文字 */
   from_address: string | null;
-  /** null = 件名で絞らない */
+  /** null = 件名で絞らない。空白区切りのキーワード(すべて含むときに一致。subjectKeywords) */
   subject_contains: string | null;
   form_name_source: FormNameSource;
   form_name_param: string | null;
@@ -264,7 +264,19 @@ export interface RuleMatchInput {
   subject: string | null;
 }
 
-/** ルールの一致条件(受信箱・差出人・件名含有)をすべて満たすか。無効なルールは一致しない */
+/**
+ * 件名の条件(subject_contains)をキーワードに分ける。半角/全角の空白区切り。
+ * 実際の件名は「【Google広告経由】【…請求】本人確認完了 ○○ 様（社名）」のように語順や差し込みが
+ * メールごとに違うため、丸ごとの部分一致ではなくキーワードの AND で判定する(2026-09-15)。
+ */
+export function subjectKeywords(text: string | null | undefined): string[] {
+  return (text ?? '')
+    .split(/[\s\u3000]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+}
+
+/** ルールの一致条件(受信箱・差出人・件名キーワード)をすべて満たすか。無効なルールは一致しない */
 export function ruleMatches(rule: MailImportRule, msg: RuleMatchInput): boolean {
   if (!rule.is_active) return false;
   if (rule.mail_box_id !== null && rule.mail_box_id !== msg.mailBoxId) return false;
@@ -274,7 +286,11 @@ export function ruleMatches(rule: MailImportRule, msg: RuleMatchInput): boolean 
   ) {
     return false;
   }
-  if (rule.subject_contains && !(msg.subject ?? '').includes(rule.subject_contains)) return false;
+  const keywords = subjectKeywords(rule.subject_contains);
+  if (keywords.length > 0) {
+    const subject = msg.subject ?? '';
+    if (!keywords.every((k) => subject.includes(k))) return false;
+  }
   return true;
 }
 

@@ -6,25 +6,37 @@ import {
   moveMailImportRule,
   setMailImportRuleActive,
 } from '@/lib/domain/mail_import_rule_actions';
-import { FORM_NAME_SOURCE_LABELS, type MailImportRule } from '@/lib/domain/mail_import_rules';
-import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
+import {
+  FORM_NAME_SOURCE_LABELS,
+  type MailImportRule,
+  subjectKeywords,
+} from '@/lib/domain/mail_import_rules';
+import { ArrowDown, ArrowUp, Pencil, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
+import type { InquiryFieldOption } from '../ImportRuleTargetSelect';
+import { ImportRuleEditDialog } from './ImportRuleEditDialog';
 
 /**
  * /mail/settings のメール取込ルール一覧(CLAUDE.md §5.16)。
- * ここでは有効/無効・判定順・削除だけを扱い、新規作成と編集は取込候補のメール詳細で行う。
+ * 有効/無効・判定順・削除と、編集ダイアログ(プレビュー無し)。新規作成は取込候補のメール詳細で行う。
  */
 interface Props {
   rules: MailImportRule[];
-  /** mail_box_id → アドレス(表示用) */
-  boxAddresses: Record<number, string>;
+  /** 受信箱(編集ダイアログの選択肢。「その他」は除く) */
+  boxes: Array<{ id: number; address: string }>;
+  /** 問合せオブジェクトの項目(編集ダイアログの「入れる項目」の選択肢) */
+  inquiryFields: InquiryFieldOption[];
 }
 
-export function ImportRuleList({ rules, boxAddresses }: Props) {
+export function ImportRuleList({ rules, boxes, inquiryFields }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<MailImportRule | null>(null);
+  const boxAddresses: Record<number, string> = Object.fromEntries(
+    boxes.map((b) => [b.id, b.address]),
+  );
 
   const run = (fn: () => Promise<{ error?: string }>) => {
     setError(null);
@@ -88,7 +100,17 @@ export function ImportRuleList({ rules, boxAddresses }: Props) {
                   <div>受信箱: {boxAddresses[r.mail_box_id] ?? r.mail_box_id}</div>
                 )}
                 {r.from_address && <div>差出人: {r.from_address}</div>}
-                {r.subject_contains && <div>件名に「{r.subject_contains}」</div>}
+                {subjectKeywords(r.subject_contains).length > 0 && (
+                  <div>
+                    件名にキーワード:{' '}
+                    {subjectKeywords(r.subject_contains).map((k) => (
+                      <span key={k} className="mr-1 rounded bg-muted px-1 py-0.5">
+                        {k}
+                      </span>
+                    ))}
+                    <span className="text-[10px]">(すべて含む)</span>
+                  </div>
+                )}
                 {r.mail_box_id === null && !r.from_address && !r.subject_contains && (
                   <div>(条件なし)</div>
                 )}
@@ -115,11 +137,23 @@ export function ImportRuleList({ rules, boxAddresses }: Props) {
                   aria-label="有効"
                 />
               </td>
-              <td className="px-3 py-2 text-right">
+              <td className="whitespace-nowrap px-3 py-2 text-right">
                 <Button
                   variant="ghost"
                   size="sm"
                   disabled={pending}
+                  aria-label="編集"
+                  title="編集"
+                  onClick={() => setEditing(r)}
+                >
+                  <Pencil className="h-4 w-4" aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={pending}
+                  aria-label="削除"
+                  title="削除"
                   onClick={() => {
                     if (window.confirm(`ルール「${r.name}」を削除します。よろしいですか?`)) {
                       run(() => deleteMailImportRule(r.id));
@@ -133,6 +167,15 @@ export function ImportRuleList({ rules, boxAddresses }: Props) {
           ))}
         </tbody>
       </table>
+      {editing && (
+        <ImportRuleEditDialog
+          key={editing.id}
+          rule={editing}
+          boxes={boxes}
+          inquiryFields={inquiryFields}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }
