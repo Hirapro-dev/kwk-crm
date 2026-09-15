@@ -3,6 +3,8 @@ import {
   type MailImportRule,
   applyRule,
   findMatchingRule,
+  guessFieldTarget,
+  guessFormLabel,
   htmlToText,
   normalizeFieldMap,
   parseJstDateTime,
@@ -267,5 +269,27 @@ describe('ruleMatches / findMatchingRule', () => {
     const b = rule({ id: 2, sort_order: 100, name: 'b' });
     expect(findMatchingRule([a, b], msg)?.name).toBe('b');
     expect(findMatchingRule([rule({ subject_contains: 'なし' })], msg)).toBeNull();
+  });
+});
+
+describe('guessFieldTarget / guessFormLabel(新規ルールの初期割当て)', () => {
+  const extras = new Set(['extra:年収']);
+  it('ラベル名から問合せの項目を推定する。ふりがな・フリガナ・カナは氏名ではなく氏名(カナ)', () => {
+    expect(guessFieldTarget('お名前(姓・名)', extras)).toBe('name');
+    expect(guessFieldTarget('お名前ふりがな', extras)).toBe('name_kana');
+    expect(guessFieldTarget('フリガナ', extras)).toBe('name_kana');
+    expect(guessFieldTarget('氏名カナ', extras)).toBe('name_kana');
+    expect(guessFieldTarget('メールアドレス', extras)).toBe('email');
+    expect(guessFieldTarget('電話番号', extras)).toBe('phone');
+    expect(guessFieldTarget('登録日時', extras)).toBe('registered_at');
+    expect(guessFieldTarget('年収', extras)).toBe('extra:年収');
+    expect(guessFieldTarget('IPアドレス', extras)).toBe('');
+  });
+  it('本文に「フォーム名」「フォーム」のラベルがあれば、それをフォーム名の取り元にする', () => {
+    expect(guessFormLabel(['登録日時', 'フォームID', 'フォーム名', 'お名前'])).toBe('フォーム名');
+    expect(guessFormLabel(['フォーム', 'お名前'])).toBe('フォーム');
+    // 「フォームID」だけではフォーム名にしない
+    expect(guessFormLabel(['フォームID', 'お名前'])).toBeNull();
+    expect(guessFormLabel([])).toBeNull();
   });
 });

@@ -19,7 +19,15 @@ export interface InquiryFieldOption {
   is_in_db: boolean;
 }
 
+/**
+ * 割り当て先「フォーム」の値。field_map には保存せず、選ぶと「フォーム名の取り方」を
+ * 「本文のラベルの値」(body_label)+そのラベルに切り替える(問合せの form_id に入る)。
+ */
+export const FORM_TARGET = 'form';
+
 export interface TargetOptions {
+  /** 問合せの「フォーム」(form_id)の表示名 */
+  formLabel: string;
   columns: Array<{ value: FieldColumn; label: string }>;
   extras: Array<{ value: string; label: string }>;
   extraKeys: Set<string>;
@@ -38,11 +46,17 @@ export function buildTargetOptions(inquiryFields: InquiryFieldOption[]): TargetO
   const extras = inquiryFields
     .filter((f) => !f.is_in_db)
     .map((f) => ({ value: `extra:${f.field_name}`, label: f.label ?? f.field_name }));
-  return { columns, extras, extraKeys: new Set(extras.map((e) => e.value)) };
+  return {
+    formLabel: labelByColumn.get('form_id') ?? 'フォーム',
+    columns,
+    extras,
+    extraKeys: new Set(extras.map((e) => e.value)),
+  };
 }
 
 /** 割り当て先(value)の表示名 */
 export function targetLabel(options: TargetOptions, target: string): string {
+  if (target === FORM_TARGET) return options.formLabel;
   const col = options.columns.find((c) => c.value === target);
   if (col) return col.label;
   const ex = options.extras.find((e) => e.value === target);
@@ -68,6 +82,7 @@ export function ImportRuleTargetSelect({ label, value, onChange, options, disabl
   const showNewExtra = !options.extraKeys.has(newExtra);
   const unknownCurrent =
     value !== '' &&
+    value !== FORM_TARGET &&
     value !== newExtra &&
     !options.columns.some((c) => c.value === value) &&
     !options.extraKeys.has(value);
@@ -80,6 +95,7 @@ export function ImportRuleTargetSelect({ label, value, onChange, options, disabl
     >
       <option value="">(入れない)</option>
       <optgroup label="問合せの項目">
+        <option value={FORM_TARGET}>{options.formLabel}</option>
         {options.columns.map((c) => (
           <option key={c.value} value={c.value}>
             {c.label}
