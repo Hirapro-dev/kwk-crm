@@ -131,8 +131,18 @@ export function subjectWithoutName(subject: string): string {
   if (LATIN_WORD.test(tokens[start] ?? '')) {
     while (start - 1 > 0 && LATIN_WORD.test(tokens[start - 1] ?? '')) start--;
   }
+  // 「【…】オオシマ 様」のように氏名が「】」の直後に空白なしで続く件名では、
+  // 語ごと落とさず「】」までを残す(先頭の語が丸ごと消える不具合の防止)
+  const nameToken = tokens[start] ?? '';
+  const bracketEnd = nameToken.lastIndexOf('】');
+  const head = bracketEnd >= 0 ? [nameToken.slice(0, bracketEnd + 1)] : [];
   const rest = (tokens[i] ?? '').slice(1); // 「様」の後ろ(例: "（キオクシア）")
-  const kept = [...tokens.slice(0, start), ...(rest ? [rest] : []), ...tokens.slice(i + 1)];
+  const kept = [
+    ...tokens.slice(0, start),
+    ...head,
+    ...(rest ? [rest] : []),
+    ...tokens.slice(i + 1),
+  ];
   let out = '';
   for (const t of kept) {
     if (out === '' || /^[（(]/.test(t)) out += t;
