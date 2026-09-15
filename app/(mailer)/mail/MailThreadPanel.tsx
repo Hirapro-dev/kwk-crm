@@ -251,11 +251,15 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
         );
       })}
 
-      {importRuleSample && (
+      {importRuleSample && lastInbound && (
         <MailImportRulePanel
           sample={importRuleSample}
           existingRule={matchingImportRule}
           isAdmin={me.role === 'admin'}
+          messageRowId={lastInbound.id}
+          importStatus={lastInbound.import_status ?? null}
+          importNote={lastInbound.import_note ?? null}
+          inquiryId={lastInbound.inquiry_id ?? null}
         />
       )}
 

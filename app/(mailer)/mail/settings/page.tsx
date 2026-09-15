@@ -31,6 +31,7 @@ import { DomainCard } from './DomainCard';
 import { ImportRuleList } from './ImportRuleList';
 import { MailBoxRow } from './MailBoxRow';
 import { NewMailBoxForm } from './NewMailBoxForm';
+import { ProcessCandidatesButton } from './ProcessCandidatesButton';
 import { ReassignOtherButton } from './ReassignOtherButton';
 
 export default async function MailSettingsPage() {
@@ -181,6 +182,9 @@ export default async function MailSettingsPage() {
         <div className="border-b px-4 py-2 text-xs text-muted-foreground">
           取込候補のメールを開くと出る「取込ルール」パネルで、そのメールを見本にルールを作成・編集します。
           ここでは判定順・有効/無効・削除だけを扱います。判定は上から順に行い、最初に一致したルールを使います。
+        </div>
+        <div className="border-b px-4 py-2">
+          <ProcessCandidatesButton />
         </div>
         <ImportRuleList
           rules={importRules}

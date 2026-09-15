@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { processMailMessageImport } from '@/lib/domain/mail_import_exec_actions';
 import { saveMailImportRule } from '@/lib/domain/mail_import_rule_actions';
 import {
   FIELD_COLUMNS,
@@ -40,6 +41,11 @@ interface Props {
   /** このメールに一致している既存ルール(無ければ null = 新規作成) */
   existingRule: MailImportRule | null;
   isAdmin: boolean;
+  /** 見本にしている受信メッセージ(mail_messages.id)と、その処理結果(§5.16 段階③) */
+  messageRowId: string;
+  importStatus: 'pending' | 'done' | 'error' | null;
+  importNote: string | null;
+  inquiryId: string | null;
 }
 
 /** ラベルの割り当て先の選択肢(未割当 / 各項目 / 可変項目=ラベル名をキーにする) */
@@ -68,10 +74,36 @@ function initialFieldMap(
   return guess;
 }
 
-export function MailImportRulePanel({ sample, existingRule, isAdmin }: Props) {
+export function MailImportRulePanel({
+  sample,
+  existingRule,
+  isAdmin,
+  messageRowId,
+  importStatus,
+  importNote,
+  inquiryId,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+
+  // 「このメールを処理」: 保存済みのルールで実際に問合せを作る(結果はメールに記録される)
+  const handleProcess = () => {
+    setMessage(null);
+    startTransition(async () => {
+      const r = await processMailMessageImport(messageRowId);
+      if (r.error) {
+        setMessage({ kind: 'error', text: r.error });
+        return;
+      }
+      const o = r.outcome;
+      setMessage({
+        kind: o?.status === 'error' ? 'error' : 'ok',
+        text: o ? `処理結果: ${o.note}` : '処理しました',
+      });
+      router.refresh();
+    });
+  };
 
   const parsed = useMemo(() => parseMailBody(sample.textBody, sample.htmlBody), [sample]);
   const labelNames = useMemo(() => Object.keys(parsed.labels), [parsed]);
@@ -154,6 +186,26 @@ export function MailImportRulePanel({ sample, existingRule, isAdmin }: Props) {
             ? `このメールに一致するルール「${existingRule.name}」を編集します。`
             : 'このメールに一致するルールはありません。このメールを見本に新しいルールを作ります。'}
           {!isAdmin && ' ルールの変更は管理者のみ行えます。'}
+        </p>
+        <p className="mt-1 text-xs">
+          <span className="text-muted-foreground">このメールの処理結果: </span>
+          {inquiryId ? (
+            <a
+              href={`/inquiries/${inquiryId}`}
+              className="sf-link"
+              target="_blank"
+              rel="noreferrer"
+            >
+              問合せ {inquiryId}
+            </a>
+          ) : importStatus === 'error' ? (
+            <span className="text-destructive">エラー</span>
+          ) : importStatus === 'pending' ? (
+            <span>ルール未一致</span>
+          ) : (
+            <span>未処理</span>
+          )}
+          {importNote && <span className="ml-1 text-muted-foreground">({importNote})</span>}
         </p>
       </CardHeader>
       <CardContent className="space-y-5 p-4 text-sm">
@@ -369,7 +421,17 @@ export function MailImportRulePanel({ sample, existingRule, isAdmin }: Props) {
           </p>
         )}
         {isAdmin && (
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            {existingRule && (
+              <Button
+                variant="outline"
+                onClick={handleProcess}
+                disabled={pending}
+                title="保存済みのルールでこのメールから問合せを作ります(既に作成済みなら何もしません)"
+              >
+                {pending ? '処理中…' : 'このメールを処理'}
+              </Button>
+            )}
             <Button onClick={handleSave} disabled={pending || labelNames.length === 0}>
               {pending ? '保存中…' : existingRule ? 'ルールを更新' : 'ルールを保存'}
             </Button>

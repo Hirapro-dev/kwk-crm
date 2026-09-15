@@ -23,6 +23,7 @@
  */
 
 import { isImportCandidate } from '@/lib/domain/mail_import_candidates';
+import { fetchMailImportRules, importMailMessage } from '@/lib/domain/mail_import_exec';
 import {
   classifyInbound,
   ensureMessageId,
@@ -389,6 +390,31 @@ export async function POST(request: Request): Promise<Response> {
     return json({ error: 'failed to store message' }, 500);
   }
   const messageRowId = (message as { id: string }).id;
+
+  // ---- 取込候補なら取込ルールを適用して問合せを作る(§5.16 段階③) ----
+  // 失敗しても受信自体は成功として扱う(処理結果はメールに記録され、後で一括実行し直せる)
+  if (importCandidate) {
+    try {
+      const rules = await fetchMailImportRules(supabase);
+      await importMailMessage(
+        supabase,
+        {
+          id: messageRowId,
+          message_id: messageId,
+          thread_id: threadId,
+          mail_box_id: box.id,
+          from_address: from.address || (parsed.from?.text ?? ''),
+          subject: parsed.subject ?? null,
+          text_body: parsed.text ?? null,
+          html_body: typeof parsed.html === 'string' ? parsed.html : null,
+          sent_at: sentAt,
+        },
+        rules,
+      );
+    } catch {
+      /* 取込候補の一覧・設定画面から再実行できるため、ここでは握りつぶす */
+    }
+  }
 
   // ---- 添付: 解析結果の Buffer をそのまま Storage へ保存 ----
   let savedAttachments = 0;
