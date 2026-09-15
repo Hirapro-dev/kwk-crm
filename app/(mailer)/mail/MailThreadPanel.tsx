@@ -11,8 +11,14 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
-import { getMailAttachmentSignedUrl, getMailThread, listMailBoxes } from '@/lib/domain/mail';
+import {
+  getMailAttachmentSignedUrl,
+  getMailThread,
+  listMailBoxes,
+  listMailImportRules,
+} from '@/lib/domain/mail';
 import { splitOtherMailBox } from '@/lib/domain/mail_folders';
+import { findMatchingRule } from '@/lib/domain/mail_import_rules';
 import { buildQuotedBody } from '@/lib/domain/mail_text';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import { getMailAwsConfig } from '@/lib/mail/aws';
@@ -21,6 +27,7 @@ import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { MailBodyViewer } from './MailBodyViewer';
+import { MailImportRulePanel } from './MailImportRulePanel';
 import { MailReplyForm } from './MailReplyForm';
 import { MailThreadControls } from './MailThreadControls';
 import { MarkThreadRead } from './MarkThreadRead';
@@ -94,6 +101,27 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
   );
   // 返信本文に最初から入れる引用(直近の受信メール。HTML しか無ければテキスト化)
   const initialQuote = lastInbound ? buildQuotedBody(lastInbound) : '';
+
+  // 取込候補から開いたとき(showReply=false)は、返信の代わりに取込ルール(§5.16)のパネルを出す。
+  // このメールに一致するルールがあれば編集、無ければ新規作成になる。
+  const importRuleSample =
+    !showReply && lastInbound
+      ? {
+          mailBoxId: thread.mail_box_id,
+          mailBoxAddress: thread.mail_box?.address ?? null,
+          fromAddress: lastInbound.from_address,
+          subject: lastInbound.subject ?? thread.subject ?? '',
+          textBody: lastInbound.text_body,
+          htmlBody: lastInbound.html_body,
+        }
+      : null;
+  const matchingImportRule = importRuleSample
+    ? findMatchingRule(await listMailImportRules(), {
+        mailBoxId: importRuleSample.mailBoxId,
+        fromAddress: importRuleSample.fromAddress,
+        subject: importRuleSample.subject,
+      })
+    : null;
 
   // 添付の署名 URL をまとめて発行
   const signedUrls = new Map<string, string>();
@@ -222,6 +250,14 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
           </Card>
         );
       })}
+
+      {importRuleSample && (
+        <MailImportRulePanel
+          sample={importRuleSample}
+          existingRule={matchingImportRule}
+          isAdmin={me.role === 'admin'}
+        />
+      )}
 
       {canEdit && showReply && (
         <MailReplyForm

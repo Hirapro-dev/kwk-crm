@@ -9,6 +9,7 @@
 
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import type { MailBoxCount } from './mail_folders';
+import type { MailImportRule } from './mail_import_rules';
 import type {
   MailBox,
   MailMessage,
@@ -275,4 +276,21 @@ export async function listMyMailBoxPins(): Promise<number[]> {
   // mail_box_pins は生成済みの DB 型に無いため、行の形を明示する
   const rows = (data ?? []) as unknown as Array<{ mail_box_id: number }>;
   return rows.map((r) => Number(r.mail_box_id));
+}
+
+/**
+ * メール取込ルール(§5.16 / migration 87)の一覧。判定順(sort_order → id)。
+ * テーブル未適用なら空配列(画面を壊さない)。
+ */
+export async function listMailImportRules(): Promise<MailImportRule[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('mail_import_rules')
+    .select(
+      'id, name, is_active, sort_order, mail_box_id, from_address, subject_contains, form_name_source, form_name_param, field_map',
+    )
+    .order('sort_order', { ascending: true })
+    .order('id', { ascending: true });
+  if (error) return [];
+  return (data ?? []) as unknown as MailImportRule[];
 }
