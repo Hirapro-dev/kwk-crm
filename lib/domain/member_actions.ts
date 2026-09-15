@@ -1,6 +1,7 @@
 'use server';
 
 import { getCurrentUser } from '@/lib/domain/auth';
+import { mergeMemberExtra } from '@/lib/domain/member_extra_edit';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
@@ -54,13 +55,18 @@ export interface UpdateMemberInput {
   protect_by_user_id?: string | null;
   /** プロテクト期限 (YYYY-MM-DD または ISO)。空文字/null で無期限解除。admin のみ変更可。 */
   protect_expires_at?: string | null;
+  /**
+   * extra(jsonb)のうち編集を許可するキー(電話番号2・3。EDITABLE_MEMBER_EXTRA_KEYS)の値。
+   * 空文字/null でそのキーを削除。他のキーは触らない。
+   */
+  extra?: Record<string, string | null | undefined>;
   /** その他の会員カラム(ホワイトリストで検証)。 */
   [key: string]: unknown;
 }
 
 export async function updateMember(input: UpdateMemberInput): Promise<{ error?: string }> {
   const supabase = await createClient();
-  const { id, protect_by_user_id, protect_expires_at, ...fields } = input;
+  const { id, protect_by_user_id, protect_expires_at, extra: extraEdits, ...fields } = input;
   const hasProtectFields = 'protect_by_user_id' in input || 'protect_expires_at' in input;
 
   // ホワイトリストのカラムのみ反映。空文字は null に変換。
@@ -102,6 +108,23 @@ export async function updateMember(input: UpdateMemberInput): Promise<{ error?: 
     if ('protect_expires_at' in input && !cleared) {
       cleaned.protect_expires_at = protect_expires_at?.trim() ? protect_expires_at.trim() : null;
     }
+  }
+
+  // --- extra(jsonb)の許可キー(電話番号2・3)は、現在の extra に差し込んで丸ごと書き戻す ---
+  // (他のキー(累計入金額・各案件利用額など)を壊さないため、ホワイトリストのキーだけ差し替える)
+  if (extraEdits && Object.keys(extraEdits).length > 0) {
+    const { data: current, error: readError } = await supabase
+      .from('members')
+      .select('extra')
+      .eq('id', id)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (readError) return { error: readError.message };
+    if (!current) return { error: '会員が見つかりません' };
+    cleaned.extra = mergeMemberExtra(
+      (current.extra as Record<string, unknown> | null) ?? null,
+      extraEdits,
+    );
   }
 
   const { error } = await supabase

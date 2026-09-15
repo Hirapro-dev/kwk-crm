@@ -341,7 +341,11 @@ erDiagram
 - `xels_insider_joined_at` date nullable — XELSインサイダークラブ入会日 (2026-07 追加, migration 56。extract.csv から取込)
 - `sct_insider_joined_at` date nullable — SCTインサイダークラブ入会日 (2026-07 追加, migration 56。extract.csv から取込)
 - `remarks` text nullable — 備考 (2026-07 追加, migration 70。extract.csv から会員IDで突合して取込。複数行テキスト。会員詳細で全ロールがインライン編集可能: SECURITY DEFINER RPC `update_member_remarks`, migration 71。詳細画面では2列分の全幅表示)
-- `extra` jsonb default `'{}'::jsonb` — 案件別利用額の参考保持(縦持ち化後は不要だが移行時の証跡として残す)
+- `extra` jsonb default `'{}'::jsonb` — 案件別利用額の参考保持(縦持ち化後は不要だが移行時の証跡として残す)。
+  電話番号2・3 も DB カラムではなく extra のキー(`電話番号2` / `電話番号3`。field_definitions は is_in_db=false)として
+  CSV から取り込まれる。会員詳細の編集ダイアログ(`MemberEditDialog`)ではこの2キーだけ編集できる
+  (2026-09-15 追加。ホワイトリスト `EDITABLE_MEMBER_EXTRA_KEYS`、`lib/domain/member_extra_edit.ts`。
+  `updateMember` が現在の extra に差し込んで書き戻し、他のキーは触らない。空にしたキーは削除)
 - `created_at`, `updated_at`, `deleted_at` timestamptz
 
 ### 5.5 projects (案件マスタ)
