@@ -292,6 +292,8 @@ erDiagram
 - `ad_id` text
 - `extra` jsonb default `'{}'::jsonb` — フォーム固有項目(不安要素フラグ、暗号資産保有、ADA詳細など)
 - `registered_at` timestamptz not null — 元の登録日時
+- `source_mail_message_id` text unique nullable — メール取込(§5.16)で作った問合せの元メール。1メール1件の冪等キー(2026-09 追加予定)
+- `member_match` jsonb nullable — 会員の自動照合結果(§5.16。auto / candidates / none / manual)(2026-09 追加予定)
 - `created_at`, `updated_at`, `deleted_at` timestamptz
 - ※ `extra` 内の「備考」キーは問合せ詳細で全ロールがインライン編集可能 (SECURITY DEFINER RPC `update_inquiry_remarks`, migration 72。会員の備考/migration 71 と同方式)
 
@@ -727,6 +729,63 @@ Vercel では `AWS_*` が予約名のため `MAIL_` 接頭辞を付け、SDK ク
 **段階**: M1 受信箱(受信・スレッド・会員突合・担当/ステータス) → M2 送信(返信・新規・配信状態・`/mail/settings` での受信箱管理と送信ドメインの SES 登録) →
 M3 CRM 連携(受信/送信を対応歴 `d_bunrui=メール` に自動記録、会員詳細「メール」タブ、定型文、添付送信、スレッド結合)。
 M3 の対応歴自動記録の要否は M2 完了後に判断。
+
+### 5.16 メール取込ルール(メール → 問合せ) ★2026-09-15 追加(設計承認待ち → 承認後に migration)
+**目的**: メーラーの「取込候補」(§5.15)に溜まるフォーム通知メール(例: 【未来予測分析レポート請求】本人確認完了)から
+**問合せ(TA-)を自動作成**し、Salesforce の「メール to リード」→ CSV 定期取込(§5.10c)の経路を置き換える。
+1メール = 1問合せ。取込先は問合せのみ(新しいリードオブジェクトは作らない。リード一覧 = 問合せ一覧の絞り込み)。
+
+**業務の流れ**(2026-09-15 ユーザー確認済み):
+1. メールが取込候補に溜まる → ルールで項目を切り出し、問合せを1件作る(フォーム名・氏名・電話・メール・住所・登録日時・可変項目)
+2. 問合せ一覧(リード一覧)を表形式で精査する。重複申請はここで削除(§5.14 の一括削除)
+3. 既存会員を**自動照合**(下記)。3点以上一致は自動で紐付け、それ以外は目視確認
+4. 一致しないものは電話番号・メールアドレスで目視確認し、会員がいなければ「新規会員登録」で会員を作る(K- 採番)
+
+**テーブル**:
+- `mail_import_rules` — `id` serial PK / `name` text / `is_active` boolean / `sort_order` int(判定順) /
+  一致条件: `mail_box_id` int FK → mail_boxes nullable(受信箱で絞る) / `from_address` text nullable(差出人の完全一致、小文字) /
+  `subject_contains` text nullable(件名に含む文字列) /
+  フォーム名の取り方: `form_name_source` text check in (`subject`=件名そのまま, `subject_without_name`=件名から「○○ 様」を除く,
+  `body_line`=本文のN行目(空行は数えない), `body_label`=本文の「ラベル: 値」の値, `fixed`=固定文字列) / `form_name_param` text(行番号・ラベル・固定文字列) /
+  `field_map` jsonb(本文のラベル → 問合せ項目。例 `{"お名前":"name","メールアドレス":"email","電話番号":"phone","住所":"address",
+  "完了日時":"registered_at","対象銘柄":"extra:対象銘柄","流入元":"extra:流入元"}`。値は `name` / `name_kana` / `email` / `phone` /
+  `postal_code` / `address` / `ad_id` / `registered_at` / `extra:<キー>` のいずれか。ホワイトリストで検証) /
+  `created_at`, `updated_at`。RLS: 全員 SELECT、admin のみ書込。
+- `inquiries` に列追加: `source_mail_message_id` text unique nullable(元メールの `mail_messages.message_id`。**1メール1件の冪等キー**) /
+  `member_match` jsonb nullable(自動照合の結果。`{"status":"auto"|"candidates"|"none"|"manual","points":3,"candidates":["K-…"],"checked_at":"…"}`)。
+- `mail_messages` に列追加: `import_status` text check in (`pending`, `done`, `error`) nullable(取込候補のみ使う) /
+  `import_note` text(問合せID / 既存に紐付け / ルール未一致 / エラー内容)。取込候補の一覧に「処理結果」列として出す。
+
+**決定論的ルール**(コードで実装。純粋関数 `lib/domain/mail_import_rules.ts` に置き、ユニットテストで固定):
+- ルール判定: 取込候補のメッセージに対し、`sort_order` 順に条件(受信箱・差出人・件名含有)がすべて一致した**最初の1件**を適用。無ければ `import_status='pending'`、note「ルール未一致」で候補に残す。
+- 本文の解析: `text_body`(無ければ `html_body` をテキスト化)を行に分け、「ラベル: 値」(半角/全角コロン)を辞書にする。
+  `field_map` のラベルがある項目だけ取り込む。日時「2026/9/15 9:42:03」は日本時間として解釈。電話は数字のみ(先頭の 0 は残す)。メールは小文字化。
+- フォーム名: `form_name_source` で決め、`forms` を名前で**非破壊**解決(無ければ追加。CSV 取込 `import_inquiries.ts` と同方式)。取れなければ `error`(勝手に別名を付けない)。
+- 重複防止: (1) `source_mail_message_id` 一意で同じメールから二重に作らない。(2) Salesforce 併用期間: **同じ form_id・同じメール(小文字)・同じ登録日(日本時間)**の
+  問合せが既にあれば新規作成せず、そのメールを既存問合せに紐付ける(`done`、note「既存 TA-… に紐付け」)。
+- 会員照合(自動): 氏名(空白除去・全角半角統一)/ 電話(数字のみ・先頭 0 を除く)/ メール(小文字)/ 住所(空白除去・全角半角統一)の
+  4点を削除済み以外の `members` と比較。**3点以上一致 → `member_id` を設定し `status='auto'`**。1〜2点 → `candidates`(候補 ID を保持、`member_id` は未設定)。
+  0点 → `none`。3点以上一致する会員が複数なら自動では紐付けず `candidates`。あいまい一致(部分一致)はしない(§5.15 と同方針)。
+- 実行タイミング: 受信 Webhook で候補判定の直後に実行。過去分・未処理分は `/mail/settings` の「候補を処理」(admin)で一括実行。
+
+**画面**:
+- **ルールの設定はメールの詳細から行う**(2026-09-15 決定): 取込候補からメールスレッド(`/mail/[id]?folder=candidates`)を開くと
+  「取込ルール」パネルを出す(admin)。そのメールを見本にして、件名・本文の行・本文の「ラベル: 値」を画面上で選びながら、
+  一致条件(受信箱・差出人は自動で埋める。件名に含む文字を指定)/ フォーム名の取り方 / ラベル → 問合せ項目の対応 を設定し、
+  **同じ画面でプレビュー**(切り出した項目・フォーム名・照合結果。書込みなし)を確認して保存する。
+  一致するルールが既にあるメールでは、そのルールの内容と処理結果を表示し、編集・「このメールを処理」ができる。
+- `/mail/settings`: ルールの一覧(有効/無効・判定順の変更・削除。admin)。新規作成はメール詳細から行う。
+- 取込候補(`/mail?folder=candidates`)の一覧に「処理結果」列(問合せID へのリンク / ルール未一致 / エラー)。
+- `/inquiries`: 絞り込み「メール取込分」を追加。行の操作 **①会員検索**(照合結果と候補の表示。氏名/電話/メールの手動検索から選んで紐付け)
+  **②新規会員登録**(既存の会員化=新規作成を流用。氏名・電話・メール・住所を引き継ぐ) **③確認済み**(`member_match.status='manual'`。列に表示)。
+
+**会員IDの採番**(2026-09-15 決定): 新規会員は **K- 形式(9桁ゼロ埋め)で統一**する。DB の連番 `members_id_seq` と関数 `gen_member_id()`
+(`'K-' || lpad(nextval, 9, '0')`。`gen_ta_id()` と同方式)を追加し、会員化の新規作成(`convertInquiryToMember`)はこれで採番する
+(2026-05 の UUID 採番方針を変更。既存の UUID 会員はそのまま)。開始番号は **100000(K-000100000)**: Salesforce 併用中は
+Salesforce も 2 万台の K- を振り続けるため、離れた番号帯にして CSV 取込時の衝突(別人の上書き)を避ける。
+
+**段階**: ① `gen_member_id()` と会員化の採番変更 → ② ルール定義(テーブル・設定画面・本文解析・プレビュー)
+→ ③ 自動作成(重複防止・会員照合・受信時実行・一括実行・取込候補の処理結果)→ ④ 問合せ一覧のリード操作(絞り込み・会員検索・新規会員登録・確認済み)。
 
 ---
 
