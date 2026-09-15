@@ -9,7 +9,7 @@
 
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import type { MailBoxCount } from './mail_folders';
-import type { MailImportRule } from './mail_import_rules';
+import { type MailImportRule, findMatchingRule } from './mail_import_rules';
 import type {
   MailBox,
   MailMessage,
@@ -135,16 +135,19 @@ export async function listMailThreads(
     const { data: msgs } = await supabase
       .from('mail_messages')
       .select(
-        'thread_id, from_address, from_name, sent_at, direction, import_status, import_note, inquiry_id',
+        'thread_id, from_address, from_name, subject, sent_at, direction, import_status, import_note, inquiry_id',
       )
       .in('thread_id', ids)
       .eq('direction', 'in')
       .order('sent_at', { ascending: false });
+    // 取込候補の一覧では、各メールがどのルールに一致するかも出す(判定は純粋関数 findMatchingRule)
+    const rules = params.importCandidate ? await listMailImportRules() : [];
     const seen = new Set<string>();
     for (const m of (msgs ?? []) as Array<{
       thread_id: string;
       from_address: string;
       from_name: string | null;
+      subject: string | null;
       import_status: 'pending' | 'done' | 'error' | null;
       import_note: string | null;
       inquiry_id: string | null;
@@ -158,6 +161,14 @@ export async function listMailThreads(
         row.last_import_status = m.import_status ?? null;
         row.last_import_note = m.import_note ?? null;
         row.last_inquiry_id = m.inquiry_id ?? null;
+        if (params.importCandidate) {
+          const rule = findMatchingRule(rules, {
+            mailBoxId: row.mail_box_id,
+            fromAddress: m.from_address,
+            subject: m.subject ?? '',
+          });
+          row.last_import_rule = rule ? { id: rule.id, name: rule.name } : null;
+        }
       }
     }
   }
