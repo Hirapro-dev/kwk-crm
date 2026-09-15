@@ -39,6 +39,7 @@ function rule(over: Partial<MailImportRule> = {}): MailImportRule {
     mail_box_id: null,
     from_address: null,
     subject_contains: '【未来予測分析レポート請求】本人確認完了',
+    body_contains: null,
     form_name_source: 'body_line',
     form_name_param: '1',
     field_map: {
@@ -231,6 +232,35 @@ describe('ruleMatches / findMatchingRule', () => {
     expect(ruleMatches(rule({ subject_contains: '本人確認完了 kioxia' }), msg)).toBe(false);
     // 件名が無いメールはキーワード条件のあるルールに一致しない
     expect(ruleMatches(rule(), { ...msg, subject: null })).toBe(false);
+  });
+  it('本文キーワード(空白区切り・すべて含む)でも絞れる。本文が無いメールは一致しない', () => {
+    // 「受信データ」と「本人確認完了」の区別は件名に無く本文1行目にしかないため(2026-09-15 追加, migration 90)
+    const withBody = {
+      ...msg,
+      subject: '【Google広告経由】【未来予測分析レポート請求】オオシマ 様',
+      textBody: BODY,
+    };
+    const base = { subject_contains: '【未来予測分析レポート請求】' };
+    expect(ruleMatches(rule({ ...base, body_contains: '本人確認完了' }), withBody)).toBe(true);
+    expect(ruleMatches(rule({ ...base, body_contains: '本人確認完了 kioxia' }), withBody)).toBe(
+      true,
+    );
+    expect(ruleMatches(rule({ ...base, body_contains: '受信データ' }), withBody)).toBe(false);
+    // 本文を渡さない・空のメールは、本文条件のあるルールに一致しない
+    expect(ruleMatches(rule({ ...base, body_contains: '本人確認完了' }), msg)).toBe(false);
+    expect(
+      ruleMatches(rule({ ...base, body_contains: '本人確認完了' }), { ...withBody, textBody: '' }),
+    ).toBe(false);
+    // HTML しか無いメールはテキスト化して判定する
+    expect(
+      ruleMatches(rule({ ...base, body_contains: '本人確認完了' }), {
+        ...msg,
+        textBody: null,
+        htmlBody: '<p>【未来予測分析レポート請求】本人確認完了（kioxia）</p>',
+      }),
+    ).toBe(true);
+    // 本文条件が空(null / 空白)なら本文は見ない
+    expect(ruleMatches(rule({ ...base, body_contains: '  ' }), msg)).toBe(true);
   });
   it('判定順(sort_order → id)で最初に一致したルールを返す', () => {
     const a = rule({ id: 1, sort_order: 200, name: 'a' });

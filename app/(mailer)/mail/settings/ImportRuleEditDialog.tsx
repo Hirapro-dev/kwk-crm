@@ -54,6 +54,7 @@ export function ImportRuleEditDialog({ rule, boxes, inquiryFields, onClose }: Pr
   );
   const [fromAddress, setFromAddress] = useState(rule.from_address ?? '');
   const [subjectContains, setSubjectContains] = useState(rule.subject_contains ?? '');
+  const [bodyContains, setBodyContains] = useState(rule.body_contains ?? '');
   const [source, setSource] = useState<FormNameSource>(rule.form_name_source);
   const [param, setParam] = useState(rule.form_name_param ?? '');
   // ラベルの並びを保つため配列で持つ(オブジェクトのキー順に頼らない)
@@ -63,6 +64,7 @@ export function ImportRuleEditDialog({ rule, boxes, inquiryFields, onClose }: Pr
   const [newLabel, setNewLabel] = useState('');
 
   const keywords = subjectKeywords(subjectContains);
+  const bodyKeywords = subjectKeywords(bodyContains);
 
   const setTarget = (i: number, target: string) =>
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, target } : r)));
@@ -86,6 +88,7 @@ export function ImportRuleEditDialog({ rule, boxes, inquiryFields, onClose }: Pr
         mailBoxId: mailBoxId === '' ? null : Number(mailBoxId),
         fromAddress: fromAddress.trim() || null,
         subjectContains: subjectContains.trim() || null,
+        bodyContains: bodyContains.trim() || null,
         formNameSource: source,
         formNameParam: param,
         fieldMap,
@@ -151,6 +154,21 @@ export function ImportRuleEditDialog({ rule, boxes, inquiryFields, onClose }: Pr
                   {keywords.length > 0
                     ? `${keywords.map((k) => `「${k}」`).join('')} をすべて含む件名に一致(語順は問いません)`
                     : '例: 「本人確認完了 kioxia Google広告経由」'}
+                </p>
+              </div>
+              <div className="space-y-1 sm:col-start-2">
+                <Label className="text-xs text-muted-foreground">
+                  本文に含むキーワード(空白区切り)
+                </Label>
+                <Input
+                  value={bodyContains}
+                  onChange={(e) => setBodyContains(e.target.value)}
+                  placeholder="空欄なら本文で絞らない"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {bodyKeywords.length > 0
+                    ? `${bodyKeywords.map((k) => `「${k}」`).join('')} をすべて含む本文に一致`
+                    : '件名で区別できない型を分けるときに使います(例: 「受信データ」)'}
                 </p>
               </div>
             </div>

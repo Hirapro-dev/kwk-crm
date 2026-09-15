@@ -48,7 +48,7 @@ export async function fetchMailImportRules(supabase: SupabaseClient): Promise<Ma
   const { data, error } = await supabase
     .from('mail_import_rules')
     .select(
-      'id, name, is_active, sort_order, mail_box_id, from_address, subject_contains, form_name_source, form_name_param, field_map',
+      'id, name, is_active, sort_order, mail_box_id, from_address, subject_contains, body_contains, form_name_source, form_name_param, field_map',
     )
     .order('sort_order', { ascending: true })
     .order('id', { ascending: true });
@@ -115,6 +115,8 @@ export async function importMailMessage(
     mailBoxId: msg.mail_box_id,
     fromAddress: msg.from_address,
     subject: msg.subject,
+    textBody: msg.text_body,
+    htmlBody: msg.html_body,
   });
   if (!rule) {
     return recordOutcome(supabase, msg, {

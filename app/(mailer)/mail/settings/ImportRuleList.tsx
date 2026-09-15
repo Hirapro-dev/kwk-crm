@@ -111,9 +111,21 @@ export function ImportRuleList({ rules, boxes, inquiryFields }: Props) {
                     <span className="text-[10px]">(すべて含む)</span>
                   </div>
                 )}
-                {r.mail_box_id === null && !r.from_address && !r.subject_contains && (
-                  <div>(条件なし)</div>
+                {subjectKeywords(r.body_contains).length > 0 && (
+                  <div>
+                    本文にキーワード:{' '}
+                    {subjectKeywords(r.body_contains).map((k) => (
+                      <span key={k} className="mr-1 rounded bg-muted px-1 py-0.5">
+                        {k}
+                      </span>
+                    ))}
+                    <span className="text-[10px]">(すべて含む)</span>
+                  </div>
                 )}
+                {r.mail_box_id === null &&
+                  !r.from_address &&
+                  !r.subject_contains &&
+                  !r.body_contains && <div>(条件なし)</div>}
               </td>
               <td className="px-3 py-2 text-xs">
                 {FORM_NAME_SOURCE_LABELS[r.form_name_source]}

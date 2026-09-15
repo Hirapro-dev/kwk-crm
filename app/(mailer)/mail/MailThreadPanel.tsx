@@ -121,6 +121,8 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
         mailBoxId: importRuleSample.mailBoxId,
         fromAddress: importRuleSample.fromAddress,
         subject: importRuleSample.subject,
+        textBody: importRuleSample.textBody,
+        htmlBody: importRuleSample.htmlBody,
       })
     : null;
   // 「入れる項目」の選択肢: 問合せの全項目(項目管理の定義。空白セルは除く)

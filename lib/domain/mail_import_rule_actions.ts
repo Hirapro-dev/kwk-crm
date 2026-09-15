@@ -27,6 +27,8 @@ export interface SaveMailImportRuleInput {
   mailBoxId: number | null;
   fromAddress: string | null;
   subjectContains: string | null;
+  /** 本文に含むキーワード(空白区切り。migration 90) */
+  bodyContains?: string | null;
   formNameSource: string;
   formNameParam: string | null;
   fieldMap: Record<string, string>;
@@ -84,6 +86,7 @@ export async function saveMailImportRule(
     mail_box_id: mailBoxId,
     from_address: trimOrNull(input.fromAddress)?.toLowerCase() ?? null,
     subject_contains: trimOrNull(input.subjectContains),
+    body_contains: trimOrNull(input.bodyContains),
     form_name_source: source,
     form_name_param: source === 'subject' || source === 'subject_without_name' ? null : param,
     field_map: fieldMap,

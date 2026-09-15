@@ -15,6 +15,7 @@ import {
   type MailImportRule,
   applyRule,
   parseMailBody,
+  ruleMatches,
   subjectWithoutName,
 } from '@/lib/domain/mail_import_rules';
 import { useRouter } from 'next/navigation';
@@ -112,6 +113,7 @@ export function MailImportRulePanel({
   const [subjectContains, setSubjectContains] = useState(
     existingRule?.subject_contains ?? subjectWithoutName(sample.subject),
   );
+  const [bodyContains, setBodyContains] = useState(existingRule?.body_contains ?? '');
   const [source, setSource] = useState<FormNameSource>(
     existingRule?.form_name_source ?? 'body_line',
   );
@@ -127,6 +129,45 @@ export function MailImportRulePanel({
         { subject: sample.subject, textBody: sample.textBody, htmlBody: sample.htmlBody },
       ),
     [source, param, fieldMap, sample],
+  );
+
+  // 編集中の一致条件でこのメール自身が一致するか(保存前に条件の書き間違いに気づけるように)
+  const draftMatches = useMemo(
+    () =>
+      ruleMatches(
+        {
+          id: existingRule?.id ?? 0,
+          name,
+          is_active: true,
+          sort_order: 0,
+          mail_box_id: useMailBox ? sample.mailBoxId : null,
+          from_address: useFrom ? sample.fromAddress : null,
+          subject_contains: subjectContains,
+          body_contains: bodyContains,
+          form_name_source: source,
+          form_name_param: param,
+          field_map: fieldMap,
+        },
+        {
+          mailBoxId: sample.mailBoxId,
+          fromAddress: sample.fromAddress,
+          subject: sample.subject,
+          textBody: sample.textBody,
+          htmlBody: sample.htmlBody,
+        },
+      ),
+    [
+      existingRule,
+      name,
+      useMailBox,
+      useFrom,
+      subjectContains,
+      bodyContains,
+      source,
+      param,
+      fieldMap,
+      sample,
+    ],
   );
 
   const setTarget = (label: string, target: string) =>
@@ -165,6 +206,7 @@ export function MailImportRulePanel({
         mailBoxId: useMailBox ? sample.mailBoxId : null,
         fromAddress: useFrom ? sample.fromAddress : null,
         subjectContains,
+        bodyContains,
         formNameSource: source,
         formNameParam: param,
         fieldMap,
@@ -238,7 +280,27 @@ export function MailImportRulePanel({
                 kioxia Google広告経由」
               </p>
             </div>
+            <div className="space-y-1 sm:col-start-2">
+              <Label className="text-xs text-muted-foreground">
+                本文に含むキーワード(空白区切り)
+              </Label>
+              <Input
+                value={bodyContains}
+                onChange={(e) => setBodyContains(e.target.value)}
+                disabled={!isAdmin}
+                placeholder="空欄なら本文で絞らない"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                件名では区別できない型(例:
+                本文1行目だけが「受信データ」と「本人確認完了」で違う)を分けるときに使います
+              </p>
+            </div>
           </div>
+          <p className={draftMatches ? 'text-xs text-emerald-700' : 'text-xs text-destructive'}>
+            {draftMatches
+              ? 'この条件は、このメールに一致します。'
+              : 'この条件は、このメールに一致しません(キーワードを見直してください)。'}
+          </p>
           <div className="flex flex-wrap gap-4 text-xs">
             <label className="flex items-center gap-1.5">
               <input
