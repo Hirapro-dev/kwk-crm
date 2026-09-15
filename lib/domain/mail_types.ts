@@ -61,6 +61,10 @@ export interface MailThreadListItem {
   /** 一覧表示用: 最新の受信メッセージの差出人 */
   last_from_address?: string | null;
   last_from_name?: string | null;
+  /** 取込候補の一覧用: 最新の受信メッセージの処理結果(§5.16) */
+  last_import_status?: 'pending' | 'done' | 'error' | null;
+  last_import_note?: string | null;
+  last_inquiry_id?: string | null;
 }
 
 export interface MailAttachment {
@@ -91,6 +95,10 @@ export interface MailMessage {
   delivery_status: string | null;
   sender_user_id: string | null;
   source: MailSource;
+  /** 取込候補の処理結果(§5.16 / migration 88)。候補以外は null */
+  import_status?: 'pending' | 'done' | 'error' | null;
+  import_note?: string | null;
+  inquiry_id?: string | null;
   created_at: string;
   sender: { id: string; full_name: string | null } | null;
   attachments: MailAttachment[];

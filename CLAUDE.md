@@ -284,7 +284,8 @@ erDiagram
 - `is_active` boolean default true
 
 ### 5.3 inquiries (問合せ)
-- `id` text PK — `TA-XXXXXXX` 形式、未採番時は `gen_ta_id()` 関数で生成
+- `id` text PK — `TA-XXXXXXX` 形式(実データは 9 桁ゼロ埋め。例 `TA-000475044`)。メール取込(§5.16)で作る問合せは `gen_inquiry_id()`
+  (migration 88。TA-001000000 から)で採番する。`gen_ta_id()`(migration 03)は 7 桁形式のため使わない
 - `form_id` int FK → forms
 - `member_id` text FK → members (会員化済の場合)
 - `name`, `name_kana` text
@@ -753,8 +754,12 @@ M3 の対応歴自動記録の要否は M2 完了後に判断。
   `created_at`, `updated_at`。RLS: 全員 SELECT、admin のみ書込。
 - `inquiries` に列追加: `source_mail_message_id` text unique nullable(元メールの `mail_messages.message_id`。**1メール1件の冪等キー**) /
   `member_match` jsonb nullable(自動照合の結果。`{"status":"auto"|"candidates"|"none"|"manual","points":3,"candidates":["K-…"],"checked_at":"…"}`)。
-- `mail_messages` に列追加: `import_status` text check in (`pending`, `done`, `error`) nullable(取込候補のみ使う) /
-  `import_note` text(問合せID / 既存に紐付け / ルール未一致 / エラー内容)。取込候補の一覧に「処理結果」列として出す。
+- `mail_messages` に列追加(migration 88): `import_status` text check in (`pending`, `done`, `error`) nullable(取込候補のみ使う) /
+  `import_note` text(問合せID / 既存に紐付け / ルール未一致 / エラー内容)/ `inquiry_id` text FK → inquiries(作成・紐付けした問合せ)。
+  取込候補の一覧とメール詳細に「処理結果」として出す。
+- 問合せIDの採番: `gen_inquiry_id()`(migration 88。連番 `inquiries_id_seq`、`'TA-' || lpad(…, 9, '0')`)。既存の `gen_ta_id()`
+  (migration 03)は 7 桁形式で実データ(9 桁)に合わないため使わない。開始番号は **1000000(TA-001000000)**: Salesforce 併用中は
+  Salesforce も 47 万台の TA- を振り続けるため、離れた番号帯にする(会員IDの K-000100000 と同じ考え方)。
 
 **決定論的ルール**(コードで実装。純粋関数 `lib/domain/mail_import_rules.ts` に置き、ユニットテストで固定):
 - ルール判定: 取込候補のメッセージに対し、`sort_order` 順に条件(受信箱・差出人・件名含有)がすべて一致した**最初の1件**を適用。無ければ `import_status='pending'`、note「ルール未一致」で候補に残す。
@@ -766,7 +771,13 @@ M3 の対応歴自動記録の要否は M2 完了後に判断。
 - 会員照合(自動): 氏名(空白除去・全角半角統一)/ 電話(数字のみ・先頭 0 を除く)/ メール(小文字)/ 住所(空白除去・全角半角統一)の
   4点を削除済み以外の `members` と比較。**3点以上一致 → `member_id` を設定し `status='auto'`**。1〜2点 → `candidates`(候補 ID を保持、`member_id` は未設定)。
   0点 → `none`。3点以上一致する会員が複数なら自動では紐付けず `candidates`。あいまい一致(部分一致)はしない(§5.15 と同方針)。
-- 実行タイミング: 受信 Webhook で候補判定の直後に実行。過去分・未処理分は `/mail/settings` の「候補を処理」(admin)で一括実行。
+- 実行タイミング: 受信 Webhook で候補判定の直後に実行(失敗しても受信は成功扱い。結果はメールに記録)。
+  未処理分は `/mail/settings` の「候補を処理」(admin。1回 300 件)で、過去分の大量処理は
+  `scripts/mail/process_import_candidates.ts`(サービスロール)で一括実行。メール詳細の「このメールを処理」で1通ずつも可。
+  実行本体は `lib/domain/mail_import_exec.ts`(`importMailMessage` / `processCandidateBacklog`。DB とのやり取りだけで、判断は純粋関数)。
+  会員照合の比較は DB 関数 `match_members_for_inquiry()`(migration 88。正規化の規則はアプリ側 `normalizeMatchInput` と同じ)、
+  点数からの判定は純粋関数 `decideMemberMatch`(`lib/domain/mail_import_match.ts`)。自動紐付けした会員は、スレッドの会員が
+  未設定ならスレッドにも反映する。ルールを直した後に再処理したいメールは `import_status` を NULL に戻して実行し直す。
 
 **画面**:
 - **ルールの設定はメールの詳細から行う**(2026-09-15 決定): 取込候補からメールスレッド(`/mail/[id]?folder=candidates`)を開くと

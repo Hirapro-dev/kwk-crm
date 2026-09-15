@@ -46,6 +46,8 @@ export function MailInfinite({ initialRows, total, params, showBoxColumn, boxAdd
     { header: '状態', headClassName: 'w-28' },
     { header: '件名' },
     { header: 'From', headClassName: 'w-64' },
+    // 取込候補(§5.16)では、ルールで問合せを作った結果を出す
+    ...(params.importCandidate ? [{ header: '処理結果', headClassName: 'w-64' }] : []),
     ...(showBoxColumn ? [{ header: '受信箱', headClassName: 'w-48' }] : []),
     { header: '日付', headClassName: 'w-36' },
     { header: '担当', headClassName: 'w-28' },
@@ -90,6 +92,33 @@ export function MailInfinite({ initialRows, total, params, showBoxColumn, boxAdd
         {from}
       </TableCell>,
     ];
+    if (params.importCandidate) {
+      const status = t.last_import_status ?? null;
+      cells.push(
+        <TableCell
+          key="import"
+          className="max-w-[280px] py-2 text-xs"
+          title={t.last_import_note ?? ''}
+        >
+          {t.last_inquiry_id ? (
+            <>
+              <Link href={`/inquiries/${t.last_inquiry_id}`} className="sf-link" target="_blank">
+                問合せ {t.last_inquiry_id}
+              </Link>
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {t.last_import_note}
+              </span>
+            </>
+          ) : status === 'error' ? (
+            <span className="block truncate text-destructive">エラー: {t.last_import_note}</span>
+          ) : status === 'pending' ? (
+            <span className="text-muted-foreground">{t.last_import_note ?? 'ルール未一致'}</span>
+          ) : (
+            <span className="text-muted-foreground">未処理</span>
+          )}
+        </TableCell>,
+      );
+    }
     if (showBoxColumn) {
       cells.push(
         <TableCell

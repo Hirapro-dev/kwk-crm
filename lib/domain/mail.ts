@@ -134,7 +134,9 @@ export async function listMailThreads(
     const ids = rows.map((r) => r.id);
     const { data: msgs } = await supabase
       .from('mail_messages')
-      .select('thread_id, from_address, from_name, sent_at, direction')
+      .select(
+        'thread_id, from_address, from_name, sent_at, direction, import_status, import_note, inquiry_id',
+      )
       .in('thread_id', ids)
       .eq('direction', 'in')
       .order('sent_at', { ascending: false });
@@ -143,6 +145,9 @@ export async function listMailThreads(
       thread_id: string;
       from_address: string;
       from_name: string | null;
+      import_status: 'pending' | 'done' | 'error' | null;
+      import_note: string | null;
+      inquiry_id: string | null;
     }>) {
       if (seen.has(m.thread_id)) continue;
       seen.add(m.thread_id);
@@ -150,6 +155,9 @@ export async function listMailThreads(
       if (row) {
         row.last_from_address = m.from_address;
         row.last_from_name = m.from_name;
+        row.last_import_status = m.import_status ?? null;
+        row.last_import_note = m.import_note ?? null;
+        row.last_inquiry_id = m.inquiry_id ?? null;
       }
     }
   }
@@ -223,6 +231,7 @@ export async function getMailThread(id: string): Promise<MailThreadDetail | null
         id, thread_id, direction, message_id, in_reply_to, references_header,
         from_address, from_name, to_addresses, cc_addresses, subject,
         text_body, html_body, sent_at, provider_message_id, delivery_status,
+        import_status, import_note, inquiry_id,
         sender_user_id, source, created_at,
         sender:users!mail_messages_sender_user_id_fkey(id, full_name),
         attachments:mail_attachments(id, message_id, filename, content_type, size_bytes, storage_path)
