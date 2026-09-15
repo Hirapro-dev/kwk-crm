@@ -1,68 +1,27 @@
 'use client';
 
 import {
-  FIELD_COLUMNS,
-  FIELD_COLUMN_LABELS,
-  type FieldColumn,
-} from '@/lib/domain/mail_import_rules';
+  FORM_TARGET,
+  type FilteredTargetOptions,
+  type InquiryFieldOption,
+  type TargetOption,
+  type TargetOptions,
+  buildTargetOptions,
+  filterTargetOptions,
+  targetLabel,
+} from '@/lib/domain/mail_import_targets';
+import { ChevronDown, Search } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 /**
  * 取込ルールの「入れる項目」セレクト(CLAUDE.md §5.16)。
  * 取込候補のメール詳細の「取込ルール」パネルと、/mail/settings の編集ダイアログの両方で使う。
- * 選択肢は 問合せの項目(DB 列のホワイトリスト) / 可変項目(項目管理で定義済み) / 可変項目(新規)。
+ * 問合せの可変項目が 289 件あるため、文字で絞り込めるセレクト(検索欄付きのプルダウン)にする。
+ * 選択肢の組み立てと絞り込みは純粋関数(lib/domain/mail_import_targets.ts)。
  */
 
-/** 問合せの項目定義(field_definitions)のうち、割り当て先の選択肢に使う部分 */
-export interface InquiryFieldOption {
-  field_name: string;
-  label: string | null;
-  is_in_db: boolean;
-}
-
-/**
- * 割り当て先「フォーム」の値。field_map には保存せず、選ぶと「フォーム名の取り方」を
- * 「本文のラベルの値」(body_label)+そのラベルに切り替える(問合せの form_id に入る)。
- */
-export const FORM_TARGET = 'form';
-
-export interface TargetOptions {
-  /** 問合せの「フォーム」(form_id)の表示名 */
-  formLabel: string;
-  columns: Array<{ value: FieldColumn; label: string }>;
-  extras: Array<{ value: string; label: string }>;
-  extraKeys: Set<string>;
-}
-
-/** 割り当て先の選択肢: DB 列(ホワイトリスト内)と、定義済みの可変項目 */
-export function buildTargetOptions(inquiryFields: InquiryFieldOption[]): TargetOptions {
-  const labelByColumn = new Map<string, string>();
-  for (const f of inquiryFields) {
-    if (f.is_in_db && f.label) labelByColumn.set(f.field_name, f.label);
-  }
-  const columns = FIELD_COLUMNS.map((c) => ({
-    value: c,
-    label: labelByColumn.get(c) ?? FIELD_COLUMN_LABELS[c],
-  }));
-  const extras = inquiryFields
-    .filter((f) => !f.is_in_db)
-    .map((f) => ({ value: `extra:${f.field_name}`, label: f.label ?? f.field_name }));
-  return {
-    formLabel: labelByColumn.get('form_id') ?? 'フォーム',
-    columns,
-    extras,
-    extraKeys: new Set(extras.map((e) => e.value)),
-  };
-}
-
-/** 割り当て先(value)の表示名 */
-export function targetLabel(options: TargetOptions, target: string): string {
-  if (target === FORM_TARGET) return options.formLabel;
-  const col = options.columns.find((c) => c.value === target);
-  if (col) return col.label;
-  const ex = options.extras.find((e) => e.value === target);
-  if (ex) return ex.label;
-  return target.startsWith('extra:') ? `${target.slice('extra:'.length)}(新規)` : target;
-}
+export { FORM_TARGET, buildTargetOptions, targetLabel };
+export type { InquiryFieldOption, TargetOptions };
 
 export const selectClass =
   'h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
@@ -76,47 +35,162 @@ interface Props {
   disabled?: boolean;
 }
 
+const NONE: TargetOption = { value: '', label: '(入れない)' };
+
+/** 絞り込み結果を、上から順に選べる1本のリストにする(Enter で先頭を選ぶため) */
+function flatten(f: FilteredTargetOptions, current: TargetOption | null): TargetOption[] {
+  return [
+    NONE,
+    ...(current ? [current] : []),
+    ...(f.form ? [f.form] : []),
+    ...f.columns,
+    ...f.extras,
+    ...(f.newExtra ? [f.newExtra] : []),
+  ];
+}
+
 export function ImportRuleTargetSelect({ label, value, onChange, options, disabled }: Props) {
-  const newExtra = `extra:${label}`;
-  // 定義済みの可変項目に同名が無いときだけ「新規」を出す。既存ルールが未定義キーを指している場合も選べるようにする
-  const showNewExtra = !options.extraKeys.has(newExtra);
-  const unknownCurrent =
-    value !== '' &&
-    value !== FORM_TARGET &&
-    value !== newExtra &&
-    !options.columns.some((c) => c.value === value) &&
-    !options.extraKeys.has(value);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
+
+  const filtered = useMemo(
+    () => filterTargetOptions(options, query, label),
+    [options, query, label],
+  );
+  // 既存ルールが未定義の可変項目を指しているときも、その値を選べるようにする
+  const knownValues = useMemo(
+    () =>
+      new Set([
+        FORM_TARGET,
+        ...options.columns.map((c) => c.value),
+        ...options.extras.map((e) => e.value),
+        `extra:${label}`,
+      ]),
+    [options, label],
+  );
+  const current: TargetOption | null =
+    value !== '' && !knownValues.has(value) ? { value, label: targetLabel(options, value) } : null;
+  const items = flatten(filtered, current);
+
+  const close = () => {
+    setOpen(false);
+    setQuery('');
+  };
+
+  // 外側クリックで閉じる
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery('');
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  const pick = (target: string) => {
+    onChange(target);
+    close();
+  };
+
+  const groups: Array<{ title: string; items: TargetOption[] }> = [
+    ...(current ? [{ title: '現在の設定', items: [current] }] : []),
+    {
+      title: '問合せの項目',
+      items: [...(filtered.form ? [filtered.form] : []), ...filtered.columns],
+    },
+    { title: '可変項目(定義済み)', items: filtered.extras },
+    { title: '可変項目(新規)', items: filtered.newExtra ? [filtered.newExtra] : [] },
+  ].filter((g) => g.items.length > 0);
+
   return (
-    <select
-      className={selectClass}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      disabled={disabled}
-    >
-      <option value="">(入れない)</option>
-      <optgroup label="問合せの項目">
-        <option value={FORM_TARGET}>{options.formLabel}</option>
-        {options.columns.map((c) => (
-          <option key={c.value} value={c.value}>
-            {c.label}
-          </option>
-        ))}
-      </optgroup>
-      {options.extras.length > 0 && (
-        <optgroup label="可変項目(定義済み)">
-          {options.extras.map((e) => (
-            <option key={e.value} value={e.value}>
-              {e.label}
-            </option>
-          ))}
-        </optgroup>
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        className={`${selectClass} flex items-center justify-between text-left disabled:cursor-not-allowed disabled:opacity-50`}
+        onClick={() => (open ? close() : setOpen(true))}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+      >
+        <span className={`truncate ${value === '' ? 'text-muted-foreground' : ''}`}>
+          {value === '' ? NONE.label : targetLabel(options, value)}
+        </span>
+        <ChevronDown className="ml-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="absolute left-0 z-30 mt-1 w-full min-w-[280px] rounded-md border bg-popover text-popover-foreground shadow-md">
+          <div className="flex items-center gap-1 border-b px-2">
+            <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  close();
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  // 検索語があるときは先頭の一致項目、無いときは何もしない(誤って「入れない」にしないため)
+                  const first = items.find((i) => i.value !== '' && i.value !== current?.value);
+                  if (query !== '' && first) pick(first.value);
+                }
+              }}
+              placeholder="項目名で絞り込み(例: 銘柄)"
+              className="h-8 w-full bg-transparent text-xs focus:outline-none"
+              aria-label="項目名で絞り込み"
+            />
+          </div>
+          <ul id={listId} className="max-h-64 overflow-y-auto py-1 text-xs" aria-label="入れる項目">
+            <li>
+              <button
+                type="button"
+                className={`w-full px-2 py-1 text-left hover:bg-accent ${value === '' ? 'font-semibold' : 'text-muted-foreground'}`}
+                onClick={() => pick('')}
+              >
+                {NONE.label}
+              </button>
+            </li>
+            {groups.map((g) => (
+              <li key={g.title}>
+                <div className="px-2 pt-1.5 pb-0.5 text-[10px] font-semibold text-muted-foreground">
+                  {g.title}
+                </div>
+                <ul>
+                  {g.items.map((i) => (
+                    <li key={i.value}>
+                      <button
+                        type="button"
+                        className={`w-full truncate px-2 py-1 text-left hover:bg-accent ${i.value === value ? 'bg-accent/60 font-semibold' : ''}`}
+                        onClick={() => pick(i.value)}
+                        title={i.label}
+                      >
+                        {g.title === '可変項目(新規)'
+                          ? `「${i.label}」を新しい可変項目として追加`
+                          : i.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+            {groups.length === 0 && (
+              <li className="px-2 py-2 text-muted-foreground">該当する項目がありません</li>
+            )}
+          </ul>
+        </div>
       )}
-      {(showNewExtra || unknownCurrent) && (
-        <optgroup label="可変項目(新規)">
-          {showNewExtra && <option value={newExtra}>「{label}」を新しい可変項目として追加</option>}
-          {unknownCurrent && <option value={value}>{targetLabel(options, value)}</option>}
-        </optgroup>
-      )}
-    </select>
+    </div>
   );
 }
