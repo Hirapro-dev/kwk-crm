@@ -20,7 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { getCurrentUser } from '@/lib/domain/auth';
-import { listMailBoxes } from '@/lib/domain/mail';
+import { listMailBoxes, listMailImportRules } from '@/lib/domain/mail';
 import { uniqueDomains } from '@/lib/domain/mail_box_settings';
 import { domainOfAddress, splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { getMailAwsConfig } from '@/lib/mail/aws';
@@ -28,6 +28,7 @@ import { type DomainIdentity, getDomainIdentity } from '@/lib/mail/ses_identity'
 import { redirect } from 'next/navigation';
 import { CopyButton } from './CopyButton';
 import { DomainCard } from './DomainCard';
+import { ImportRuleList } from './ImportRuleList';
 import { MailBoxRow } from './MailBoxRow';
 import { NewMailBoxForm } from './NewMailBoxForm';
 import { ReassignOtherButton } from './ReassignOtherButton';
@@ -36,7 +37,7 @@ export default async function MailSettingsPage() {
   const me = await getCurrentUser();
   if (me.role !== 'admin') redirect('/mail');
 
-  const allBoxes = await listMailBoxes();
+  const [allBoxes, importRules] = await Promise.all([listMailBoxes(), listMailImportRules()]);
   // 「その他」(未登録アドレス宛。migration 78)はここでは編集対象にしない
   const { other: otherBox, rest: boxes } = splitOtherMailBox(allBoxes);
   const cfg = getMailAwsConfig();
@@ -167,6 +168,24 @@ export default async function MailSettingsPage() {
             <DomainCard key={i.domain} identity={i} sesConfigured={!!cfg} />
           ))}
         </div>
+      </Card>
+
+      {/* 4. メール取込ルール(§5.16)。新規作成・編集は取込候補のメール詳細で行う */}
+      <Card className="overflow-hidden p-0 shadow-sm">
+        <PanelHeader
+          iconLabel="RULE"
+          iconColor="#7b3fe4"
+          viewName="メール取込ルール(取込候補 → 問合せ)"
+          totalCount={importRules.length}
+        />
+        <div className="border-b px-4 py-2 text-xs text-muted-foreground">
+          取込候補のメールを開くと出る「取込ルール」パネルで、そのメールを見本にルールを作成・編集します。
+          ここでは判定順・有効/無効・削除だけを扱います。判定は上から順に行い、最初に一致したルールを使います。
+        </div>
+        <ImportRuleList
+          rules={importRules}
+          boxAddresses={Object.fromEntries(allBoxes.map((b) => [b.id, b.address]))}
+        />
       </Card>
     </div>
   );
