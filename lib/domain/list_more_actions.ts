@@ -93,7 +93,7 @@ export async function loadMoreMailThreads(
   },
   page: number,
 ) {
-  const r = await listMailThreads({ ...params, page, pageSize: LIST_PAGE_SIZE });
+  const r = await listMailThreads({ ...params, page, pageSize: LIST_PAGE_SIZE, strict: true });
   return r.rows;
 }
 

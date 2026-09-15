@@ -97,6 +97,8 @@ export function InfiniteTable<T>({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(initialRows.length >= total);
+  // 追加読み込みの失敗。「全件表示」と誤解させないよう、終わり扱いにせず再試行できるようにする
+  const [loadError, setLoadError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // --- 行の選択・削除 ---
@@ -141,7 +143,7 @@ export function InfiniteTable<T>({
 
   useEffect(() => {
     const el = sentinelRef.current;
-    if (!el || done) return;
+    if (!el || done || loadError) return;
     const io = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting || loadingRef.current || done) return;
@@ -156,8 +158,8 @@ export function InfiniteTable<T>({
               return merged;
             });
             setPage((p) => p + 1);
-          } catch {
-            setDone(true);
+          } catch (e) {
+            setLoadError(e instanceof Error ? e.message : '読み込みに失敗しました');
           } finally {
             loadingRef.current = false;
             setLoading(false);
@@ -169,7 +171,7 @@ export function InfiniteTable<T>({
     io.observe(el);
     return () => io.disconnect();
     // root は scrollRef(スクロール領域)。マウント後に ref が入るため deps に含めない。
-  }, [page, done, total, pageSize]);
+  }, [page, done, total, pageSize, loadError]);
 
   // 削除ぶんを差し引いた表示用の総件数(サーバー側 total は router.refresh() まで古い)
   const displayTotal = Math.max(0, total - removedCount);
@@ -399,11 +401,26 @@ export function InfiniteTable<T>({
       </div>
       {rows.length > 0 && (
         <div className="py-3 text-center text-xs text-muted-foreground">
-          {loading
-            ? '読み込み中…'
-            : done
-              ? `全 ${displayTotal.toLocaleString()} 件を表示`
-              : `${rows.length.toLocaleString()} / ${displayTotal.toLocaleString()} 件`}
+          {loading ? (
+            '読み込み中…'
+          ) : loadError ? (
+            <span className="text-destructive">
+              続きの読み込みに失敗しました({rows.length.toLocaleString()} /{' '}
+              {displayTotal.toLocaleString()} 件まで表示)。{' '}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => setLoadError(null)}
+                title={loadError}
+              >
+                再試行
+              </button>
+            </span>
+          ) : done ? (
+            `全 ${displayTotal.toLocaleString()} 件を表示`
+          ) : (
+            `${rows.length.toLocaleString()} / ${displayTotal.toLocaleString()} 件`
+          )}
         </div>
       )}
 

@@ -136,6 +136,11 @@ export interface MailThreadListParams {
   importCandidate?: boolean;
   page?: number;
   pageSize?: number;
+  /**
+   * true なら DB エラーを例外にする(追加読み込み用。画面で「読み込みに失敗」と出して再試行できるようにする)。
+   * 既定は false: 初回表示ではテーブル未適用でも画面を壊さないよう空で返す
+   */
+  strict?: boolean;
 }
 
 export interface MailThreadListResult {
