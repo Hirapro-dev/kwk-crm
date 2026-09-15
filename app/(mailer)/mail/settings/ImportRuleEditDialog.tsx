@@ -22,6 +22,7 @@ import { Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
 import {
+  FORM_TARGET,
   ImportRuleTargetSelect,
   type InquiryFieldOption,
   buildTargetOptions,
@@ -66,8 +67,22 @@ export function ImportRuleEditDialog({ rule, boxes, inquiryFields, onClose }: Pr
   const keywords = subjectKeywords(subjectContains);
   const bodyKeywords = subjectKeywords(bodyContains);
 
-  const setTarget = (i: number, target: string) =>
+  // 「フォーム」を選んだラベルは field_map には入れず、フォーム名の取り方(本文のラベルの値)に反映する
+  const isFormLabel = (label: string) => source === 'body_label' && param === label;
+  const setTarget = (i: number, target: string) => {
+    const label = rows[i]?.label ?? '';
+    if (target === FORM_TARGET) {
+      setSource('body_label');
+      setParam(label);
+      setRows((prev) => prev.map((r, j) => (j === i ? { ...r, target: '' } : r)));
+      return;
+    }
+    if (isFormLabel(label)) {
+      setSource('body_line');
+      setParam('1');
+    }
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, target } : r)));
+  };
   const removeRow = (i: number) => setRows((prev) => prev.filter((_, j) => j !== i));
   const addRow = () => {
     const label = newLabel.trim();
@@ -253,7 +268,7 @@ export function ImportRuleEditDialog({ rule, boxes, inquiryFields, onClose }: Pr
                       <td className="px-2 py-1.5">
                         <ImportRuleTargetSelect
                           label={r.label}
-                          value={r.target}
+                          value={isFormLabel(r.label) ? FORM_TARGET : r.target}
                           onChange={(t) => setTarget(i, t)}
                           options={options}
                         />

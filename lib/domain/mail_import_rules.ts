@@ -261,6 +261,33 @@ export function applyRule(
   return { formName, fields, extra, registeredAt, errors };
 }
 
+const KANA_LABEL = /カナ|かな|がな|ふりがな|フリガナ|ｶﾅ/;
+
+/**
+ * 新規ルールの初期割当て: 本文のラベル名から問合せの項目を推定する(空文字 = 入れない)。
+ * ふりがな・フリガナ・カナは氏名(カナ)。定義済みの可変項目と同名ならそれに入れる。
+ * 画面の初期値にだけ使い、保存時は利用者が選んだ値が正。
+ */
+export function guessFieldTarget(label: string, definedExtraKeys: ReadonlySet<string>): string {
+  if (KANA_LABEL.test(label)) return 'name_kana';
+  if (/名前|氏名/.test(label)) return 'name';
+  if (/メール/.test(label)) return 'email';
+  if (/電話|TEL|Tel/.test(label)) return 'phone';
+  if (/郵便/.test(label)) return 'postal_code';
+  if (/住所/.test(label)) return 'address';
+  if (/日時|完了日|登録日/.test(label)) return 'registered_at';
+  if (definedExtraKeys.has(`extra:${label}`)) return `extra:${label}`;
+  return '';
+}
+
+/**
+ * 本文のラベルに「フォーム名」「フォーム」があれば、それをフォーム名の取り元(body_label)にする。
+ * 「フォームID」のような別のラベルは対象にしない。無ければ null
+ */
+export function guessFormLabel(labels: readonly string[]): string | null {
+  return labels.find((l) => l === 'フォーム名' || l === 'フォーム') ?? null;
+}
+
 /** field_map を検証し、許可された項目だけを残す(ホワイトリスト。§9.8 と同じ考え方) */
 export function normalizeFieldMap(input: unknown): Record<string, string> {
   const out: Record<string, string> = {};

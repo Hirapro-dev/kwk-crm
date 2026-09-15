@@ -14,6 +14,8 @@ import {
   type FormNameSource,
   type MailImportRule,
   applyRule,
+  guessFieldTarget,
+  guessFormLabel,
   parseMailBody,
   ruleMatches,
   subjectWithoutName,
@@ -21,6 +23,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
 import {
+  FORM_TARGET,
   ImportRuleTargetSelect,
   type InquiryFieldOption,
   buildTargetOptions,
@@ -67,17 +70,11 @@ function initialFieldMap(
   definedExtraKeys: Set<string>,
 ): Record<string, string> {
   if (existing) return { ...existing.field_map };
-  // 新規作成時の初期割当て: ラベル名から DB 列を推定し、定義済みの可変項目と同名ならそれに入れる
+  // 新規作成時の初期割当て: ラベル名から問合せの項目を推定(純粋関数 guessFieldTarget)
   const guess: Record<string, string> = {};
   for (const l of labels) {
-    if (/名前|氏名/.test(l) && !/カナ|かな|フリガナ/.test(l)) guess[l] = 'name';
-    else if (/カナ|かな|フリガナ/.test(l)) guess[l] = 'name_kana';
-    else if (/メール/.test(l)) guess[l] = 'email';
-    else if (/電話|TEL|Tel/.test(l)) guess[l] = 'phone';
-    else if (/郵便/.test(l)) guess[l] = 'postal_code';
-    else if (/住所/.test(l)) guess[l] = 'address';
-    else if (/日時|完了日|登録日/.test(l)) guess[l] = 'registered_at';
-    else if (definedExtraKeys.has(`extra:${l}`)) guess[l] = `extra:${l}`;
+    const t = guessFieldTarget(l, definedExtraKeys);
+    if (t) guess[l] = t;
   }
   return guess;
 }
@@ -114,10 +111,12 @@ export function MailImportRulePanel({
     existingRule?.subject_contains ?? subjectWithoutName(sample.subject),
   );
   const [bodyContains, setBodyContains] = useState(existingRule?.body_contains ?? '');
+  // 新規作成時、本文に「フォーム名」のラベルがあればそれをフォーム名の取り元にする(エキスパのフォーム通知など)
+  const guessedFormLabel = existingRule ? null : guessFormLabel(labelNames);
   const [source, setSource] = useState<FormNameSource>(
-    existingRule?.form_name_source ?? 'body_line',
+    existingRule?.form_name_source ?? (guessedFormLabel ? 'body_label' : 'body_line'),
   );
-  const [param, setParam] = useState(existingRule?.form_name_param ?? '1');
+  const [param, setParam] = useState(existingRule?.form_name_param ?? guessedFormLabel ?? '1');
   const [fieldMap, setFieldMap] = useState<Record<string, string>>(() =>
     initialFieldMap(labelNames, existingRule, options.extraKeys),
   );
@@ -170,13 +169,31 @@ export function MailImportRulePanel({
     ],
   );
 
-  const setTarget = (label: string, target: string) =>
+  // 「フォーム」を選んだラベルは field_map には入れず、フォーム名の取り方(本文のラベルの値)に反映する
+  const isFormLabel = (label: string) => source === 'body_label' && param === label;
+  const setTarget = (label: string, target: string) => {
+    if (target === FORM_TARGET) {
+      setSource('body_label');
+      setParam(label);
+      setFieldMap((prev) => {
+        const next = { ...prev };
+        delete next[label];
+        return next;
+      });
+      return;
+    }
+    if (isFormLabel(label)) {
+      // フォーム名の取り元だったラベルを別の項目に変えたら、取り方を既定(本文1行目)に戻す
+      setSource('body_line');
+      setParam('1');
+    }
     setFieldMap((prev) => {
       const next = { ...prev };
       if (target === '') delete next[label];
       else next[label] = target;
       return next;
     });
+  };
 
   // 「このメールを処理」: 保存済みのルールで実際に問合せを作る(結果はメールに記録される)
   const handleProcess = () => {
@@ -413,7 +430,7 @@ export function MailImportRulePanel({
                 </thead>
                 <tbody>
                   {labelNames.map((l) => {
-                    const current = fieldMap[l] ?? '';
+                    const current = isFormLabel(l) ? FORM_TARGET : (fieldMap[l] ?? '');
                     return (
                       <tr key={l} className="border-t">
                         <td className="whitespace-nowrap px-2 py-1.5">{l}</td>
