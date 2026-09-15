@@ -46,8 +46,13 @@ export function MailInfinite({ initialRows, total, params, showBoxColumn, boxAdd
     { header: '状態', headClassName: 'w-28' },
     { header: '件名' },
     { header: 'From', headClassName: 'w-64' },
-    // 取込候補(§5.16)では、ルールで問合せを作った結果を出す
-    ...(params.importCandidate ? [{ header: '処理結果', headClassName: 'w-64' }] : []),
+    // 取込候補(§5.16)では、一致する取込ルールと、ルールで問合せを作った結果を出す
+    ...(params.importCandidate
+      ? [
+          { header: '取込ルール', headClassName: 'w-44' },
+          { header: '処理結果', headClassName: 'w-64' },
+        ]
+      : []),
     ...(showBoxColumn ? [{ header: '受信箱', headClassName: 'w-48' }] : []),
     { header: '日付', headClassName: 'w-36' },
     { header: '担当', headClassName: 'w-28' },
@@ -95,6 +100,19 @@ export function MailInfinite({ initialRows, total, params, showBoxColumn, boxAdd
     if (params.importCandidate) {
       const status = t.last_import_status ?? null;
       cells.push(
+        <TableCell key="rule" className="max-w-[180px] py-2 text-xs">
+          {t.last_import_rule ? (
+            <Badge
+              variant="outline"
+              className="max-w-full truncate bg-emerald-50 text-[11px] text-emerald-800 border-emerald-200"
+              title={`ルール「${t.last_import_rule.name}」に一致`}
+            >
+              {t.last_import_rule.name}
+            </Badge>
+          ) : (
+            <span className="text-muted-foreground">未設定</span>
+          )}
+        </TableCell>,
         <TableCell
           key="import"
           className="max-w-[280px] py-2 text-xs"
