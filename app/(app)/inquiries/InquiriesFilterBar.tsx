@@ -10,11 +10,14 @@ export function InquiriesFilterBar({
   initialQ,
   initialFormId,
   initialUnassigned,
+  initialMailImported = false,
   forms,
 }: {
   initialQ: string;
   initialFormId: string;
   initialUnassigned: boolean;
+  /** メール取込分のみ(リード一覧。§5.16) */
+  initialMailImported?: boolean;
   forms: { id: number; name: string; category: string | null }[];
 }) {
   const router = useRouter();
@@ -23,6 +26,7 @@ export function InquiriesFilterBar({
   const [q, setQ] = useState(initialQ);
   const [formId, setFormId] = useState(initialFormId);
   const [unassigned, setUnassigned] = useState(initialUnassigned);
+  const [mailImported, setMailImported] = useState(initialMailImported);
 
   const submit = () => {
     const params = new URLSearchParams(searchParams?.toString() ?? '');
@@ -32,6 +36,8 @@ export function InquiriesFilterBar({
     else params.delete('form');
     if (unassigned) params.set('unassigned', '1');
     else params.delete('unassigned');
+    if (mailImported) params.set('mail', '1');
+    else params.delete('mail');
     params.delete('page');
     startTransition(() => router.push(`/inquiries?${params.toString()}`));
   };
@@ -67,6 +73,14 @@ export function InquiriesFilterBar({
         />
         会員化前のみ
       </label>
+      <label className="flex items-center gap-1 text-sm">
+        <input
+          type="checkbox"
+          checked={mailImported}
+          onChange={(e) => setMailImported(e.target.checked)}
+        />
+        メール取込分のみ
+      </label>
       <Button type="submit" disabled={pending}>
         {pending ? '検索中…' : '検索'}
       </Button>
@@ -77,6 +91,7 @@ export function InquiriesFilterBar({
           setQ('');
           setFormId('');
           setUnassigned(false);
+          setMailImported(false);
           startTransition(() => router.push('/inquiries'));
         }}
       >

@@ -20,6 +20,7 @@ import {
 import { splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { findMatchingRule } from '@/lib/domain/mail_import_rules';
 import { buildQuotedBody } from '@/lib/domain/mail_text';
+import { listFieldDefinitions } from '@/lib/domain/object_metadata';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
@@ -122,6 +123,12 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
         subject: importRuleSample.subject,
       })
     : null;
+  // 「入れる項目」の選択肢: 問合せの全項目(項目管理の定義。空白セルは除く)
+  const inquiryFields = importRuleSample
+    ? (await listFieldDefinitions('inquiries', 'detail'))
+        .filter((f) => !f.is_placeholder)
+        .map((f) => ({ field_name: f.field_name, label: f.label, is_in_db: f.is_in_db }))
+    : [];
 
   // 添付の署名 URL をまとめて発行
   const signedUrls = new Map<string, string>();
@@ -256,6 +263,7 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
           sample={importRuleSample}
           existingRule={matchingImportRule}
           isAdmin={me.role === 'admin'}
+          inquiryFields={inquiryFields}
           messageRowId={lastInbound.id}
           importStatus={lastInbound.import_status ?? null}
           importNote={lastInbound.import_note ?? null}

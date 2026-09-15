@@ -11,6 +11,7 @@ import {
   FIELD_COLUMN_LABELS,
   FORM_NAME_SOURCES,
   FORM_NAME_SOURCE_LABELS,
+  type FieldColumn,
   type FormNameSource,
   type MailImportRule,
   applyRule,
@@ -25,6 +26,8 @@ import { useMemo, useState, useTransition } from 'react';
  * 開いているメールを見本に、件名・本文の行・本文の「ラベル: 値」を選びながらルールを作り、
  * 同じ画面でプレビュー(切り出した項目・フォーム名)を確認して保存する。
  * プレビューはサーバーの実行と同じ純粋関数(applyRule)で計算するため、保存後の結果と一致する。
+ * 「入れる項目」には問合せオブジェクトの全項目(DB 列 + 項目管理で定義済みの可変項目)を出し、
+ * 既存の可変項目と同じキーに入れられるようにする(Salesforce 由来のデータと同じ形で集計できる)。
  */
 
 export interface MailImportRuleSample {
@@ -36,11 +39,20 @@ export interface MailImportRuleSample {
   htmlBody: string | null;
 }
 
+/** 問合せの項目定義(field_definitions)のうち、割り当て先の選択肢に使う部分 */
+export interface InquiryFieldOption {
+  field_name: string;
+  label: string | null;
+  is_in_db: boolean;
+}
+
 interface Props {
   sample: MailImportRuleSample;
   /** このメールに一致している既存ルール(無ければ null = 新規作成) */
   existingRule: MailImportRule | null;
   isAdmin: boolean;
+  /** 問合せオブジェクトの項目(項目管理 /settings/objects/inquiries の定義) */
+  inquiryFields: InquiryFieldOption[];
   /** 見本にしている受信メッセージ(mail_messages.id)と、その処理結果(§5.16 段階③) */
   messageRowId: string;
   importStatus: 'pending' | 'done' | 'error' | null;
@@ -48,19 +60,32 @@ interface Props {
   inquiryId: string | null;
 }
 
-/** ラベルの割り当て先の選択肢(未割当 / 各項目 / 可変項目=ラベル名をキーにする) */
-const NONE = '';
-const EXTRA = '__extra__';
-
 const selectClass =
   'h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
+
+/** 割り当て先の選択肢: DB 列(ホワイトリスト内)と、定義済みの可変項目 */
+function buildTargetOptions(inquiryFields: InquiryFieldOption[]) {
+  const labelByColumn = new Map<string, string>();
+  for (const f of inquiryFields) {
+    if (f.is_in_db && f.label) labelByColumn.set(f.field_name, f.label);
+  }
+  const columns = FIELD_COLUMNS.map((c) => ({
+    value: c,
+    label: labelByColumn.get(c) ?? FIELD_COLUMN_LABELS[c],
+  }));
+  const extras = inquiryFields
+    .filter((f) => !f.is_in_db)
+    .map((f) => ({ value: `extra:${f.field_name}`, label: f.label ?? f.field_name }));
+  return { columns, extras, extraKeys: new Set(extras.map((e) => e.value)) };
+}
 
 function initialFieldMap(
   labels: string[],
   existing: MailImportRule | null,
+  definedExtraKeys: Set<string>,
 ): Record<string, string> {
   if (existing) return { ...existing.field_map };
-  // 新規作成時は、本文のラベルから分かりやすいものだけ初期割当てする
+  // 新規作成時の初期割当て: ラベル名から DB 列を推定し、定義済みの可変項目と同名ならそれに入れる
   const guess: Record<string, string> = {};
   for (const l of labels) {
     if (/名前|氏名/.test(l) && !/カナ|かな|フリガナ/.test(l)) guess[l] = 'name';
@@ -70,6 +95,7 @@ function initialFieldMap(
     else if (/郵便/.test(l)) guess[l] = 'postal_code';
     else if (/住所/.test(l)) guess[l] = 'address';
     else if (/日時|完了日|登録日/.test(l)) guess[l] = 'registered_at';
+    else if (definedExtraKeys.has(`extra:${l}`)) guess[l] = `extra:${l}`;
   }
   return guess;
 }
@@ -78,6 +104,7 @@ export function MailImportRulePanel({
   sample,
   existingRule,
   isAdmin,
+  inquiryFields,
   messageRowId,
   importStatus,
   importNote,
@@ -87,26 +114,11 @@ export function MailImportRulePanel({
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
-  // 「このメールを処理」: 保存済みのルールで実際に問合せを作る(結果はメールに記録される)
-  const handleProcess = () => {
-    setMessage(null);
-    startTransition(async () => {
-      const r = await processMailMessageImport(messageRowId);
-      if (r.error) {
-        setMessage({ kind: 'error', text: r.error });
-        return;
-      }
-      const o = r.outcome;
-      setMessage({
-        kind: o?.status === 'error' ? 'error' : 'ok',
-        text: o ? `処理結果: ${o.note}` : '処理しました',
-      });
-      router.refresh();
-    });
-  };
-
   const parsed = useMemo(() => parseMailBody(sample.textBody, sample.htmlBody), [sample]);
   const labelNames = useMemo(() => Object.keys(parsed.labels), [parsed]);
+  const options = useMemo(() => buildTargetOptions(inquiryFields), [inquiryFields]);
+  const extraLabel = (key: string) =>
+    options.extras.find((e) => e.value === `extra:${key}`)?.label ?? key;
 
   const [name, setName] = useState(
     existingRule?.name ?? subjectWithoutName(sample.subject).slice(0, 60),
@@ -124,7 +136,7 @@ export function MailImportRulePanel({
   );
   const [param, setParam] = useState(existingRule?.form_name_param ?? '1');
   const [fieldMap, setFieldMap] = useState<Record<string, string>>(() =>
-    initialFieldMap(labelNames, existingRule),
+    initialFieldMap(labelNames, existingRule, options.extraKeys),
   );
 
   const preview = useMemo(
@@ -136,19 +148,30 @@ export function MailImportRulePanel({
     [source, param, fieldMap, sample],
   );
 
-  const setTarget = (label: string, v: string) =>
+  const setTarget = (label: string, target: string) =>
     setFieldMap((prev) => {
       const next = { ...prev };
-      if (v === NONE) delete next[label];
-      else if (v === EXTRA) next[label] = `extra:${label}`;
-      else next[label] = v;
+      if (target === '') delete next[label];
+      else next[label] = target;
       return next;
     });
 
-  const targetValue = (label: string): string => {
-    const t = fieldMap[label];
-    if (!t) return NONE;
-    return t.startsWith('extra:') ? EXTRA : t;
+  // 「このメールを処理」: 保存済みのルールで実際に問合せを作る(結果はメールに記録される)
+  const handleProcess = () => {
+    setMessage(null);
+    startTransition(async () => {
+      const r = await processMailMessageImport(messageRowId);
+      if (r.error) {
+        setMessage({ kind: 'error', text: r.error });
+        return;
+      }
+      const o = r.outcome;
+      setMessage({
+        kind: o?.status === 'error' ? 'error' : 'ok',
+        text: o ? `処理結果: ${o.note}` : '処理しました',
+      });
+      router.refresh();
+    });
   };
 
   const handleSave = () => {
@@ -340,34 +363,54 @@ export function MailImportRulePanel({
                   <tr>
                     <th className="px-2 py-1.5 font-medium">ラベル</th>
                     <th className="px-2 py-1.5 font-medium">このメールの値</th>
-                    <th className="px-2 py-1.5 font-medium">入れる項目</th>
+                    <th className="px-2 py-1.5 font-medium">入れる項目(問合せの項目から選択)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {labelNames.map((l) => (
-                    <tr key={l} className="border-t">
-                      <td className="whitespace-nowrap px-2 py-1.5">{l}</td>
-                      <td className="max-w-[260px] truncate px-2 py-1.5 text-muted-foreground">
-                        {parsed.labels[l]}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <select
-                          className={selectClass}
-                          value={targetValue(l)}
-                          onChange={(e) => setTarget(l, e.target.value)}
-                          disabled={!isAdmin}
-                        >
-                          <option value={NONE}>(入れない)</option>
-                          {FIELD_COLUMNS.map((c) => (
-                            <option key={c} value={c}>
-                              {FIELD_COLUMN_LABELS[c]}
-                            </option>
-                          ))}
-                          <option value={EXTRA}>可変項目「{l}」</option>
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
+                  {labelNames.map((l) => {
+                    const current = fieldMap[l] ?? '';
+                    const newExtra = `extra:${l}`;
+                    const showNewExtra = !options.extraKeys.has(newExtra);
+                    return (
+                      <tr key={l} className="border-t">
+                        <td className="whitespace-nowrap px-2 py-1.5">{l}</td>
+                        <td className="max-w-[260px] truncate px-2 py-1.5 text-muted-foreground">
+                          {parsed.labels[l]}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <select
+                            className={selectClass}
+                            value={current}
+                            onChange={(e) => setTarget(l, e.target.value)}
+                            disabled={!isAdmin}
+                          >
+                            <option value="">(入れない)</option>
+                            <optgroup label="問合せの項目">
+                              {options.columns.map((c) => (
+                                <option key={c.value} value={c.value}>
+                                  {c.label}
+                                </option>
+                              ))}
+                            </optgroup>
+                            {options.extras.length > 0 && (
+                              <optgroup label="可変項目(定義済み)">
+                                {options.extras.map((e) => (
+                                  <option key={e.value} value={e.value}>
+                                    {e.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {showNewExtra && (
+                              <optgroup label="可変項目(新規)">
+                                <option value={newExtra}>「{l}」を新しい可変項目として追加</option>
+                              </optgroup>
+                            )}
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -386,7 +429,10 @@ export function MailImportRulePanel({
             </dd>
             {(Object.keys(preview.fields) as Array<keyof typeof preview.fields>).map((k) => (
               <div key={k} className="contents">
-                <dt className="text-muted-foreground">{FIELD_COLUMN_LABELS[k]}</dt>
+                <dt className="text-muted-foreground">
+                  {options.columns.find((c) => c.value === k)?.label ??
+                    FIELD_COLUMN_LABELS[k as FieldColumn]}
+                </dt>
                 <dd>{preview.fields[k]}</dd>
               </div>
             ))}
@@ -394,7 +440,7 @@ export function MailImportRulePanel({
             <dd>{preview.registeredAt ?? '(未指定 → 受信日時を使います)'}</dd>
             {Object.entries(preview.extra).map(([k, v]) => (
               <div key={k} className="contents">
-                <dt className="text-muted-foreground">可変項目「{k}」</dt>
+                <dt className="text-muted-foreground">{extraLabel(k)}</dt>
                 <dd>{v}</dd>
               </div>
             ))}
@@ -407,7 +453,7 @@ export function MailImportRulePanel({
             </ul>
           )}
           <p className="text-[11px] text-muted-foreground">
-            会員の自動照合の結果は、自動作成の機能(段階③)で表示します。
+            会員の自動照合は、保存後に「このメールを処理」または受信時に自動で行われ、結果は問合せ一覧に出ます。
           </p>
         </section>
 

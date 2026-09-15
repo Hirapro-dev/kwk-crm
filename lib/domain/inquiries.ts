@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import type { MemberMatch } from './inquiry_lead';
 
 export interface InquiryListItem {
   id: string;
@@ -11,6 +12,10 @@ export interface InquiryListItem {
   created_at: string;
   form: { id: number; name: string; category: string | null } | null;
   member: { id: string; name: string } | null;
+  /** メール取込(§5.16)で作った問合せの元メール。null なら CSV 取込・手入力 */
+  source_mail_message_id?: string | null;
+  /** 会員の自動照合結果(§5.16) */
+  member_match?: MemberMatch | null;
 }
 
 export interface Inquiry extends InquiryListItem {
@@ -28,6 +33,8 @@ export interface InquiryListParams {
   unassigned?: boolean;
   /** 特定会員に紐づく問合せのみ抽出 (会員詳細ページの「関連」タブで利用) */
   memberId?: string;
+  /** メール取込(§5.16)で作った問合せのみ(リード一覧) */
+  mailImported?: boolean;
   from?: string;
   to?: string;
   sort?: string;
@@ -70,6 +77,7 @@ export async function listInquiries(params: InquiryListParams = {}): Promise<Inq
       `
         id, form_id, member_id, name, name_kana, email, phone,
         postal_code, address, ad_id, extra, registered_at, created_at,
+        source_mail_message_id, member_match,
         form:forms!inquiries_form_id_fkey(id, name, category),
         member:members!inquiries_member_id_fkey(id, name)
       `,
@@ -99,6 +107,7 @@ export async function listInquiries(params: InquiryListParams = {}): Promise<Inq
   if (params.formId) query = query.eq('form_id', params.formId);
   if (params.unassigned) query = query.is('member_id', null);
   if (params.memberId) query = query.eq('member_id', params.memberId);
+  if (params.mailImported) query = query.not('source_mail_message_id', 'is', null);
   if (params.from) query = query.gte('registered_at', params.from);
   if (params.to) query = query.lte('registered_at', params.to);
 

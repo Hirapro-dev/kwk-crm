@@ -16,6 +16,8 @@ interface PageProps {
     q?: string;
     form?: string;
     unassigned?: string;
+    /** '1' = メール取込分のみ(リード一覧。§5.16) */
+    mail?: string;
     sort?: string;
     dir?: string;
     page?: string;
@@ -25,6 +27,7 @@ interface PageProps {
 export default async function InquiriesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const formId = sp.form ? Number.parseInt(sp.form, 10) : undefined;
+  const mailImported = sp.mail === '1';
 
   const [me, result, forms, listFields] = await Promise.all([
     getCurrentUser(),
@@ -32,6 +35,7 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
       q: sp.q,
       formId,
       unassigned: sp.unassigned === '1',
+      mailImported,
       sort: sp.sort,
       dir: sp.dir === 'desc' ? 'desc' : 'asc',
       page: 1,
@@ -71,6 +75,7 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
               initialQ={sp.q ?? ''}
               initialFormId={sp.form ?? ''}
               initialUnassigned={sp.unassigned === '1'}
+              initialMailImported={mailImported}
               forms={forms}
             />
           </Suspense>
@@ -78,7 +83,7 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
 
         {/* 無限スクロール表示。一覧カラムはオブジェクト管理に従う */}
         <InquiriesInfinite
-          key={`${sp.q ?? ''}|${sp.form ?? ''}|${sp.unassigned ?? ''}|${sp.sort ?? ''}|${sp.dir ?? ''}`}
+          key={`${sp.q ?? ''}|${sp.form ?? ''}|${sp.unassigned ?? ''}|${sp.mail ?? ''}|${sp.sort ?? ''}|${sp.dir ?? ''}`}
           initialRows={result.rows}
           fields={listFields}
           total={result.total}
@@ -86,6 +91,7 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
             q: sp.q,
             formId,
             unassigned: sp.unassigned === '1',
+            mailImported,
             sort: sp.sort,
             dir: sp.dir === 'desc' ? 'desc' : 'asc',
           }}
