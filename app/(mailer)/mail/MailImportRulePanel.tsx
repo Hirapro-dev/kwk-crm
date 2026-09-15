@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { processMailMessageImport } from '@/lib/domain/mail_import_exec_actions';
 import { saveMailImportRule } from '@/lib/domain/mail_import_rule_actions';
 import {
-  FIELD_COLUMNS,
   FIELD_COLUMN_LABELS,
   FORM_NAME_SOURCES,
   FORM_NAME_SOURCE_LABELS,
@@ -20,6 +19,12 @@ import {
 } from '@/lib/domain/mail_import_rules';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
+import {
+  ImportRuleTargetSelect,
+  type InquiryFieldOption,
+  buildTargetOptions,
+  selectClass,
+} from './ImportRuleTargetSelect';
 
 /**
  * 取込候補のメール詳細に出す「取込ルール」パネル(CLAUDE.md §5.16)。
@@ -39,12 +44,7 @@ export interface MailImportRuleSample {
   htmlBody: string | null;
 }
 
-/** 問合せの項目定義(field_definitions)のうち、割り当て先の選択肢に使う部分 */
-export interface InquiryFieldOption {
-  field_name: string;
-  label: string | null;
-  is_in_db: boolean;
-}
+export type { InquiryFieldOption };
 
 interface Props {
   sample: MailImportRuleSample;
@@ -58,25 +58,6 @@ interface Props {
   importStatus: 'pending' | 'done' | 'error' | null;
   importNote: string | null;
   inquiryId: string | null;
-}
-
-const selectClass =
-  'h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
-
-/** 割り当て先の選択肢: DB 列(ホワイトリスト内)と、定義済みの可変項目 */
-function buildTargetOptions(inquiryFields: InquiryFieldOption[]) {
-  const labelByColumn = new Map<string, string>();
-  for (const f of inquiryFields) {
-    if (f.is_in_db && f.label) labelByColumn.set(f.field_name, f.label);
-  }
-  const columns = FIELD_COLUMNS.map((c) => ({
-    value: c,
-    label: labelByColumn.get(c) ?? FIELD_COLUMN_LABELS[c],
-  }));
-  const extras = inquiryFields
-    .filter((f) => !f.is_in_db)
-    .map((f) => ({ value: `extra:${f.field_name}`, label: f.label ?? f.field_name }));
-  return { columns, extras, extraKeys: new Set(extras.map((e) => e.value)) };
 }
 
 function initialFieldMap(
@@ -243,7 +224,9 @@ export function MailImportRulePanel({
               <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!isAdmin} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">件名に含む文字</Label>
+              <Label className="text-xs text-muted-foreground">
+                件名に含むキーワード(空白区切り)
+              </Label>
               <Input
                 value={subjectContains}
                 onChange={(e) => setSubjectContains(e.target.value)}
@@ -251,8 +234,8 @@ export function MailImportRulePanel({
                 placeholder="空欄なら件名で絞らない"
               />
               <p className="text-[11px] text-muted-foreground">
-                短くすると同じ型のメールにまとめて一致します(例:
-                【未来予測分析レポート請求】本人確認完了)
+                すべてのキーワードを含む件名に一致します(語順は問いません)。例: 「本人確認完了
+                kioxia Google広告経由」
               </p>
             </div>
           </div>
@@ -369,8 +352,6 @@ export function MailImportRulePanel({
                 <tbody>
                   {labelNames.map((l) => {
                     const current = fieldMap[l] ?? '';
-                    const newExtra = `extra:${l}`;
-                    const showNewExtra = !options.extraKeys.has(newExtra);
                     return (
                       <tr key={l} className="border-t">
                         <td className="whitespace-nowrap px-2 py-1.5">{l}</td>
@@ -378,35 +359,13 @@ export function MailImportRulePanel({
                           {parsed.labels[l]}
                         </td>
                         <td className="px-2 py-1.5">
-                          <select
-                            className={selectClass}
+                          <ImportRuleTargetSelect
+                            label={l}
                             value={current}
-                            onChange={(e) => setTarget(l, e.target.value)}
+                            onChange={(t) => setTarget(l, t)}
+                            options={options}
                             disabled={!isAdmin}
-                          >
-                            <option value="">(入れない)</option>
-                            <optgroup label="問合せの項目">
-                              {options.columns.map((c) => (
-                                <option key={c.value} value={c.value}>
-                                  {c.label}
-                                </option>
-                              ))}
-                            </optgroup>
-                            {options.extras.length > 0 && (
-                              <optgroup label="可変項目(定義済み)">
-                                {options.extras.map((e) => (
-                                  <option key={e.value} value={e.value}>
-                                    {e.label}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            )}
-                            {showNewExtra && (
-                              <optgroup label="可変項目(新規)">
-                                <option value={newExtra}>「{l}」を新しい可変項目として追加</option>
-                              </optgroup>
-                            )}
-                          </select>
+                          />
                         </td>
                       </tr>
                     );

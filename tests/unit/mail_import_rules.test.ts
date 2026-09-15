@@ -9,6 +9,7 @@ import {
   parseMailBody,
   resolveFormName,
   ruleMatches,
+  subjectKeywords,
   subjectWithoutName,
 } from '../../lib/domain/mail_import_rules';
 
@@ -204,6 +205,22 @@ describe('ruleMatches / findMatchingRule', () => {
     expect(ruleMatches(rule({ from_address: 'other@example.com' }), msg)).toBe(false);
     expect(ruleMatches(rule({ subject_contains: '受信データ' }), msg)).toBe(false);
     expect(ruleMatches(rule({ is_active: false }), msg)).toBe(false);
+  });
+  it('件名の条件は空白区切りのキーワードで、順序を問わずすべて含むときに一致する', () => {
+    // 実際の件名は「【Google広告経由】【未来予測分析レポート請求】本人確認完了 …（キオクシア…）」のように
+    // 本文1行目と語順が違うため、丸ごとの部分一致ではなくキーワードの AND で判定する
+    expect(subjectKeywords('本人確認完了 Google広告経由　キオクシア')).toEqual([
+      '本人確認完了',
+      'Google広告経由',
+      'キオクシア',
+    ]);
+    expect(subjectKeywords('  ')).toEqual([]);
+    expect(subjectKeywords(null)).toEqual([]);
+    expect(ruleMatches(rule({ subject_contains: '本人確認完了 Google広告経由' }), msg)).toBe(true);
+    expect(ruleMatches(rule({ subject_contains: 'Google広告経由　キオクシア' }), msg)).toBe(true);
+    expect(ruleMatches(rule({ subject_contains: '本人確認完了 kioxia' }), msg)).toBe(false);
+    // 件名が無いメールはキーワード条件のあるルールに一致しない
+    expect(ruleMatches(rule(), { ...msg, subject: null })).toBe(false);
   });
   it('判定順(sort_order → id)で最初に一致したルールを返す', () => {
     const a = rule({ id: 1, sort_order: 200, name: 'a' });

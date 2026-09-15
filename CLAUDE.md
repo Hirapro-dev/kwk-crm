@@ -745,7 +745,9 @@ M3 の対応歴自動記録の要否は M2 完了後に判断。
 **テーブル**:
 - `mail_import_rules` — `id` serial PK / `name` text / `is_active` boolean / `sort_order` int(判定順) /
   一致条件: `mail_box_id` int FK → mail_boxes nullable(受信箱で絞る) / `from_address` text nullable(差出人の完全一致、小文字) /
-  `subject_contains` text nullable(件名に含む文字列) /
+  `subject_contains` text nullable(件名に含む**キーワード**。半角/全角の空白区切りで、**すべて含む**件名に一致。語順は問わない。
+  実際の件名は「【Google広告経由】【…請求】本人確認完了 ○○ 様（社名）」のように語順・差し込みがメールごとに違うため。
+  `subjectKeywords`。2026-09-15 変更) /
   フォーム名の取り方: `form_name_source` text check in (`subject`=件名そのまま, `subject_without_name`=件名から「○○ 様」を除く,
   `body_line`=本文のN行目(空行は数えない), `body_label`=本文の「ラベル: 値」の値, `fixed`=固定文字列) / `form_name_param` text(行番号・ラベル・固定文字列) /
   `field_map` jsonb(本文のラベル → 問合せ項目。例 `{"お名前":"name","メールアドレス":"email","電話番号":"phone","住所":"address",
@@ -762,7 +764,7 @@ M3 の対応歴自動記録の要否は M2 完了後に判断。
   Salesforce も 47 万台の TA- を振り続けるため、離れた番号帯にする(会員IDの K-000100000 と同じ考え方)。
 
 **決定論的ルール**(コードで実装。純粋関数 `lib/domain/mail_import_rules.ts` に置き、ユニットテストで固定):
-- ルール判定: 取込候補のメッセージに対し、`sort_order` 順に条件(受信箱・差出人・件名含有)がすべて一致した**最初の1件**を適用。無ければ `import_status='pending'`、note「ルール未一致」で候補に残す。
+- ルール判定: 取込候補のメッセージに対し、`sort_order` 順に条件(受信箱・差出人・件名キーワード)がすべて一致した**最初の1件**を適用。無ければ `import_status='pending'`、note「ルール未一致」で候補に残す。
 - 本文の解析: `text_body`(無ければ `html_body` をテキスト化)を行に分け、「ラベル: 値」(半角/全角コロン)を辞書にする。
   `field_map` のラベルがある項目だけ取り込む。日時「2026/9/15 9:42:03」は日本時間として解釈。電話は数字のみ(先頭の 0 は残す)。メールは小文字化。
 - フォーム名: `form_name_source` で決め、`forms` を名前で**非破壊**解決(無ければ追加。CSV 取込 `import_inquiries.ts` と同方式)。取れなければ `error`(勝手に別名を付けない)。
@@ -789,7 +791,9 @@ M3 の対応歴自動記録の要否は M2 完了後に判断。
   切り出しは純粋関数 `lib/domain/mail_import_rules.ts`(`parseMailBody` / `resolveFormName` / `applyRule` / `findMatchingRule`)で行い、
   画面のプレビューもサーバーの実行も同じ関数を使う。Server Action は `lib/domain/mail_import_rule_actions.ts`(admin のみ)。
   一致するルールが既にあるメールでは、そのルールの内容と処理結果を表示し、編集・「このメールを処理」ができる。
-- `/mail/settings`: ルールの一覧(有効/無効・判定順の変更・削除。admin)。新規作成はメール詳細から行う。
+- `/mail/settings`: ルールの一覧(有効/無効・判定順の変更・削除・**編集**。admin)。編集はダイアログ(`ImportRuleEditDialog`)で、
+  一致条件・フォーム名の取り方・ラベル → 項目の対応・有効を直せる(見本のメールが無いのでプレビューは出ない。2026-09-15 追加)。
+  新規作成はメール詳細から行う。「入れる項目」のセレクトは共通部品 `ImportRuleTargetSelect`。
 - 取込候補(`/mail?folder=candidates`)の一覧に「取込ルール」列(最新の受信メールに一致するルール名。無ければ「未設定」。一覧を読むたびに `findMatchingRule` で判定するので、ルールを直せばすぐ反映される。2026-09-15 追加)と「処理結果」列(問合せID へのリンク / ルール未一致 / エラー)。
 - `/inquiries`: 絞り込み「メール取込分」を追加。行の操作 **①会員検索**(照合結果と候補の表示。氏名/電話/メールの手動検索から選んで紐付け)
   **②新規会員登録**(既存の会員化=新規作成を流用。氏名・電話・メール・住所を引き継ぐ) **③確認済み**(`member_match.status='manual'`。列に表示)。

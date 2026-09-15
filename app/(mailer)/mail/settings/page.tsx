@@ -21,6 +21,7 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import { listMailBoxes, listMailImportRules } from '@/lib/domain/mail';
 import { uniqueDomains } from '@/lib/domain/mail_box_settings';
 import { domainOfAddress, splitOtherMailBox } from '@/lib/domain/mail_folders';
+import { listFieldDefinitions } from '@/lib/domain/object_metadata';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { type DomainIdentity, getDomainIdentity } from '@/lib/mail/ses_identity';
 import { redirect } from 'next/navigation';
@@ -37,7 +38,15 @@ export default async function MailSettingsPage() {
   const me = await getCurrentUser();
   if (me.role !== 'admin') redirect('/mail');
 
-  const [allBoxes, importRules] = await Promise.all([listMailBoxes(), listMailImportRules()]);
+  const [allBoxes, importRules, inquiryFieldDefs] = await Promise.all([
+    listMailBoxes(),
+    listMailImportRules(),
+    listFieldDefinitions('inquiries', 'detail'),
+  ]);
+  // 取込ルールの編集ダイアログの「入れる項目」: 問合せの全項目(空白セルは除く。メール詳細のパネルと同じ)
+  const inquiryFields = inquiryFieldDefs
+    .filter((f) => !f.is_placeholder)
+    .map((f) => ({ field_name: f.field_name, label: f.label, is_in_db: f.is_in_db }));
   // 「その他」(未登録アドレス宛。migration 78)はここでは編集対象にしない
   const { other: otherBox, rest: boxes } = splitOtherMailBox(allBoxes);
   const cfg = getMailAwsConfig();
@@ -191,7 +200,8 @@ export default async function MailSettingsPage() {
         </div>
         <ImportRuleList
           rules={importRules}
-          boxAddresses={Object.fromEntries(allBoxes.map((b) => [b.id, b.address]))}
+          boxes={boxes.map((b) => ({ id: b.id, address: b.address }))}
+          inquiryFields={inquiryFields}
         />
       </CollapsibleCard>
     </div>
