@@ -322,6 +322,10 @@ export async function POST(request: Request): Promise<Response> {
   });
 
   // ---- スレッドを作成 or 更新 ----
+  // 同じメールの通知が同時に2件来た(複数の共有アドレスを経由して転送された)ときは、
+  // どちらも上の Message-ID 確認をすり抜けて新しいスレッドを作ることがある。
+  // メッセージ保存の一意制約違反で気づいたら、この要求で作った空のスレッドを片付ける
+  let createdThreadId: string | null = null;
   if (!threadId) {
     const { data: created, error: tErr } = await supabase
       .from('mail_threads')
@@ -342,6 +346,7 @@ export async function POST(request: Request): Promise<Response> {
       return json({ error: 'failed to create thread' }, 500);
     }
     threadId = (created as { id: string }).id;
+    createdThreadId = threadId;
   } else {
     const { data: current } = await supabase
       .from('mail_threads')
@@ -389,8 +394,14 @@ export async function POST(request: Request): Promise<Response> {
     .select('id')
     .single();
   if (mErr || !message) {
-    // 一意制約違反(同時再送)は重複として扱う
+    // 一意制約違反(同時再送)は重複として扱う。この要求で作った空のスレッドは論理削除して一覧に出さない
     if ((mErr as { code?: string } | null)?.code === '23505') {
+      if (createdThreadId) {
+        await supabase
+          .from('mail_threads')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', createdThreadId);
+      }
       return json({ ok: true, duplicate: true });
     }
     return json({ error: 'failed to store message' }, 500);
