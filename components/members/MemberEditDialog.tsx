@@ -12,6 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { updateMember } from '@/lib/domain/member_actions';
+import { EDITABLE_MEMBER_EXTRA_KEYS } from '@/lib/domain/member_extra_edit';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import type { MemberWithOwner } from '@/lib/domain/types';
 import { useRouter } from 'next/navigation';
@@ -88,19 +89,27 @@ export function MemberEditDialog({
   const [error, setError] = useState<string | null>(null);
   const isAdmin = currentUserRole === 'admin';
 
-  // 動的編集対象: 実DBカラム(is_in_db)のみ。空白セル/専用UI/計算列/extra(jsonb)は除外。
+  // 動的編集対象: 実DBカラム(is_in_db)と、extra(jsonb)のうち編集を許可したキー(電話番号2・3)。
+  // 空白セル/専用UI/計算列/それ以外の extra キーは除外。並びは詳細画面と同じ(sort_order_detail)。
+  const isExtraEditable = (f: FieldDefinition) =>
+    !f.is_in_db && EDITABLE_MEMBER_EXTRA_KEYS.includes(f.field_name);
   const editableFields = detailFields.filter(
-    (f) => f.is_in_db && !f.is_placeholder && !SPECIAL_OR_READONLY_FIELDS.has(f.field_name),
+    (f) =>
+      !f.is_placeholder &&
+      ((f.is_in_db && !SPECIAL_OR_READONLY_FIELDS.has(f.field_name)) || isExtraEditable(f)),
   );
+  const extraKeys = editableFields.filter(isExtraEditable).map((f) => f.field_name);
 
   // プロテクト期限が 2099 以降なら「無期限(固定)」扱い
   const initialUnlimited = (member.protect_expires_at ?? '') >= '2099-01-01';
 
   const record = member as unknown as Record<string, unknown>;
+  const extraRecord = (record.extra as Record<string, unknown> | null | undefined) ?? {};
   const [form, setForm] = useState<Record<string, string | boolean>>(() => {
     const o: Record<string, string | boolean> = {};
     for (const f of editableFields) {
-      o[f.field_name] = initValue(f.data_type, record[f.field_name]);
+      const raw = isExtraEditable(f) ? extraRecord[f.field_name] : record[f.field_name];
+      o[f.field_name] = initValue(f.data_type, raw);
     }
     return o;
   });
@@ -137,11 +146,19 @@ export function MemberEditDialog({
               : null,
           }
         : {};
+      // DB カラムと extra のキーを分けて送る(extra は許可キーだけを差し替える)
+      const columnValues: Record<string, string | boolean> = {};
+      const extraValues: Record<string, string> = {};
+      for (const [k, v] of Object.entries(form)) {
+        if (extraKeys.includes(k)) extraValues[k] = typeof v === 'string' ? v : '';
+        else columnValues[k] = v;
+      }
       const result = await updateMember({
         id: member.id,
-        ...form,
+        ...columnValues,
         do_not_call: doNotCall,
         regular_contact_id: regularContactId,
+        ...(extraKeys.length > 0 ? { extra: extraValues } : {}),
         ...protectPayload,
       });
       if (result.error) {
