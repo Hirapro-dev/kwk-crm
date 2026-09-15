@@ -1,6 +1,5 @@
 'use server';
 
-import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
@@ -10,9 +9,11 @@ import { getCurrentUser } from './auth';
  * 問合せ → 会員化(仕様書 §8.1)。
  * 既存会員の選択 or 新規会員作成のどちらか。
  *
- * ID 採番方針(2026-05 変更):
- *   - 既存 CSV 由来データの ID(K-XXXXXXX) は維持
- *   - 本システム新規作成時は UUID 文字列を採番(衝突回避)
+ * ID 採番方針(2026-09-15 変更。CLAUDE.md §5.16「会員IDの採番」):
+ *   - 既存 CSV 由来データの ID(K-XXXXXXXXX) は維持
+ *   - 本システム新規作成時も K- 形式(9桁ゼロ埋め)で統一し、DB の連番 gen_member_id()
+ *     (migration 86。K-000100000 から)で採番する。2026-05〜09 の UUID 採番は廃止
+ *     (UUID で作られた会員は存在しない)
  */
 
 const ConvertSchema = z
@@ -44,11 +45,18 @@ export interface ConvertResult {
 }
 
 /**
- * 新規会員ID を採番する。
- * UUID v4 を返す(衝突確率は実用上ゼロ)。
+ * 新規会員ID を採番する(K- 形式。migration 86 の gen_member_id())。
+ * 連番なので同時実行でも重複しない。migration 未適用(関数なし)なら error を返す。
  */
-function generateMemberId(): string {
-  return randomUUID();
+async function generateMemberId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<{ id: string } | { error: string }> {
+  const { data, error } = await supabase.rpc('gen_member_id');
+  if (error) return { error: `会員IDの採番に失敗しました: ${error.message}` };
+  if (typeof data !== 'string' || !/^K-\d{9}$/.test(data)) {
+    return { error: '会員IDの採番結果が不正です' };
+  }
+  return { id: data };
 }
 
 export async function convertInquiryToMember(input: {
@@ -92,8 +100,10 @@ export async function convertInquiryToMember(input: {
     if (!existing) return { ok: false, error: '指定の会員が存在しません' };
     memberId = existing.id as string;
   } else {
-    // 新規会員作成(UUID 採番)
-    memberId = generateMemberId();
+    // 新規会員作成(K- 採番)
+    const gen = await generateMemberId(supabase);
+    if ('error' in gen) return { ok: false, error: gen.error };
+    memberId = gen.id;
     const { error: insErr } = await supabase.from('members').insert({
       id: memberId,
       name: parsed.data.new_member_name!,
@@ -106,9 +116,11 @@ export async function convertInquiryToMember(input: {
       registered_at: new Date().toISOString(),
     });
     if (insErr) {
-      // UUID 衝突は実用上発生しないが、念のため1回 retry
+      // 連番なので衝突は起きない想定だが、CSV 取込で同じ番号が先に入っていた場合に備えて1回 retry
       if (insErr.message.includes('duplicate')) {
-        memberId = generateMemberId();
+        const retryGen = await generateMemberId(supabase);
+        if ('error' in retryGen) return { ok: false, error: retryGen.error };
+        memberId = retryGen.id;
         const { error: retryErr } = await supabase.from('members').insert({
           id: memberId,
           name: parsed.data.new_member_name!,
