@@ -10,6 +10,7 @@ import { loadMoreInquiries } from '@/lib/domain/list_more_actions';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import { formatFieldValue, getFieldValue } from '@/lib/utils/format_field';
 import Link from 'next/link';
+import { LeadActions } from './LeadActions';
 
 interface Props {
   initialRows: InquiryListItem[];
@@ -19,6 +20,8 @@ interface Props {
     q?: string;
     formId?: number;
     unassigned?: boolean;
+    /** メール取込分のみ(リード一覧。§5.16)。true のとき照合状態と操作の列を出す */
+    mailImported?: boolean;
     sort?: string;
     dir?: 'asc' | 'desc';
   };
@@ -27,14 +30,25 @@ interface Props {
 }
 
 export function InquiriesInfinite({ initialRows, fields, total, params, canDelete }: Props) {
-  const columns: InfiniteCol[] = fields.map((f) => ({
-    header: f.label ?? f.field_name,
-    sortField: f.is_in_db ? f.field_name : undefined,
-  }));
+  const leadMode = !!params.mailImported;
+  const columns: InfiniteCol[] = [
+    ...(leadMode ? [{ header: '会員照合 / 操作', headClassName: 'w-80' }] : []),
+    ...fields.map((f) => ({
+      header: f.label ?? f.field_name,
+      sortField: f.is_in_db ? f.field_name : undefined,
+    })),
+  ];
 
   const renderRow = (r: InquiryListItem) => {
     const rec = r as unknown as Record<string, unknown>;
-    return fields.map((f, i) => {
+    const leadCell = leadMode
+      ? [
+          <TableCell key="lead" className="py-2">
+            <LeadActions inquiry={r} />
+          </TableCell>,
+        ]
+      : [];
+    const fieldCells = fields.map((f, i) => {
       const isFirst = i === 0;
 
       // 問合せID: 詳細リンク
@@ -104,6 +118,7 @@ export function InquiriesInfinite({ initialRows, fields, total, params, canDelet
         </TableCell>
       );
     });
+    return [...leadCell, ...fieldCells];
   };
 
   if (fields.length === 0) {

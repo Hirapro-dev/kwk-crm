@@ -28,6 +28,7 @@ export async function loadMoreInquiries(
     q?: string;
     formId?: number;
     unassigned?: boolean;
+    mailImported?: boolean;
     sort?: string;
     dir?: 'asc' | 'desc';
   },
