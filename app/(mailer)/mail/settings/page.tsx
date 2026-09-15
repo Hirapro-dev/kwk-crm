@@ -9,8 +9,6 @@
  * メーラー(app/(mailer))のレイアウトは admin 限定ではないため、ここで admin を確認し、それ以外は /mail へ戻す。
  */
 
-import { PanelHeader } from '@/components/layout/PanelHeader';
-import { Card } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -26,6 +24,7 @@ import { domainOfAddress, splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { type DomainIdentity, getDomainIdentity } from '@/lib/mail/ses_identity';
 import { redirect } from 'next/navigation';
+import { CollapsibleCard } from './CollapsibleCard';
 import { CopyButton } from './CopyButton';
 import { DomainCard } from './DomainCard';
 import { ImportRuleList } from './ImportRuleList';
@@ -63,8 +62,12 @@ export default async function MailSettingsPage() {
   return (
     <div className="space-y-3">
       {/* 1. 転送先 */}
-      <Card className="overflow-hidden p-0 shadow-sm">
-        <PanelHeader iconLabel="MAIL" iconColor="#5B8DEF" viewName="メール設定" />
+      <CollapsibleCard
+        id="inbound"
+        iconLabel="MAIL"
+        iconColor="#5B8DEF"
+        viewName="受信用アドレス(転送先)"
+      >
         <div className="space-y-2 px-4 py-3 text-xs text-muted-foreground">
           <p>
             共有アドレスを CRM で受信するには、そのアドレスのサーバー(Xserver
@@ -98,18 +101,18 @@ export default async function MailSettingsPage() {
             </li>
           </ol>
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* 2. 受信箱 */}
       <NewMailBoxForm />
-      <Card className="overflow-hidden p-0 shadow-sm">
-        <PanelHeader
-          iconLabel="BOX"
-          iconColor="#5B8DEF"
-          viewName="受信箱(共有アドレス)"
-          totalCount={boxes.length}
-          actions={otherBox ? <ReassignOtherButton /> : undefined}
-        />
+      <CollapsibleCard
+        id="boxes"
+        iconLabel="BOX"
+        iconColor="#5B8DEF"
+        viewName="受信箱(共有アドレス)"
+        totalCount={boxes.length}
+        actions={otherBox ? <ReassignOtherButton /> : undefined}
+      >
         <div className="border-b px-4 py-2 text-xs text-muted-foreground">
           差出人表示名はメーラーの返信・新規作成フォームの初期値になります(送信者がその場で書き換えても、ここでの既定値は変わりません)。
           署名は送信時に本文の末尾に自動で付きます。無効にした受信箱は新しいメールを受け付けず、送信元にも選べません(過去のスレッドは残ります)。
@@ -144,16 +147,16 @@ export default async function MailSettingsPage() {
             )}
           </TableBody>
         </Table>
-      </Card>
+      </CollapsibleCard>
 
       {/* 3. 送信ドメイン */}
-      <Card className="overflow-hidden p-0 shadow-sm">
-        <PanelHeader
-          iconLabel="DKIM"
-          iconColor="#04844b"
-          viewName="送信ドメイン(SES の検証状態)"
-          totalCount={identities.length}
-        />
+      <CollapsibleCard
+        id="domains"
+        iconLabel="DKIM"
+        iconColor="#04844b"
+        viewName="送信ドメイン(SES の検証状態)"
+        totalCount={identities.length}
+      >
         <div className="border-b px-4 py-2 text-xs text-muted-foreground">
           ドメインごとに一度だけ、SES に登録して DNS に CNAME
           を3本追加すると、そのドメインの全アドレスから送信できるようになります。 DNS の反映後、SES
@@ -169,16 +172,16 @@ export default async function MailSettingsPage() {
             <DomainCard key={i.domain} identity={i} sesConfigured={!!cfg} />
           ))}
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* 4. メール取込ルール(§5.16)。新規作成・編集は取込候補のメール詳細で行う */}
-      <Card className="overflow-hidden p-0 shadow-sm">
-        <PanelHeader
-          iconLabel="RULE"
-          iconColor="#7b3fe4"
-          viewName="メール取込ルール(取込候補 → 問合せ)"
-          totalCount={importRules.length}
-        />
+      <CollapsibleCard
+        id="rules"
+        iconLabel="RULE"
+        iconColor="#7b3fe4"
+        viewName="メール取込ルール(取込候補 → 問合せ)"
+        totalCount={importRules.length}
+      >
         <div className="border-b px-4 py-2 text-xs text-muted-foreground">
           取込候補のメールを開くと出る「取込ルール」パネルで、そのメールを見本にルールを作成・編集します。
           ここでは判定順・有効/無効・削除だけを扱います。判定は上から順に行い、最初に一致したルールを使います。
@@ -190,7 +193,7 @@ export default async function MailSettingsPage() {
           rules={importRules}
           boxAddresses={Object.fromEntries(allBoxes.map((b) => [b.id, b.address]))}
         />
-      </Card>
+      </CollapsibleCard>
     </div>
   );
 }
