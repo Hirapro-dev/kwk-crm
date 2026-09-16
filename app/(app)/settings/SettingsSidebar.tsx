@@ -9,8 +9,10 @@ import {
   Folders,
   GitBranch,
   Home as HomeIcon,
+  Megaphone,
   Menu as MenuIcon,
   ShieldCheck,
+  Tags,
   Upload,
   UserCog,
   Users,
@@ -45,11 +47,6 @@ const SECTIONS: MenuSection[] = [
     items: [
       { href: '/settings/users', label: 'ユーザー管理', icon: <Users className="h-3.5 w-3.5" /> },
       {
-        href: '/settings/projects',
-        label: '案件マスタ',
-        icon: <Briefcase className="h-3.5 w-3.5" />,
-      },
-      {
         href: '/settings/objects',
         label: 'オブジェクト管理',
         icon: <Boxes className="h-3.5 w-3.5" />,
@@ -68,6 +65,27 @@ const SECTIONS: MenuSection[] = [
         href: '/settings/flows',
         label: 'フロー',
         icon: <GitBranch className="h-3.5 w-3.5" />,
+      },
+    ],
+  },
+  {
+    // マスター管理(2026-09-16): 案件・広告・顧客情報取得ポイントのマスタをここにまとめる
+    label: 'マスター管理',
+    items: [
+      {
+        href: '/settings/projects',
+        label: '案件マスタ',
+        icon: <Briefcase className="h-3.5 w-3.5" />,
+      },
+      {
+        href: '/settings/ads',
+        label: '広告マスタ',
+        icon: <Megaphone className="h-3.5 w-3.5" />,
+      },
+      {
+        href: '/settings/acquisition-points',
+        label: '顧客情報取得ポイントマスタ',
+        icon: <Tags className="h-3.5 w-3.5" />,
       },
     ],
   },
