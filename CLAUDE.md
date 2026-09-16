@@ -623,6 +623,8 @@ Salesforce の「広告IDマスタ」(広告一覧 CSV 4 ファイル: KAWARA版
 (集計の列見出し = 46 件。本番の会員に入っている値 46 種類と完全一致)をマスタ化した。
 - `id` serial PK / `name` text unique / `sort_order` int / `is_active` boolean / `created_at` / `updated_at`
 - RLS: SELECT 全ロール / 書込 admin。画面は `/settings/acquisition-points`(追加・行内編集で名前 / 並び順 / 有効)。
+- 2026-09-16(migration 97): 「【分析WEBレポート請求】本人確認完了」「【分析WEBレポート請求】受信データ」の 161 名を
+  **「未来予測レポート」**に統合(マスタに追加、旧 2 件は無効化)。
 - 会員の編集フォーム(`MemberEditDialog`)の「個人情報取得ポイント」は有効なマスタからの**選択式**(空 = 未設定。現在の値が
   マスタに無い/無効化済みでも、その値を選択肢に足して失わない。`selectOptions` プロップ。2026-09-16)
 
