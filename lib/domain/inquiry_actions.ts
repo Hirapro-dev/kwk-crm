@@ -129,7 +129,7 @@ export async function convertInquiryToMember(input: {
     memberId = gen.id;
     // 画面で指定した項目(空文字は未設定扱い)。広告ID は指定が無ければ問合せの値を使う
     const mf = parsed.data.member_fields ?? {};
-    const nz = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
+    const nz = (v: string | null | undefined) => (v?.trim() ? v.trim() : null);
     const mailmag = nz(mf.mailmag_registered_at);
     const extraCols = {
       ad_id: nz(mf.ad_id) ?? inquiry.ad_id,
