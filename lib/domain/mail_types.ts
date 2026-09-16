@@ -130,6 +130,8 @@ export interface MailThreadListParams {
   /** users.id / 'none' = 未割当 */
   assigneeId?: string;
   mailBoxId?: number;
+  /** この受信箱群だけ(「その他(未振り分け)」= マイフォルダに入れていない受信箱。unsortedBoxIds) */
+  mailBoxIds?: number[];
   unreadOnly?: boolean;
   memberId?: string;
   /** true なら「取込候補」(mail_threads.is_import_candidate)のスレッドだけ */

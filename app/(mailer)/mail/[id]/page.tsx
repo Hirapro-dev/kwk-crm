@@ -5,7 +5,8 @@
  */
 
 import { Button } from '@/components/ui/button';
-import { getAdjacentMailThreads } from '@/lib/domain/mail';
+import { getAdjacentMailThreads, listMailBoxes, listMyMailUserFolders } from '@/lib/domain/mail';
+import { unsortedBoxIds } from '@/lib/domain/mail_folders';
 import { mailTabFilter, resolveMailTab } from '@/lib/domain/mail_tabs';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
@@ -29,10 +30,16 @@ export default async function MailThreadPage({ params, searchParams }: PageProps
   // 一覧(page.tsx)と同じ解釈で絞り込み条件を組み立てる
   const tab = resolveMailTab(sp.tab);
   const mailBoxId = sp.box && /^\d+$/.test(sp.box) ? Number(sp.box) : undefined;
+  // 「その他(未振り分け)」から開いたときは、一覧と同じ受信箱群で前後移動する
+  const unsorted = sp.folder === 'unsorted';
+  const unsortedIds = unsorted
+    ? unsortedBoxIds(await listMailBoxes(), await listMyMailUserFolders())
+    : undefined;
   const listParams = {
     q: sp.q || undefined,
     assigneeId: sp.assignee || undefined,
-    mailBoxId,
+    mailBoxId: unsorted ? undefined : mailBoxId,
+    mailBoxIds: unsortedIds,
     unreadOnly: sp.unread === '1',
     importCandidate: sp.folder === 'candidates',
     // 「取込候補」では状態タブを適用しない(一覧と同じ並び・条件で前後移動する)

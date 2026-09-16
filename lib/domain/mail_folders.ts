@@ -198,3 +198,17 @@ export function moveBoxInList(
   const idx = rest.indexOf(beforeId);
   return [...rest.slice(0, idx), movedId, ...rest.slice(idx)];
 }
+
+/**
+ * 「その他(未振り分け)」の対象となる受信箱の ID(2026-09-16 変更)。
+ * 自分のマイフォルダのどれにも入れていない受信箱(「その他」受信箱 = 未登録アドレス宛 を含む)。
+ * マイフォルダが無ければ全受信箱(= すべての受信箱と同じ)。順序は boxes の順のまま(決定論的)。
+ */
+export function unsortedBoxIds(
+  boxes: readonly MailBox[],
+  folders: readonly MailUserFolder[],
+): number[] {
+  const sorted = new Set<number>();
+  for (const f of folders) for (const id of f.boxIds) sorted.add(id);
+  return boxes.filter((b) => !sorted.has(b.id)).map((b) => b.id);
+}

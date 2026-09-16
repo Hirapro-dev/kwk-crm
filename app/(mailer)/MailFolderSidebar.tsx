@@ -48,8 +48,11 @@ import { createContext, useContext, useState, useTransition } from 'react';
 interface Props {
   groups: MailFolderGroup[];
   total: { pendingCount: number; unreadCount: number };
-  /** 「その他」(未登録アドレス宛。migration 78)。未適用時は null */
-  otherBox: { id: number; pendingCount: number; unreadCount: number } | null;
+  /**
+   * 「その他(未振り分け)」の件数: 未登録アドレス宛の「その他」受信箱(migration 78)に加え、
+   * 自分のマイフォルダに入れていない受信箱のメール(2026-09-16 変更)。受信箱が無ければ null
+   */
+  unsortedFolder: { pendingCount: number; unreadCount: number } | null;
   /** 「取込候補」(旧「メール to リード」宛先を含むメール。migration 82)の件数 */
   candidateFolder: { pendingCount: number; unreadCount: number };
   /** 自分がピン留めした受信箱(ピン留めした順。migration 84) */
@@ -161,7 +164,7 @@ function CountBadge({ n, strong }: { n: number; strong?: boolean }) {
 function FolderTree({
   groups,
   total,
-  otherBox,
+  unsortedFolder,
   candidateFolder,
   pinned,
   folders,
@@ -290,16 +293,16 @@ function FolderTree({
         <CountBadge n={candidateFolder.pendingCount} strong />
       </Link>
 
-      {otherBox && (
+      {unsortedFolder && (
         <Link
-          href={hrefFor(otherBox.id)}
+          href={hrefForFolder('unsorted')}
           onClick={onNavigate}
-          className={itemClass(onList && currentBox === String(otherBox.id))}
-          title="まだ受信箱として登録していないアドレス宛のメール。登録すると自動で振り分けられます"
+          className={itemClass(onList && currentFolder === 'unsorted')}
+          title="マイフォルダに入れていない受信箱のメールと、まだ受信箱として登録していないアドレス宛のメール"
         >
           <Archive className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
           <span className="truncate">その他(未振り分け)</span>
-          <CountBadge n={otherBox.pendingCount} strong />
+          <CountBadge n={unsortedFolder.pendingCount} strong />
         </Link>
       )}
 
