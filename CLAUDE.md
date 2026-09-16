@@ -586,14 +586,35 @@ Phase 1 では:
 **画面**: `/withdrawal-parents` `/withdrawal-children` (一覧+詳細)。メニューバーは
 「出金管理」親タブのホバープルダウンから遷移(nav_items の parent_id / visible_roles)。
 
+### 5.17 lp_entries (LP) ★2026-09-16 追加 (migration 95)
+LP・メルマガ登録系フォーム(54 種類)の問合せは、Salesforce では問合せ(TA-)だが CRM の問合せ取込(§5.10c)の対象外だった
+(約 5.8 万件)。これを**問合せとは別のオブジェクト「LP」**として保持し、問合せの件数・集計・レポートには混ぜない
+(2026-09-16 ユーザー決定。取込は今回の CSV 2 ファイルのみで、定期取込は行わない)。出金管理(§5.13)と同じ取込専用オブジェクトの形。
+
+- `id` text PK — 問合せID(`TA-XXXXXXXXX`。元の ID を温存。再取込は id で upsert)
+- `member_id` text FK → members nullable — 会員ID(K-)。取込時に実在する会員だけ紐付け、無ければ NULL
+- `registered_month` text — 登録月(`YYYY/MM`)
+- `form_name` text — フォーム名(名称のまま保持。`forms` には登録しない)
+- `ad_id` text — 広告ID
+- `email` text — メールアドレス(小文字)
+- `name`, `name_kana` text — 氏名 / 氏名かな(ほとんど空)
+- `registered_at` timestamptz — 登録日時(CSV「2026/09/16 15:07:50」を日本時間として解釈)
+- `created_at`, `updated_at`, `deleted_at` timestamptz
+
+**RLS**: SELECT は全ロール(問合せと同じ扱い)、書込は admin のみ(取込はサービスロール)。
+**取込**: `scripts/import/import_lp_entries.ts --file <csv> | --dir <dir> [--dry-run] [--limit N]`(Shift_JIS 対応、冪等)。
+**画面**: `/lp`(一覧。問合せID/メール/氏名/かな/会員ID の部分一致検索、フォーム名の絞り込み、無限スクロール、
+一覧カラムは項目管理 `lp_entries` に従う。admin は一括削除可 §5.14)/ `/lp/[id]`(詳細。編集なし)/
+会員詳細の関連に「LP登録」。メニューは「LP」(問合せの次、全ロール)。`object_definitions` に `lp_entries`(sort 92)。
+
 ### 5.14 一覧画面からのレコード削除 ★2026-08 追加 (migration 73)
 一覧画面の各行の**左端**に、選択チェックボックスと削除ボタンを表示し、
 複数選択してまとめて削除できるようにする(§8.1)。
 
 - **論理削除のみ**。`deleted_at` をセットする(§4.3 のとおり物理削除はしない)。
 - **admin のみ**。他ロールには選択列自体を描画せず、RPC 側でも `is_admin()` で弾く。
-- **対象6オブジェクト**: `members` / `inquiries` / `applications` /
-  `article_reactions` / `withdrawal_parents` / `withdrawal_children`。
+- **対象7オブジェクト**: `members` / `inquiries` / `applications` /
+  `article_reactions` / `withdrawal_parents` / `withdrawal_children` / `lp_entries`(2026-09-16 追加, migration 95)。
   いずれも主キーが text のため引数は `text[]` で統一。
   ※ `activities` は一覧がタイムライン表示のため対象外(既存の1件削除のみ)。
 - **RPC** `soft_delete_records(p_object text, p_ids text[]) RETURNS integer`
@@ -915,6 +936,7 @@ Supabase RLSで以下を実装:
 | `/login` | ログイン | Supabase Auth UI |
 | `/` | ダッシュボード | 今日の架電数/面談数、月次推移、担当別実績、最新活動10件 |
 | `/inquiries` | 問合せ一覧 | フィルタ(フォーム種別/期間/未対応)、検索、会員化ボタン。**メール取込分のみ**(`?mail=1`。§5.16 のリード一覧)では行の先頭に「会員照合 / 操作」列: 照合状態(会員化済 / 候補あり / 該当なし / 確認済み / 未照合)と、①会員検索(自動照合の候補を一致項目つきで表示 + 手動検索 → 紐付け)②新規会員登録(氏名・メール・電話・住所を引き継ぎ、K- 採番)③確認済み(会員を作らずに確認済みにする)。`app/(app)/inquiries/LeadActions.tsx` / `lib/domain/inquiry_lead_actions.ts` / 純粋関数 `lib/domain/inquiry_lead.ts` |
+| `/lp` `/lp/[id]` | LP 一覧 / 詳細 | LP・メルマガ登録系フォームの問合せ(§5.17。問合せとは別オブジェクト、取込専用)。検索・フォーム名の絞り込み・無限スクロール。会員が紐付く行は会員詳細へリンク |
 | `/inquiries/[id]` | 問合せ詳細 | フォーム固有情報表示、メモ。会員化の操作は一覧(メール取込分)と同じ `LeadActions`(2026-09-16 に統一): **会員検索**(自動照合の候補を一致項目つきで表示 + 氏名/カナ/メール/電話/会員IDの手動検索。スクロールして既存会員かどうかを確認し、その会員に紐付け)/ **新規会員登録**(氏名・メール・電話・住所を引き継ぎ、K- 採番)/ **確認済み**。旧 `ConvertButton`(会員IDの直接入力)は廃止 |
 | `/members` | 会員一覧 | フィルタ(担当/種別/期間)、CSV出力 |
 | `/members/[id]` | 会員詳細 | 基本情報、申込履歴、活動履歴タイムライン、活動追加。対応歴は**接触種別(チェックボックスで複数選択 = いずれかに一致。例: アウトとインだけ)・状態(通電/不在/接触対応/申込獲得/受信/送信)・期間**で絞り込める(サーバー側で絞り、先頭ページを読み直す。`MemberActivityTimeline`。メール由来の対応歴(§5.7)が増えたため。2026-09-16) |
