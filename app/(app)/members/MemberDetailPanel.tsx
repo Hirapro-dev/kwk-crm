@@ -37,6 +37,7 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import { listInquiries } from '@/lib/domain/inquiries';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { listLpEntriesByMember } from '@/lib/domain/lp';
+import { listAcquisitionPoints } from '@/lib/domain/masters';
 import { getMember } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { listAllUsers } from '@/lib/domain/users_admin';
@@ -80,6 +81,7 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     relInqs,
     relReactions,
     relLps,
+    acquisitionPoints,
   ] = await Promise.all([
     // 先頭ページのみ。以降は MemberActivityTimeline が無限スクロールで追記する。
     // ページサイズは追加取得(loadMoreActivities)と必ず揃えること。
@@ -93,6 +95,8 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     listInquiries({ memberId, pageSize: 100, page: 1 }),
     getReactionsByMember(memberId, 100),
     listLpEntriesByMember(memberId, 100),
+    // 編集フォームの「個人情報取得ポイント」の選択肢(有効なマスタのみ。§5.19)
+    listAcquisitionPoints({ activeOnly: true }),
   ]);
 
   const canAssignRegularContact = ['admin', 'manager', 'sales', 'support'].includes(me.role);
@@ -161,6 +165,7 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                   currentUserRole={me.role}
                   protectUsers={protectUsers}
                   detailFields={detailFields}
+                  selectOptions={{ info_acquired_points: acquisitionPoints.map((p) => p.name) }}
                 />
                 <MemberDeleteButton memberId={member.id} memberName={member.name ?? member.id} />
               </>

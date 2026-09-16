@@ -621,7 +621,8 @@ Salesforce の「広告IDマスタ」(広告一覧 CSV 4 ファイル: KAWARA版
 (集計の列見出し = 46 件。本番の会員に入っている値 46 種類と完全一致)をマスタ化した。
 - `id` serial PK / `name` text unique / `sort_order` int / `is_active` boolean / `created_at` / `updated_at`
 - RLS: SELECT 全ロール / 書込 admin。画面は `/settings/acquisition-points`(追加・行内編集で名前 / 並び順 / 有効)。
-- ※ 会員の編集フォームはまだ自由入力のまま(マスタからの選択への切り替えは今後の課題)
+- 会員の編集フォーム(`MemberEditDialog`)の「個人情報取得ポイント」は有効なマスタからの**選択式**(空 = 未設定。現在の値が
+  マスタに無い/無効化済みでも、その値を選択肢に足して失わない。`selectOptions` プロップ。2026-09-16)
 
 **設定画面の「マスター管理」**(2026-09-16): 設定の左メニューに「マスター管理」区画を設け、案件マスタ / 広告マスタ /
 顧客情報取得ポイントマスタ をまとめる(`SettingsSidebar`)。参照は `lib/domain/masters.ts`、変更は `lib/domain/master_actions.ts`。
