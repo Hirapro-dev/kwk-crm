@@ -8,7 +8,7 @@
  */
 
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
-import type { MailBoxCount } from './mail_folders';
+import type { MailBoxCount, MailUserFolder } from './mail_folders';
 import { type MailImportRule, findMatchingRule } from './mail_import_rules';
 import type {
   MailBox,
@@ -306,6 +306,38 @@ export async function listMyMailBoxPins(): Promise<number[]> {
   // mail_box_pins は生成済みの DB 型に無いため、行の形を明示する
   const rows = (data ?? []) as unknown as Array<{ mail_box_id: number }>;
   return rows.map((r) => Number(r.mail_box_id));
+}
+
+/**
+ * 自分のマイフォルダ(migration 92)。フォルダは sort_order → id 順、フォルダ内の受信箱は sort_order 順。
+ * テーブル未適用なら空配列(画面を壊さない)。
+ */
+export async function listMyMailUserFolders(): Promise<MailUserFolder[]> {
+  const supabase = await createClient();
+  const [{ data: folders, error: fErr }, { data: items, error: iErr }] = await Promise.all([
+    supabase
+      .from('mail_user_folders')
+      .select('id, name, sort_order')
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true }),
+    supabase
+      .from('mail_user_folder_items')
+      .select('folder_id, mail_box_id, sort_order')
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true }),
+  ]);
+  if (fErr || iErr) return [];
+  const byFolder = new Map<number, number[]>();
+  for (const it of (items ?? []) as unknown as Array<{ folder_id: number; mail_box_id: number }>) {
+    const list = byFolder.get(Number(it.folder_id)) ?? [];
+    list.push(Number(it.mail_box_id));
+    byFolder.set(Number(it.folder_id), list);
+  }
+  return ((folders ?? []) as unknown as Array<{ id: number; name: string }>).map((f) => ({
+    id: Number(f.id),
+    name: f.name,
+    boxIds: byFolder.get(Number(f.id)) ?? [],
+  }));
 }
 
 /**
