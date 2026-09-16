@@ -130,8 +130,8 @@ export async function getInquiry(id: string): Promise<Inquiry | null> {
         id, form_id, member_id, name, name_kana, email, phone,
         postal_code, address, ad_id, extra, registered_at, created_at,
         form:forms!inquiries_form_id_fkey(id, name, category),
-        member:members!inquiries_member_id_fkey(id, name)
-      `,
+        member:members!inquiries_member_id_fkey(id, name),
+        source_mail_message_id, member_match`,
     )
     .eq('id', id)
     .is('deleted_at', null)
