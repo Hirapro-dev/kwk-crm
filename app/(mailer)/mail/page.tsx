@@ -9,7 +9,13 @@
 
 import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
-import { countMailThreads, listMailBoxes, listMailThreads } from '@/lib/domain/mail';
+import {
+  countMailThreads,
+  listMailBoxes,
+  listMailThreads,
+  listMyMailUserFolders,
+} from '@/lib/domain/mail';
+import { unsortedBoxIds } from '@/lib/domain/mail_folders';
 import { MAIL_TABS, mailTabFilter, resolveMailTab } from '@/lib/domain/mail_tabs';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import { MailFilterBar } from './MailFilterBar';
@@ -35,21 +41,25 @@ export default async function MailPage({ searchParams }: PageProps) {
   const tab = resolveMailTab(sp.tab);
   const mailBoxId = sp.box && /^\d+$/.test(sp.box) ? Number(sp.box) : undefined;
   const importCandidate = sp.folder === 'candidates';
+  // 「その他(未振り分け)」: 自分のマイフォルダに入れていない受信箱(未登録アドレス宛の「その他」を含む)
+  const unsorted = sp.folder === 'unsorted';
+  const boxes = await listMailBoxes();
+  const unsortedIds = unsorted ? unsortedBoxIds(boxes, await listMyMailUserFolders()) : undefined;
 
   // タブ以外の絞り込み(担当・未読・件名・受信箱・取込候補)。タブ件数はこの条件で数える
   const baseParams = {
     q: sp.q || undefined,
     assigneeId: sp.assignee || undefined,
-    mailBoxId,
+    mailBoxId: unsorted ? undefined : mailBoxId,
+    mailBoxIds: unsortedIds,
     unreadOnly: sp.unread === '1',
     importCandidate,
   } as const;
   // 「取込候補」では状態タブを適用しない(状態・分類を問わず全件を仕訳の対象にする)
   const listParams = { ...baseParams, ...mailTabFilter(tab, { importCandidate }) } as const;
 
-  const [result, boxes, users, tabCounts] = await Promise.all([
+  const [result, users, tabCounts] = await Promise.all([
     listMailThreads({ ...listParams, page: 1, pageSize: LIST_PAGE_SIZE }),
-    listMailBoxes(),
     listAllUsers({ activeOnly: true }),
     importCandidate
       ? Promise.resolve([] as number[])
@@ -64,11 +74,13 @@ export default async function MailPage({ searchParams }: PageProps) {
   const currentBox = mailBoxId ? boxes.find((b) => b.id === mailBoxId) : undefined;
   const title = importCandidate
     ? '取込候補'
-    : currentBox
-      ? currentBox.display_name
-        ? `${currentBox.display_name} <${currentBox.address}>`
-        : currentBox.address
-      : 'すべての受信箱';
+    : unsorted
+      ? 'その他(未振り分け)'
+      : currentBox
+        ? currentBox.display_name
+          ? `${currentBox.display_name} <${currentBox.address}>`
+          : currentBox.address
+        : 'すべての受信箱';
   const listKey = `${tab.key}|${sp.q ?? ''}|${sp.assignee ?? ''}|${sp.box ?? ''}|${sp.unread ?? ''}|${sp.folder ?? ''}`;
 
   return (
@@ -103,7 +115,7 @@ export default async function MailPage({ searchParams }: PageProps) {
           initialRows={result.rows}
           total={result.total}
           params={listParams}
-          showBoxColumn={!mailBoxId}
+          showBoxColumn={unsorted || !mailBoxId}
           boxAddresses={Object.fromEntries(boxes.map((b) => [b.id, b.address]))}
           canEdit={me.role !== 'viewer'}
           assigneeOptions={assigneeOptions}

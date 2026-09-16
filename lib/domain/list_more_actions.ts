@@ -88,6 +88,7 @@ export async function loadMoreMailThreads(
     category?: MailCategory;
     assigneeId?: string;
     mailBoxId?: number;
+    mailBoxIds?: number[];
     unreadOnly?: boolean;
     importCandidate?: boolean;
   },

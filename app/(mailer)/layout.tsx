@@ -20,6 +20,7 @@ import {
   pinnedFolderItems,
   splitOtherMailBox,
   sumMailBoxCounts,
+  unsortedBoxIds,
   userFolderSections,
 } from '@/lib/domain/mail_folders';
 import { MailFolderSidebar, MailFolderSidebarProvider } from './MailFolderSidebar';
@@ -39,21 +40,19 @@ export default async function MailerLayout({ children }: { children: React.React
     ]);
   const candidateFolder = { pendingCount: candidatePending, unreadCount: candidateUnread };
   // 「その他」(未登録アドレス宛。migration 78)はドメイン階層に混ぜず、固定項目として出す
-  const { other, rest } = splitOtherMailBox(boxes);
+  const { rest } = splitOtherMailBox(boxes);
   const groups = groupMailBoxesByDomain(rest, counts);
   // 自分のピン留め(migration 84)。ピン留めした順に、件数付きで上部に出す
   const pinned = pinnedFolderItems(groups, pinIds);
   // 自分のマイフォルダ(migration 92)。受信箱をドラッグ&ドロップで整理する区画
   const folders = userFolderSections(groups, userFolders);
   const total = sumMailBoxCounts(counts);
-  const otherCount = other ? counts.find((c) => c.mail_box_id === other.id) : undefined;
-  const otherBox = other
-    ? {
-        id: other.id,
-        pendingCount: Number(otherCount?.pending_count ?? 0),
-        unreadCount: Number(otherCount?.unread_count ?? 0),
-      }
-    : null;
+  // 「その他(未振り分け)」= 未登録アドレス宛の「その他」受信箱 + マイフォルダに入れていない受信箱(ユーザーごと)
+  const unsortedIdSet = new Set(unsortedBoxIds(boxes, userFolders));
+  const unsortedFolder =
+    boxes.length > 0
+      ? sumMailBoxCounts(counts.filter((c) => unsortedIdSet.has(Number(c.mail_box_id))))
+      : null;
 
   return (
     <MailFolderSidebarProvider>
@@ -63,7 +62,7 @@ export default async function MailerLayout({ children }: { children: React.React
           <MailFolderSidebar
             groups={groups}
             total={total}
-            otherBox={otherBox}
+            unsortedFolder={unsortedFolder}
             candidateFolder={candidateFolder}
             pinned={pinned}
             folders={folders}
