@@ -81,6 +81,63 @@ export async function updateMailThread(
   return {};
 }
 
+/** 一括更新の上限(§5.14 の一括削除と同じ 500 件。誤操作時の被害を限定する) */
+const BULK_MAX = 500;
+
+export interface BulkUpdateMailThreadsInput {
+  ids: string[];
+  status?: MailStatus;
+  category?: MailCategory;
+  /** 担当。null で担当解除 */
+  assigneeId?: string | null;
+  isRead?: boolean;
+}
+
+export interface BulkUpdateMailThreadsResult {
+  updated?: number;
+  error?: string;
+}
+
+/**
+ * 一覧でチェックしたスレッドをまとめて更新する(状態・分類・担当・既読/未読)。
+ * 1回 500 件まで。権限は updateMailThread と同じ(viewer 不可 + RLS)。
+ */
+export async function bulkUpdateMailThreads(
+  input: BulkUpdateMailThreadsInput,
+): Promise<BulkUpdateMailThreadsResult> {
+  const me = await getCurrentUser();
+  if (me.role === 'viewer') return { error: '閲覧専用ユーザーは変更できません' };
+  const ids = [...new Set((input.ids ?? []).filter((id) => typeof id === 'string' && id))];
+  if (ids.length === 0) return { error: 'スレッドが選択されていません' };
+  if (ids.length > BULK_MAX) return { error: `一度に更新できるのは ${BULK_MAX} 件までです` };
+
+  const patch: Record<string, unknown> = {};
+  if (input.status !== undefined) {
+    if (!MAIL_STATUSES.includes(input.status))
+      return { error: `不正なステータスです: ${input.status}` };
+    patch.status = input.status;
+  }
+  if (input.category !== undefined) {
+    if (!MAIL_CATEGORIES.includes(input.category))
+      return { error: `不正な分類です: ${input.category}` };
+    patch.category = input.category;
+  }
+  if (input.assigneeId !== undefined) patch.assignee_id = input.assigneeId || null;
+  if (input.isRead !== undefined) patch.is_read = input.isRead;
+  if (Object.keys(patch).length === 0) return { error: '変更する内容を選んでください' };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('mail_threads')
+    .update(patch)
+    .in('id', ids)
+    .is('deleted_at', null)
+    .select('id');
+  if (error) return { error: `一括更新に失敗しました: ${error.message}` };
+  revalidatePath('/mail', 'layout');
+  return { updated: (data ?? []).length };
+}
+
 /**
  * スレッドを開いたときに既読にする(Server Component から呼ぶ用)。
  * 失敗しても画面表示は止めない。

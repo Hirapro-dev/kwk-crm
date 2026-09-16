@@ -43,20 +43,31 @@ export interface InfiniteCol {
   headClassName?: string;
 }
 
+/** 一括操作(actions)に渡す道具。選択中の ID と、操作後に一覧を取り直す関数 */
+export interface InfiniteSelectionContext {
+  ids: string[];
+  /** 選択を解除する */
+  clear: () => void;
+  /** 読み込み済みのページを取り直す(一括更新の反映用) */
+  refresh: () => Promise<void>;
+}
+
 /**
- * 行の選択と削除を有効にする設定。
+ * 行の選択と一括操作(削除・更新)を有効にする設定。
  * 未指定(undefined)のときは選択列を描画せず、従来どおりの表示になる。
- * 呼び出し側は admin のときだけ渡すこと(RPC 側でも admin チェックあり)。
+ * onDelete を渡すときは admin のときだけ渡すこと(RPC 側でも admin チェックあり)。
  */
 export interface InfiniteSelection<T> {
   /** 行の主キーを返す */
   getId: (row: T) => string;
-  /** 選択された行を論理削除する(Server Action を呼ぶ) */
-  onDelete: (ids: string[]) => Promise<{ deleted?: number; error?: string }>;
+  /** 選択された行を論理削除する(Server Action を呼ぶ)。省略時は削除ボタンを出さない */
+  onDelete?: (ids: string[]) => Promise<{ deleted?: number; error?: string }>;
   /** 確認ダイアログに出すオブジェクト名(例:「会員」) */
   objectLabel: string;
   /** 1件削除時に確認ダイアログへ出す対象名(氏名など)。省略時は ID を表示。 */
   getLabel?: (row: T) => string;
+  /** 削除以外の一括操作(状態変更など)。選択中バーに描画する(メーラーの一覧など) */
+  actions?: (ctx: InfiniteSelectionContext) => React.ReactNode;
 }
 
 export function InfiniteTable<T>({
@@ -225,7 +236,7 @@ export function InfiniteTable<T>({
   };
 
   const confirmDelete = async () => {
-    if (!selection || !pendingIds) return;
+    if (!selection?.onDelete || !pendingIds) return;
     setDeleting(true);
     setDeleteError(null);
     const res = await selection.onDelete(pendingIds);
@@ -264,7 +275,14 @@ export function InfiniteTable<T>({
     <div className={cn(fillParent && 'flex min-h-0 flex-1 flex-col')}>
       {/* 選択中バー: 1件以上チェックされているときだけ出す(一括削除の入口) */}
       {selection && selectedCount > 0 && (
-        <div className="mb-2 flex items-center gap-3 rounded border border-destructive/30 bg-destructive/5 px-3 py-2">
+        <div
+          className={cn(
+            'mb-2 flex flex-wrap items-center gap-3 rounded border px-3 py-2',
+            selection.onDelete
+              ? 'border-destructive/30 bg-destructive/5'
+              : 'border-primary/30 bg-primary/5',
+          )}
+        >
           <span className="text-sm font-medium">{selectedCount.toLocaleString()} 件を選択中</span>
           <button
             type="button"
@@ -273,17 +291,24 @@ export function InfiniteTable<T>({
           >
             選択を解除
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setDeleteError(null);
-              setPendingIds(Array.from(selectedIds));
-            }}
-            className="ml-auto inline-flex items-center gap-1 rounded bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            選択した{selection.objectLabel}を削除
-          </button>
+          {selection.actions?.({
+            ids: Array.from(selectedIds),
+            clear: () => setSelectedIds(new Set()),
+            refresh: () => reloadLoadedPages(new Set(), 0),
+          })}
+          {selection.onDelete && (
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteError(null);
+                setPendingIds(Array.from(selectedIds));
+              }}
+              className="ml-auto inline-flex items-center gap-1 rounded bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              選択した{selection.objectLabel}を削除
+            </button>
+          )}
         </div>
       )}
       {/* 一覧自体をスクロール領域にして、ヘッダー行を sticky で固定する。

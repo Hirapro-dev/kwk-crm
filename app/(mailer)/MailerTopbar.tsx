@@ -1,4 +1,3 @@
-import { LogoutButton } from '@/components/layout/LogoutButton';
 import type { AppUser } from '@/lib/domain/types';
 import { ExternalLink, Mail, PenSquare } from 'lucide-react';
 import Link from 'next/link';
@@ -8,7 +7,8 @@ import { MailerSettingsMenu } from './MailerSettingsMenu';
 /**
  * メーラー(/mail)専用の黒ヘッダー(仕様書 §8.1)。
  * CRM 本体の Topbar/TabsNav は出さず、メーラーとして独立した画面にする
- * (アプリランチャーから別タブで開く運用)。右側の歯車はメール専用の設定メニュー(admin のみ)。
+ * (アプリランチャーから別タブで開く運用)。右側の歯車はメール専用の設定メニュー
+ * (メール設定は admin のみ。ログアウトは全ロールでここから行う)。
  */
 export function MailerTopbar({ me }: { me: AppUser }) {
   const userInitial = (me.full_name ?? me.email).charAt(0).toUpperCase();
@@ -48,8 +48,7 @@ export function MailerTopbar({ me }: { me: AppUser }) {
             {userInitial}
           </div>
           <span className="hidden text-xs opacity-90 sm:inline">{me.full_name ?? me.email}</span>
-          {me.role === 'admin' && <MailerSettingsMenu />}
-          <LogoutButton />
+          <MailerSettingsMenu isAdmin={me.role === 'admin'} />
         </div>
       </div>
     </header>
