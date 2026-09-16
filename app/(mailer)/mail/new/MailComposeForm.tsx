@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { groupAddressesByDomain } from '@/lib/domain/mail_folders';
 import { createMailThreadAndSend } from '@/lib/domain/mail_send_actions';
 import { composeOutgoingBody } from '@/lib/domain/mail_text';
 import { useRouter } from 'next/navigation';
@@ -101,11 +102,16 @@ export function MailComposeForm({
           disabled={pending}
           onChange={(e) => handleBoxChange(e.target.value)}
         >
-          {boxes.map((b) => (
-            <option key={b.id} value={String(b.id)} disabled={!b.sendable}>
-              {b.display_name ? `${b.display_name} <${b.address}>` : b.address}
-              {b.sendable ? '' : '(受信専用)'}
-            </option>
+          {/* 受信箱が数百件あるため、ドメインごとのセクションに分けて探しやすくする */}
+          {groupAddressesByDomain(boxes).map((g) => (
+            <optgroup key={g.domain} label={g.domain || '(ドメインなし)'}>
+              {g.items.map((b) => (
+                <option key={b.id} value={String(b.id)} disabled={!b.sendable}>
+                  {b.display_name ? `${b.display_name} <${b.address}>` : b.address}
+                  {b.sendable ? '' : '(受信専用)'}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </Select>
       </div>
@@ -179,10 +185,14 @@ export function MailComposeForm({
           }}
         >
           <option value="">署名なし</option>
-          {signatureOptions.map((b) => (
-            <option key={b.id} value={String(b.id)}>
-              {b.display_name ? `${b.display_name} <${b.address}>` : b.address} の署名
-            </option>
+          {groupAddressesByDomain(signatureOptions).map((g) => (
+            <optgroup key={g.domain} label={g.domain || '(ドメインなし)'}>
+              {g.items.map((b) => (
+                <option key={b.id} value={String(b.id)}>
+                  {b.display_name ? `${b.display_name} <${b.address}>` : b.address} の署名
+                </option>
+              ))}
+            </optgroup>
           ))}
         </Select>
         {signatureText && (

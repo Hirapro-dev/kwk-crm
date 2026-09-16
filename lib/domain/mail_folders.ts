@@ -200,6 +200,28 @@ export function moveBoxInList(
 }
 
 /**
+ * 返信・新規作成の「送信元」「署名」プルダウン用: アドレスを持つ項目をドメインごとにまとめる
+ * (optgroup のセクション)。ドメイン・アドレスとも昇順(決定論的)。ドメインの大小文字は同一視する。
+ */
+export function groupAddressesByDomain<T extends { address: string }>(
+  items: readonly T[],
+): Array<{ domain: string; items: T[] }> {
+  const groups = new Map<string, T[]>();
+  for (const it of items) {
+    const d = domainOfAddress(it.address);
+    const list = groups.get(d) ?? [];
+    list.push(it);
+    groups.set(d, list);
+  }
+  const out = [...groups.entries()].map(([domain, list]) => ({
+    domain,
+    items: [...list].sort((a, b) => a.address.localeCompare(b.address)),
+  }));
+  out.sort((a, b) => a.domain.localeCompare(b.domain));
+  return out;
+}
+
+/**
  * 「その他(未振り分け)」の対象となる受信箱の ID(2026-09-16 変更)。
  * 自分のマイフォルダのどれにも入れていない受信箱(「その他」受信箱 = 未登録アドレス宛 を含む)。
  * マイフォルダが無ければ全受信箱(= すべての受信箱と同じ)。順序は boxes の順のまま(決定論的)。
