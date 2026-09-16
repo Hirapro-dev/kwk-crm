@@ -146,3 +146,55 @@ export function pinnedFolderItems(
   }
   return out;
 }
+
+/** マイフォルダ(migration 92)の1件。boxIds は表示順 */
+export interface MailUserFolder {
+  id: number;
+  name: string;
+  boxIds: number[];
+}
+
+export interface MailUserFolderSection {
+  id: number;
+  name: string;
+  items: MailFolderItem[];
+  pendingCount: number;
+  unreadCount: number;
+}
+
+/**
+ * 左フォルダの「マイフォルダ」区画(migration 92)。自分のフォルダごとに、登録した順の受信箱を
+ * 件数付きの MailFolderItem として返す。存在しない ID は無視し、重複は1件にする。
+ */
+export function userFolderSections(
+  groups: readonly MailFolderGroup[],
+  folders: readonly MailUserFolder[],
+): MailUserFolderSection[] {
+  return folders.map((f) => {
+    const items = pinnedFolderItems(groups, f.boxIds);
+    return {
+      id: f.id,
+      name: f.name,
+      items,
+      pendingCount: items.reduce((n, i) => n + i.pendingCount, 0),
+      unreadCount: items.reduce((n, i) => n + i.unreadCount, 0),
+    };
+  });
+}
+
+/**
+ * フォルダ内の並び替え(ドラッグ&ドロップ)。movedId を beforeId の前に差し込んだ並びを返す。
+ * beforeId が null なら末尾。movedId が一覧に無ければ(別フォルダからの移動)追加する。
+ * 自分自身の前に置く、または beforeId が一覧に無いときは並びを変えない。
+ */
+export function moveBoxInList(
+  ids: readonly number[],
+  movedId: number,
+  beforeId: number | null,
+): number[] {
+  if (beforeId !== null && (beforeId === movedId || !ids.includes(beforeId))) return [...ids];
+  const rest = ids.filter((id) => id !== movedId);
+  if (beforeId === null) return [...rest, movedId];
+  const idx = rest.indexOf(beforeId);
+  return [...rest.slice(0, idx), movedId, ...rest.slice(idx)];
+}

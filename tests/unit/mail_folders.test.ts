@@ -3,9 +3,11 @@ import {
   domainOfAddress,
   expandedDomainForBox,
   groupMailBoxesByDomain,
+  moveBoxInList,
   pinnedFolderItems,
   splitOtherMailBox,
   sumMailBoxCounts,
+  userFolderSections,
 } from '../../lib/domain/mail_folders';
 import { OTHER_MAILBOX_ADDRESS } from '../../lib/domain/mail_types';
 import type { MailBox } from '../../lib/domain/mail_types';
@@ -144,5 +146,50 @@ describe('pinnedFolderItems', () => {
 
   it('ピン留めが無ければ空', () => {
     expect(pinnedFolderItems(groups, [])).toEqual([]);
+  });
+});
+
+/**
+ * マイフォルダ(ユーザーごとの受信箱フォルダ。migration 92)。
+ * 受信箱をドラッグ&ドロップで自分のフォルダに入れ、対応ごとに整理する。
+ */
+describe('userFolderSections', () => {
+  const groups = groupMailBoxesByDomain(
+    [box(1, 'a@x.jp'), box(2, 'b@x.jp'), box(3, 'c@y.jp')],
+    [
+      { mail_box_id: 1, pending_count: 2, unread_count: 1 },
+      { mail_box_id: 3, pending_count: 5, unread_count: 0 },
+    ],
+  );
+  it('フォルダごとに、登録した順の受信箱と件数の合計を返す', () => {
+    const out = userFolderSections(groups, [
+      { id: 10, name: 'キオクシア対応', boxIds: [3, 1] },
+      { id: 11, name: '空', boxIds: [] },
+    ]);
+    expect(out.map((f) => f.name)).toEqual(['キオクシア対応', '空']);
+    expect(out[0]?.items.map((i) => i.id)).toEqual([3, 1]);
+    expect(out[0]?.pendingCount).toBe(7);
+    expect(out[0]?.unreadCount).toBe(1);
+    expect(out[1]?.items).toEqual([]);
+  });
+  it('存在しない受信箱IDは無視し、重複は1件にする', () => {
+    const out = userFolderSections(groups, [{ id: 10, name: 'f', boxIds: [2, 999, 2] }]);
+    expect(out[0]?.items.map((i) => i.id)).toEqual([2]);
+  });
+});
+
+describe('moveBoxInList(フォルダ内の並び替え)', () => {
+  it('移動する受信箱を、指定した受信箱の前に差し込む', () => {
+    expect(moveBoxInList([1, 2, 3, 4], 4, 2)).toEqual([1, 4, 2, 3]);
+    expect(moveBoxInList([1, 2, 3, 4], 1, 3)).toEqual([2, 1, 3, 4]);
+  });
+  it('差し込み先が null なら末尾へ。一覧に無い受信箱なら末尾に追加する(別フォルダからの移動)', () => {
+    expect(moveBoxInList([1, 2, 3], 1, null)).toEqual([2, 3, 1]);
+    expect(moveBoxInList([1, 2], 9, null)).toEqual([1, 2, 9]);
+    expect(moveBoxInList([1, 2], 9, 1)).toEqual([9, 1, 2]);
+  });
+  it('自分自身の前に置く・差し込み先が無い場合は並びを変えない', () => {
+    expect(moveBoxInList([1, 2, 3], 2, 2)).toEqual([1, 2, 3]);
+    expect(moveBoxInList([1, 2, 3], 2, 999)).toEqual([1, 2, 3]);
   });
 });

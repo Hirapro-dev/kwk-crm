@@ -3,9 +3,17 @@
 import {
   type MailFolderGroup,
   type MailFolderItem,
+  type MailUserFolderSection,
   expandedDomainForBox,
 } from '@/lib/domain/mail_folders';
 import { pinMailBox, unpinMailBox } from '@/lib/domain/mail_pin_actions';
+import {
+  createMailUserFolder,
+  deleteMailUserFolder,
+  placeMailBoxInFolder,
+  removeMailBoxFromFolder,
+  renameMailUserFolder,
+} from '@/lib/domain/mail_user_folder_actions';
 import { cn } from '@/lib/utils/cn';
 import {
   Archive,
@@ -13,11 +21,15 @@ import {
   ChevronRight,
   ChevronsDown,
   ChevronsUp,
+  FolderPlus,
+  GripVertical,
   Import,
   Inbox,
   PanelLeft,
+  Pencil,
   Pin,
   PinOff,
+  Trash2,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -42,6 +54,35 @@ interface Props {
   candidateFolder: { pendingCount: number; unreadCount: number };
   /** 自分がピン留めした受信箱(ピン留めした順。migration 84) */
   pinned: MailFolderItem[];
+  /** 自分のマイフォルダ(migration 92)。受信箱をドラッグ&ドロップで整理する */
+  folders: MailUserFolderSection[];
+}
+
+/** ドラッグ中の受信箱(dataTransfer に JSON で載せる) */
+interface DragPayload {
+  boxId: number;
+  /** 元のフォルダ(マイフォルダから掴んだとき)。null = ドメイン一覧・ピン留めから */
+  fromFolderId: number | null;
+}
+const DRAG_MIME = 'application/x-mail-box';
+
+function setDragPayload(e: React.DragEvent, payload: DragPayload) {
+  e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
+  e.dataTransfer.effectAllowed = 'move';
+}
+function readDragPayload(e: React.DragEvent): DragPayload | null {
+  try {
+    const raw = e.dataTransfer.getData(DRAG_MIME);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Partial<DragPayload>;
+    if (!Number.isInteger(p.boxId)) return null;
+    return { boxId: Number(p.boxId), fromFolderId: p.fromFolderId ?? null };
+  } catch {
+    return null;
+  }
+}
+function isBoxDrag(e: React.DragEvent): boolean {
+  return Array.from(e.dataTransfer.types).includes(DRAG_MIME);
 }
 
 /** ピン留め/解除ボタン(フォルダ行の右端) */
@@ -123,6 +164,7 @@ function FolderTree({
   otherBox,
   candidateFolder,
   pinned,
+  folders,
   onNavigate,
 }: Props & { onNavigate?: () => void }) {
   const pathname = usePathname();
@@ -138,6 +180,58 @@ function FolderTree({
       if (pinnedIds.has(boxId)) await unpinMailBox(boxId);
       else await pinMailBox(boxId);
     });
+
+  // --- マイフォルダ(migration 92): 作成・名前変更・削除・ドラッグ&ドロップ ---
+  const [folderPending, startFolder] = useTransition();
+  const [folderError, setFolderError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null);
+  const [folderCollapsed, setFolderCollapsed] = useState<Record<number, boolean>>({});
+  /** ドロップ先の強調表示(フォルダ全体 = 'f:ID'、項目の前 = 'i:フォルダID:受信箱ID') */
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const runFolder = (fn: () => Promise<{ error?: string }>) => {
+    setFolderError(null);
+    startFolder(async () => {
+      const r = await fn();
+      if (r.error) setFolderError(r.error);
+    });
+  };
+  const submitCreate = () => {
+    const name = newName.trim();
+    if (!name) return;
+    setCreating(false);
+    setNewName('');
+    runFolder(() => createMailUserFolder(name));
+  };
+  const submitRename = () => {
+    if (!renaming) return;
+    const { id, name } = renaming;
+    setRenaming(null);
+    runFolder(() => renameMailUserFolder(id, name));
+  };
+  const dropInto = (e: React.DragEvent, folderId: number, beforeBoxId: number | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropTarget(null);
+    const p = readDragPayload(e);
+    if (!p) return;
+    runFolder(() =>
+      placeMailBoxInFolder({
+        folderId,
+        mailBoxId: p.boxId,
+        beforeBoxId,
+        fromFolderId: p.fromFolderId,
+      }),
+    );
+  };
+  const allowDrop = (e: React.DragEvent, key: string) => {
+    if (!isBoxDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    if (dropTarget !== key) setDropTarget(key);
+  };
   // 開閉状態(true=閉じる)。受信箱が数百件あるため、記録の無いドメインは閉じた扱いにする
   // (=既定はすべて閉じる)。初期表示では選択中の受信箱があるドメインだけ開いておく。
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
@@ -219,7 +313,12 @@ function FolderTree({
             {pinned.map((b) => {
               const active = onList && currentBox === String(b.id);
               return (
-                <div key={`pin-${b.id}`} className="flex items-center gap-0.5">
+                <div
+                  key={`pin-${b.id}`}
+                  className="flex items-center gap-0.5"
+                  draggable
+                  onDragStart={(e) => setDragPayload(e, { boxId: b.id, fromFolderId: null })}
+                >
                   <Link
                     href={hrefFor(b.id)}
                     onClick={onNavigate}
@@ -239,6 +338,214 @@ function FolderTree({
           </div>
         </div>
       )}
+
+      {/* マイフォルダ: 受信箱をドラッグ&ドロップで自分のフォルダに整理する(migration 92) */}
+      <div className="pt-1">
+        <div className="flex items-center gap-1 px-1 py-1 text-[11px] font-semibold text-muted-foreground">
+          <span>マイフォルダ</span>
+          <button
+            type="button"
+            onClick={() => {
+              setCreating(true);
+              setNewName('');
+            }}
+            disabled={folderPending}
+            className="ml-auto grid h-6 w-6 place-items-center rounded hover:bg-accent hover:text-foreground disabled:opacity-50"
+            aria-label="フォルダを作成"
+            title="フォルダを作成"
+          >
+            <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
+        {folderError && <p className="px-2 pb-1 text-[11px] text-destructive">{folderError}</p>}
+        {creating && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitCreate();
+            }}
+            className="flex items-center gap-1 px-1 pb-1"
+          >
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && setCreating(false)}
+              placeholder="フォルダ名"
+              maxLength={50}
+              className="h-7 min-w-0 flex-1 rounded border bg-background px-2 text-xs"
+              aria-label="フォルダ名"
+            />
+            <button
+              type="submit"
+              className="h-7 rounded bg-primary px-2 text-xs text-primary-foreground"
+            >
+              作成
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreating(false)}
+              className="h-7 rounded px-2 text-xs text-muted-foreground hover:bg-accent"
+            >
+              取消
+            </button>
+          </form>
+        )}
+        {folders.length === 0 && !creating && (
+          <p className="px-2 pb-1 text-[11px] text-muted-foreground">
+            「+」でフォルダを作り、受信箱をドラッグして入れると、よく見るアドレスを対応ごとにまとめられます。
+          </p>
+        )}
+        <div className="space-y-0.5">
+          {folders.map((f) => {
+            const isCollapsed = folderCollapsed[f.id] ?? false;
+            const folderKey = `f:${f.id}`;
+            return (
+              <div
+                key={`folder-${f.id}`}
+                onDragOver={(e) => allowDrop(e, folderKey)}
+                onDragLeave={() => dropTarget === folderKey && setDropTarget(null)}
+                onDrop={(e) => dropInto(e, f.id, null)}
+                className={cn(
+                  'rounded border border-transparent',
+                  dropTarget === folderKey && 'border-primary bg-primary/5',
+                )}
+              >
+                <div className="flex items-center gap-0.5">
+                  {renaming?.id === f.id ? (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        submitRename();
+                      }}
+                      className="flex min-w-0 flex-1 items-center gap-1 px-1"
+                    >
+                      <input
+                        value={renaming.name}
+                        onChange={(e) => setRenaming({ id: f.id, name: e.target.value })}
+                        onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)}
+                        maxLength={50}
+                        className="h-7 min-w-0 flex-1 rounded border bg-background px-2 text-xs"
+                        aria-label="フォルダ名"
+                      />
+                      <button
+                        type="submit"
+                        className="h-7 rounded bg-primary px-2 text-xs text-primary-foreground"
+                      >
+                        保存
+                      </button>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setFolderCollapsed((c) => ({ ...c, [f.id]: !isCollapsed }))}
+                      className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-1.5 text-left text-xs font-semibold hover:bg-accent"
+                      aria-expanded={!isCollapsed}
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      )}
+                      <span className="truncate">{f.name}</span>
+                      <span className="text-[10px] font-normal text-muted-foreground">
+                        ({f.items.length})
+                      </span>
+                      {isCollapsed && <CountBadge n={f.pendingCount} strong />}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setRenaming({ id: f.id, name: f.name })}
+                    disabled={folderPending}
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground opacity-40 hover:bg-accent hover:opacity-100 disabled:opacity-30"
+                    aria-label="フォルダ名を変更"
+                    title="フォルダ名を変更"
+                  >
+                    <Pencil className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `フォルダ「${f.name}」を削除します(受信箱そのものは消えません)。よろしいですか?`,
+                        )
+                      ) {
+                        runFolder(() => deleteMailUserFolder(f.id));
+                      }
+                    }}
+                    disabled={folderPending}
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground opacity-40 hover:bg-accent hover:text-destructive hover:opacity-100 disabled:opacity-30"
+                    aria-label="フォルダを削除"
+                    title="フォルダを削除"
+                  >
+                    <Trash2 className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </div>
+                {!isCollapsed && (
+                  <div className="ml-3 space-y-0.5 border-l pl-2">
+                    {f.items.length === 0 && (
+                      <p className="px-2 py-1 text-[11px] text-muted-foreground">
+                        ここに受信箱をドラッグ
+                      </p>
+                    )}
+                    {f.items.map((b) => {
+                      const active = onList && currentBox === String(b.id);
+                      const itemKey = `i:${f.id}:${b.id}`;
+                      return (
+                        <div
+                          key={`folder-${f.id}-${b.id}`}
+                          draggable
+                          onDragStart={(e) =>
+                            setDragPayload(e, { boxId: b.id, fromFolderId: f.id })
+                          }
+                          onDragOver={(e) => allowDrop(e, itemKey)}
+                          onDrop={(e) => dropInto(e, f.id, b.id)}
+                          className={cn(
+                            'flex items-center gap-0.5 rounded border-t-2 border-transparent',
+                            dropTarget === itemKey && 'border-primary',
+                          )}
+                        >
+                          <GripVertical
+                            className="h-3.5 w-3.5 shrink-0 cursor-grab text-muted-foreground opacity-40"
+                            aria-hidden="true"
+                          />
+                          <Link
+                            href={hrefFor(b.id)}
+                            onClick={onNavigate}
+                            className={cn(
+                              itemClass(active),
+                              'min-w-0 flex-1',
+                              !b.isActive && 'opacity-60',
+                            )}
+                            title={b.displayName ? `${b.displayName} <${b.address}>` : b.address}
+                          >
+                            <span className="truncate">{b.localPart}</span>
+                            <span className="truncate text-[10px] text-muted-foreground">
+                              @{b.address.split('@')[1] ?? ''}
+                            </span>
+                            <CountBadge n={b.pendingCount} strong />
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => runFolder(() => removeMailBoxFromFolder(f.id, b.id))}
+                            disabled={folderPending}
+                            className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground opacity-40 hover:bg-accent hover:opacity-100 disabled:opacity-30"
+                            aria-label="フォルダから外す"
+                            title="フォルダから外す"
+                          >
+                            <X className="h-3 w-3" aria-hidden="true" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {groups.length === 0 && (
         <p className="px-2 py-2 text-xs text-muted-foreground">受信箱が登録されていません。</p>
@@ -289,7 +596,12 @@ function FolderTree({
                 {g.items.map((b) => {
                   const active = onList && currentBox === String(b.id);
                   return (
-                    <div key={b.id} className="flex items-center gap-0.5">
+                    <div
+                      key={b.id}
+                      className="flex items-center gap-0.5"
+                      draggable
+                      onDragStart={(e) => setDragPayload(e, { boxId: b.id, fromFolderId: null })}
+                    >
                       <Link
                         href={hrefFor(b.id)}
                         onClick={onNavigate}
