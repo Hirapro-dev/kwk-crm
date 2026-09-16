@@ -1,5 +1,6 @@
 'use client';
 
+import { AdMasterPicker } from '@/components/masters/AdMasterPicker';
 import { UserCombobox } from '@/components/members/UserCombobox';
 import { Button } from '@/components/ui/button';
 import {
@@ -95,6 +96,8 @@ export function MemberEditDialog({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const isAdmin = currentUserRole === 'admin';
+  // 広告マスタの選択ダイアログ(§5.18)。選ぶと広告ID と広告媒体名の両方に入れる
+  const [adPickerOpen, setAdPickerOpen] = useState(false);
 
   // 動的編集対象: 実DBカラム(is_in_db)と、extra(jsonb)のうち編集を許可したキー(電話番号2・3)。
   // 空白セル/専用UI/計算列/それ以外の extra キーは除外。並びは詳細画面と同じ(sort_order_detail)。
@@ -192,6 +195,14 @@ export function MemberEditDialog({
         編集
       </Button>
 
+      <AdMasterPicker
+        open={adPickerOpen}
+        onOpenChange={setAdPickerOpen}
+        onPick={(ad) => {
+          setField('ad_id', ad.id);
+          setField('ad_medium', ad.name);
+        }}
+      />
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-[90%] sm:max-w-[720px]">
           <DialogHeader>
@@ -211,6 +222,19 @@ export function MemberEditDialog({
                     value={form[f.field_name]}
                     onChange={(v) => setField(f.field_name, v)}
                     options={selectOptions?.[f.field_name]}
+                    trailing={
+                      f.field_name === 'ad_id' || f.field_name === 'ad_medium' ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAdPickerOpen(true)}
+                          title="広告マスタから選んで、広告ID と広告媒体名の両方に入れます"
+                        >
+                          取得
+                        </Button>
+                      ) : undefined
+                    }
                   />
                 ))}
               </div>
@@ -298,11 +322,14 @@ function FieldInput({
   value,
   onChange,
   options,
+  trailing,
 }: {
   field: FieldDefinition;
   value: string | boolean | undefined;
   onChange: (v: string | boolean) => void;
   options?: string[];
+  /** 入力欄の右に置く操作(例: 広告マスタの【取得】) */
+  trailing?: React.ReactNode;
 }) {
   const label = field.label ?? field.field_name;
 
@@ -350,11 +377,14 @@ function FieldInput({
 
   return (
     <Field label={label}>
-      <Input
-        type={inputType}
-        value={typeof value === 'string' ? value : ''}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <div className="flex items-center gap-2">
+        <Input
+          type={inputType}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        {trailing}
+      </div>
     </Field>
   );
 }

@@ -12,6 +12,8 @@ export interface InquiryListItem {
   created_at: string;
   form: { id: number; name: string; category: string | null } | null;
   member: { id: string; name: string } | null;
+  /** 広告ID(新規会員登録の既定値・一覧の媒体名併記に使う。§5.18) */
+  ad_id?: string | null;
   /** メール取込(§5.16)で作った問合せの元メール。null なら CSV 取込・手入力 */
   source_mail_message_id?: string | null;
   /** 会員の自動照合結果(§5.16) */
