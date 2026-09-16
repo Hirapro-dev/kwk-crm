@@ -69,6 +69,8 @@ function applyThreadFilters<Q extends Record<string, any>>(
   if (params.assigneeId === 'none') q = q.is('assignee_id', null);
   else if (params.assigneeId) q = q.eq('assignee_id', params.assigneeId);
   if (params.mailBoxId) q = q.eq('mail_box_id', params.mailBoxId);
+  // 空配列なら何も一致しない(全受信箱をマイフォルダに入れた人の「その他」は空になる)
+  if (params.mailBoxIds) q = q.in('mail_box_id', params.mailBoxIds);
   if (params.unreadOnly) q = q.eq('is_read', false);
   if (params.memberId) q = q.eq('member_id', params.memberId);
   if (params.importCandidate) q = q.eq('is_import_candidate', true);

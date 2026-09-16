@@ -8,6 +8,7 @@ import {
   pinnedFolderItems,
   splitOtherMailBox,
   sumMailBoxCounts,
+  unsortedBoxIds,
   userFolderSections,
 } from '../../lib/domain/mail_folders';
 import { OTHER_MAILBOX_ADDRESS } from '../../lib/domain/mail_types';
@@ -218,5 +219,32 @@ describe('groupAddressesByDomain(送信元プルダウンのセクション分�
     expect(out).toHaveLength(1);
     expect(out[0]?.domain).toBe('x.jp');
     expect(groupAddressesByDomain([])).toEqual([]);
+  });
+});
+
+/**
+ * 「その他(未振り分け)」(2026-09-16 変更): 受信箱として未登録のアドレス宛(「その他」受信箱)に加えて、
+ * 自分のマイフォルダに入れていない受信箱のメールも表示する。どの受信箱が対象かはユーザーごとに変わる。
+ */
+describe('unsortedBoxIds(マイフォルダに入れていない受信箱)', () => {
+  const boxes = [
+    box(1, 'a@x.jp'),
+    box(2, 'b@x.jp'),
+    box(3, 'c@y.jp'),
+    box(9, OTHER_MAILBOX_ADDRESS),
+  ];
+  it('マイフォルダのどれにも入っていない受信箱の ID を返す(「その他」受信箱は常に含む)', () => {
+    expect(
+      unsortedBoxIds(boxes, [
+        { id: 10, name: 'f1', boxIds: [1] },
+        { id: 11, name: 'f2', boxIds: [3, 1] },
+      ]),
+    ).toEqual([2, 9]);
+  });
+  it('マイフォルダが無ければ全受信箱が対象(=すべての受信箱と同じ)', () => {
+    expect(unsortedBoxIds(boxes, [])).toEqual([1, 2, 3, 9]);
+  });
+  it('存在しない受信箱IDがフォルダにあっても無視する', () => {
+    expect(unsortedBoxIds(boxes, [{ id: 10, name: 'f', boxIds: [999] }])).toEqual([1, 2, 3, 9]);
   });
 });
