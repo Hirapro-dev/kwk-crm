@@ -21,6 +21,7 @@ import {
   markInquiryReviewed,
   searchMembersForInquiry,
 } from '@/lib/domain/inquiry_lead_actions';
+import { ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 
@@ -52,7 +53,17 @@ function MemberRow({
     <li className="flex items-center gap-3 border-t py-2 text-xs first:border-t-0">
       <div className="min-w-0 flex-1">
         <div className="font-medium">
-          {m.name ?? '(氏名なし)'} <span className="font-mono text-muted-foreground">{m.id}</span>
+          {/* 候補の会員詳細を別タブで開いて確認できるようにする(ダイアログは閉じない) */}
+          <a
+            href={`/members/${m.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+            title="会員詳細を別タブで開く"
+          >
+            {m.name ?? '(氏名なし)'} <span className="font-mono text-muted-foreground">{m.id}</span>
+            <ExternalLink className="ml-1 inline h-3 w-3 opacity-60" aria-hidden="true" />
+          </a>
         </div>
         <div className="truncate text-muted-foreground">
           {[m.phone1, m.email1, m.address].filter(Boolean).join(' / ') || '-'}
