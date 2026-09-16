@@ -10,13 +10,15 @@
 
 import { PanelFilterBar, PanelHeader } from '@/components/layout/PanelHeader';
 import { ResizableSplit } from '@/components/layout/ResizableSplit';
+import { NewMemberDialog } from '@/components/members/NewMemberDialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
-import { getAdNameMap } from '@/lib/domain/masters';
+import { getAdNameMap, listAcquisitionPoints } from '@/lib/domain/masters';
 import { listMembers } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
+import { listAllUsers } from '@/lib/domain/users_admin';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { MemberDetailPanel } from './MemberDetailPanel';
@@ -48,11 +50,22 @@ export default async function MembersPage({ searchParams }: PageProps) {
   const isSplit = sp.view === 'split';
   const selected = sp.selected;
 
-  const [result, listFields, adNames] = await Promise.all([
+  const [result, listFields, adNames, users, acquisitionPoints] = await Promise.all([
     listMembers({ ...memberParams, page: 1, pageSize: LIST_PAGE_SIZE }),
     getVisibleFields('members', 'list'),
     getAdNameMap(),
+    listAllUsers({ activeOnly: true }),
+    listAcquisitionPoints({ activeOnly: true }),
   ]);
+  // 会員一覧の「新規登録」(viewer 以外)
+  const newMemberButton =
+    me.role !== 'viewer' ? (
+      <NewMemberDialog
+        users={users.map((u) => ({ id: u.id, name: u.full_name ?? u.email }))}
+        currentUserId={me.id}
+        acquisitionPoints={acquisitionPoints.map((p) => p.name)}
+      />
+    ) : null;
 
   // 表示条件を維持したままモードだけ切り替えるリンクを作る
   const baseParams = () => {
@@ -90,11 +103,14 @@ export default async function MembersPage({ searchParams }: PageProps) {
               viewName="顧客情報一覧"
               totalCount={result.total}
               actions={
-                <Link href={toListHref}>
-                  <Button variant="outline" size="sm">
-                    一覧表示
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-2">
+                  {newMemberButton}
+                  <Link href={toListHref}>
+                    <Button variant="outline" size="sm">
+                      一覧表示
+                    </Button>
+                  </Link>
+                </div>
               }
             />
             <PanelFilterBar>
@@ -150,6 +166,7 @@ export default async function MembersPage({ searchParams }: PageProps) {
           actions={
             /* デスクトップ: ヘッダー右に全ボタン */
             <div className="hidden sm:flex items-center gap-2">
+              {newMemberButton}
               <Link href={toSplitHref}>
                 <Button variant="outline" size="sm">
                   分割ビュー

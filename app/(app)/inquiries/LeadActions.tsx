@@ -304,6 +304,7 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="shrink-0 whitespace-nowrap"
                     onClick={() => setAdPickerOpen(true)}
                     title="広告マスタから選んで、広告ID と広告媒体名の両方に入れます"
                   >
@@ -319,6 +320,7 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="shrink-0 whitespace-nowrap"
                     onClick={() => setAdPickerOpen(true)}
                   >
                     取得

@@ -195,14 +195,6 @@ export function MemberEditDialog({
         編集
       </Button>
 
-      <AdMasterPicker
-        open={adPickerOpen}
-        onOpenChange={setAdPickerOpen}
-        onPick={(ad) => {
-          setField('ad_id', ad.id);
-          setField('ad_medium', ad.name);
-        }}
-      />
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-[90%] sm:max-w-[720px]">
           <DialogHeader>
@@ -228,6 +220,7 @@ export function MemberEditDialog({
                           type="button"
                           variant="outline"
                           size="sm"
+                          className="shrink-0 whitespace-nowrap"
                           onClick={() => setAdPickerOpen(true)}
                           title="広告マスタから選んで、広告ID と広告媒体名の両方に入れます"
                         >
@@ -312,6 +305,15 @@ export function MemberEditDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* 編集ダイアログより後ろに置く: 同じ z-50 の固定要素は DOM の後ろが上に描かれるため。前に置くと編集ダイアログに隠れる */}
+      <AdMasterPicker
+        open={adPickerOpen}
+        onOpenChange={setAdPickerOpen}
+        onPick={(ad) => {
+          setField('ad_id', ad.id);
+          setField('ad_medium', ad.name);
+        }}
+      />
     </>
   );
 }
