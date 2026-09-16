@@ -98,6 +98,26 @@ export async function loadMoreMailThreads(
   return r.rows;
 }
 
+/**
+ * 会員詳細の対応歴を絞り込んで読み直す(接触種別・状態・期間)。件数付きで返す。
+ * 絞り込みを変えたときの先頭ページと、その続きの両方で使う。
+ */
+export async function loadActivitiesPage(
+  params: {
+    memberId?: string;
+    ownerId?: string;
+    dBunrui?: string;
+    mBunrui?: string;
+    sBunrui?: string;
+    from?: string;
+    to?: string;
+  },
+  page: number,
+) {
+  const r = await listActivities({ ...params, page, pageSize: LIST_PAGE_SIZE });
+  return { rows: r.rows, total: r.total };
+}
+
 export async function loadMoreActivities(
   params: {
     memberId?: string;

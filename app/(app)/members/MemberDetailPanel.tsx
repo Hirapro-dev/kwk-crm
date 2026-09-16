@@ -18,8 +18,8 @@ import { renderHighlightFieldValue } from '@/components/members/HighlightFieldVa
 import { MemberDeleteButton } from '@/components/members/MemberDeleteButton';
 import { MemberEditDialog } from '@/components/members/MemberEditDialog';
 import { RegularContactButton } from '@/components/members/RegularContactButton';
-import { RemarksEditor } from '@/components/objects/RemarksEditor';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
+import { RemarksEditor } from '@/components/objects/RemarksEditor';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -181,7 +181,11 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                 fullWidthFields={['remarks']}
                 fieldOverrides={{
                   remarks: (
-                    <RemarksEditor objectType="members" recordId={member.id} value={member.remarks} />
+                    <RemarksEditor
+                      objectType="members"
+                      recordId={member.id}
+                      value={member.remarks}
+                    />
                   ),
                   protect_released_at: (() => {
                     const exp = member.protect_expires_at;
@@ -397,6 +401,7 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
               total={activities.total}
               currentUserId={me.id}
               currentUserRole={me.role}
+              bunruiList={bunruiList}
             />
           </CardContent>
         </Card>
