@@ -16,22 +16,38 @@ import Link from 'next/link';
 import { LpInfinite } from './LpInfinite';
 
 interface PageProps {
-  searchParams: Promise<{ q?: string; form?: string; sort?: string; dir?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    form?: string;
+    /** '1' = メール取込分のみ(§5.16 / migration 99) */
+    mail?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 }
 
 export default async function LpPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const dir = sp.dir === 'asc' ? 'asc' : 'desc';
   const formName = sp.form || undefined;
+  const mailImported = sp.mail === '1';
 
   const [me, result, listFields, formNames, adNames] = await Promise.all([
     getCurrentUser(),
-    listLpEntries({ q: sp.q, formName, sort: sp.sort, dir, page: 1, pageSize: LIST_PAGE_SIZE }),
+    listLpEntries({
+      q: sp.q,
+      formName,
+      mailImported,
+      sort: sp.sort,
+      dir,
+      page: 1,
+      pageSize: LIST_PAGE_SIZE,
+    }),
     getVisibleFields('lp_entries', 'list'),
     listLpFormNames(),
     getAdNameMap(),
   ]);
-  const listKey = `${sp.q ?? ''}|${formName ?? ''}|${sp.sort ?? ''}|${dir}`;
+  const listKey = `${sp.q ?? ''}|${formName ?? ''}|${mailImported ? 1 : 0}|${sp.sort ?? ''}|${dir}`;
 
   return (
     <div className="space-y-3">
@@ -60,13 +76,17 @@ export default async function LpPage({ searchParams }: PageProps) {
                 </option>
               ))}
             </select>
+            <label className="flex items-center gap-1 text-sm">
+              <input type="checkbox" name="mail" value="1" defaultChecked={mailImported} />
+              メール取込分のみ
+            </label>
             <button
               type="submit"
               className="h-8 rounded bg-primary px-3 text-sm font-medium text-primary-foreground"
             >
               検索
             </button>
-            {(sp.q || formName) && (
+            {(sp.q || formName || mailImported) && (
               <Link href="/lp" className="sf-link text-sm">
                 クリア
               </Link>
@@ -79,7 +99,7 @@ export default async function LpPage({ searchParams }: PageProps) {
           initialRows={result.rows as unknown as Array<Record<string, unknown>>}
           fields={listFields}
           total={result.total}
-          params={{ q: sp.q, formName, sort: sp.sort, dir }}
+          params={{ q: sp.q, formName, mailImported, sort: sp.sort, dir }}
           canDelete={me.role === 'admin'}
           adNames={adNames}
         />

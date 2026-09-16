@@ -83,7 +83,13 @@ export async function loadMoreWithdrawalChildren(
 }
 
 export async function loadMoreLpEntries(
-  params: { q?: string; formName?: string; sort?: string; dir?: 'asc' | 'desc' },
+  params: {
+    q?: string;
+    formName?: string;
+    mailImported?: boolean;
+    sort?: string;
+    dir?: 'asc' | 'desc';
+  },
   page: number,
 ) {
   const r = await listLpEntries({ ...params, page, pageSize: LIST_PAGE_SIZE });

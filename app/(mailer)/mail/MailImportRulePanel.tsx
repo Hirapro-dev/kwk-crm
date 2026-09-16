@@ -12,6 +12,9 @@ import {
   FORM_NAME_SOURCE_LABELS,
   type FieldColumn,
   type FormNameSource,
+  IMPORT_TARGETS,
+  IMPORT_TARGET_LABELS,
+  type ImportTarget,
   type MailImportRule,
   applyRule,
   guessFieldTarget,
@@ -62,6 +65,8 @@ interface Props {
   importStatus: 'pending' | 'done' | 'error' | null;
   importNote: string | null;
   inquiryId: string | null;
+  /** 取込先が LP のとき作成した LP(migration 99) */
+  lpEntryId?: string | null;
 }
 
 function initialFieldMap(
@@ -88,6 +93,7 @@ export function MailImportRulePanel({
   importStatus,
   importNote,
   inquiryId,
+  lpEntryId = null,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -121,6 +127,9 @@ export function MailImportRulePanel({
     existingRule?.form_name_source ?? (guessedFormLabel ? 'body_label' : 'body_line'),
   );
   const [param, setParam] = useState(existingRule?.form_name_param ?? guessedFormLabel ?? '1');
+  // 取込先(問合せ / LP)とフォーム名キーワード(migration 99)
+  const [target, setImportTarget] = useState<ImportTarget>(existingRule?.target ?? 'inquiry');
+  const [formNameContains, setFormNameContains] = useState(existingRule?.form_name_contains ?? '');
   const [fieldMap, setFieldMap] = useState<Record<string, string>>(() =>
     initialFieldMap(labelNames, existingRule, options.extraKeys),
   );
@@ -147,6 +156,8 @@ export function MailImportRulePanel({
           from_address: useFrom ? sample.fromAddress : null,
           subject_contains: subjectContains,
           body_contains: bodyContains,
+          form_name_contains: formNameContains,
+          target,
           form_name_source: source,
           form_name_param: param,
           field_map: fieldMap,
@@ -166,6 +177,8 @@ export function MailImportRulePanel({
       useFrom,
       subjectContains,
       bodyContains,
+      formNameContains,
+      target,
       source,
       param,
       fieldMap,
@@ -228,6 +241,8 @@ export function MailImportRulePanel({
         fromAddress: useFrom ? sample.fromAddress : null,
         subjectContains,
         bodyContains,
+        formNameContains,
+        target,
         formNameSource: source,
         formNameParam: param,
         fieldMap,
@@ -264,6 +279,10 @@ export function MailImportRulePanel({
               rel="noreferrer"
             >
               問合せ {inquiryId}
+            </a>
+          ) : lpEntryId ? (
+            <a href={`/lp/${lpEntryId}`} className="sf-link" target="_blank" rel="noreferrer">
+              LP {lpEntryId}
             </a>
           ) : importStatus === 'error' ? (
             <span className="text-destructive">エラー</span>
@@ -315,6 +334,40 @@ export function MailImportRulePanel({
               <p className="text-[11px] text-muted-foreground">
                 件名では区別できない型(例:
                 本文1行目だけが「受信データ」と「本人確認完了」で違う)を分けるときに使います
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">取込先</Label>
+              <select
+                className={selectClass}
+                value={target}
+                onChange={(e) => setImportTarget(e.target.value as ImportTarget)}
+                disabled={!isAdmin}
+              >
+                {IMPORT_TARGETS.map((t) => (
+                  <option key={t} value={t}>
+                    {IMPORT_TARGET_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted-foreground">
+                LP を選ぶと問合せではなく
+                LP(§5.17)に入れます。氏名・かな・メール・広告ID・登録日時だけを取り込み、会員の紐付けはしません
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">
+                フォーム名に含むキーワード(空白区切り)
+              </Label>
+              <Input
+                value={formNameContains}
+                onChange={(e) => setFormNameContains(e.target.value)}
+                disabled={!isAdmin}
+                placeholder="空欄ならフォーム名で絞らない"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                下の「フォーム名の取り方」で決めたフォーム名にすべて含むときに一致します(例:
+                「LP」「メールマガジン」)。本文の他の場所は見ません
               </p>
             </div>
           </div>
@@ -496,7 +549,9 @@ export function MailImportRulePanel({
             </ul>
           )}
           <p className="text-[11px] text-muted-foreground">
-            会員の自動照合は、保存後に「このメールを処理」または受信時に自動で行われ、結果は問合せ一覧に出ます。
+            {target === 'lp'
+              ? '取込先が LP のため、フォーム名・氏名・かな・メール・広告ID・登録日時だけを LP に入れます(可変項目は入りません)。会員の紐付けはしません。'
+              : '会員の自動照合は、保存後に「このメールを処理」または受信時に自動で行われ、結果は問合せ一覧に出ます。'}
           </p>
         </section>
 

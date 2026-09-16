@@ -8,6 +8,7 @@ import {
 } from '@/lib/domain/mail_import_rule_actions';
 import {
   FORM_NAME_SOURCE_LABELS,
+  IMPORT_TARGET_LABELS,
   type MailImportRule,
   subjectKeywords,
 } from '@/lib/domain/mail_import_rules';
@@ -94,7 +95,17 @@ export function ImportRuleList({ rules, boxes, inquiryFields }: Props) {
                   <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               </td>
-              <td className="px-3 py-2">{r.name}</td>
+              <td className="px-3 py-2">
+                {r.name}
+                {r.target === 'lp' && (
+                  <span
+                    className="ml-1 rounded bg-violet-100 px-1 py-0.5 text-[10px] text-violet-800"
+                    title="取込先: LP(会員の紐付けなし)"
+                  >
+                    {IMPORT_TARGET_LABELS.lp}
+                  </span>
+                )}
+              </td>
               <td className="px-3 py-2 text-xs text-muted-foreground">
                 {r.mail_box_id !== null && (
                   <div>受信箱: {boxAddresses[r.mail_box_id] ?? r.mail_box_id}</div>
@@ -122,10 +133,22 @@ export function ImportRuleList({ rules, boxes, inquiryFields }: Props) {
                     <span className="text-[10px]">(すべて含む)</span>
                   </div>
                 )}
+                {subjectKeywords(r.form_name_contains).length > 0 && (
+                  <div>
+                    フォーム名にキーワード:{' '}
+                    {subjectKeywords(r.form_name_contains).map((k) => (
+                      <span key={k} className="mr-1 rounded bg-muted px-1 py-0.5">
+                        {k}
+                      </span>
+                    ))}
+                    <span className="text-[10px]">(すべて含む)</span>
+                  </div>
+                )}
                 {r.mail_box_id === null &&
                   !r.from_address &&
                   !r.subject_contains &&
-                  !r.body_contains && <div>(条件なし)</div>}
+                  !r.body_contains &&
+                  !r.form_name_contains && <div>(条件なし)</div>}
               </td>
               <td className="px-3 py-2 text-xs">
                 {FORM_NAME_SOURCE_LABELS[r.form_name_source]}
