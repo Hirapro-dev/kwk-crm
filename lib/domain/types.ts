@@ -73,6 +73,9 @@ export interface Activity {
   s_bunrui: string | null;
   registered_date: string | null;
   registered_datetime: string | null;
+  /** メーラーのメール由来の対応歴(migration 93)。クリックでスレッドを開くためのリンク先 */
+  mail_thread_id?: string | null;
+  mail_message_id?: string | null;
   created_at: string;
   updated_at: string;
 }

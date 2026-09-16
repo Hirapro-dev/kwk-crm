@@ -416,6 +416,13 @@ erDiagram
 - `s_bunrui` text — 小分類(Sbunrui__c)
 - `registered_date` date — `tourokuhi__c`
 - `registered_datetime` timestamptz — `tourokunitiji__c`
+- `mail_message_id` uuid FK → mail_messages nullable(部分一意)/ `mail_thread_id` uuid FK → mail_threads nullable — **メーラーのメール由来の対応歴**
+  (2026-09-16 追加, migration 93)。会員に紐付けたスレッドのメール(受信・送信の各1通)を DB トリガーで自動記録する:
+  `mail_messages` の INSERT と `mail_threads.member_id` / `deleted_at` の変更で `sync_mail_thread_activities(thread_id)`(SECURITY DEFINER)を
+  呼び、紐付け → 記録 / 付け替え → 会員を更新 / 解除 → 論理削除(再紐付けで戻す)。値は `d_bunrui='LINE／メール'`、`s_bunrui='受信'|'送信'`、
+  `description`=件名、`registered_datetime`=送受信日時、`owner_id`=送信者(受信は担当)。会員詳細・対応歴一覧では件名をクリックで
+  メーラーのスレッド(`/mail/[id]`)を別タブで開く(`ActivityTimeline`)。過去分(既に紐付いていたスレッド)は自動では入れず、
+  migration 93 末尾の SQL を運用判断で実行する
 - `created_at`, `updated_at`, `deleted_at` timestamptz
 
 **インデックス(120万件運用のため必須)**:
@@ -751,7 +758,7 @@ Vercel では `AWS_*` が予約名のため `MAIL_` 接頭辞を付け、SDK ク
 
 **段階**: M1 受信箱(受信・スレッド・会員突合・担当/ステータス) → M2 送信(返信・新規・配信状態・`/mail/settings` での受信箱管理と送信ドメインの SES 登録) →
 M3 CRM 連携(受信/送信を対応歴 `d_bunrui=メール` に自動記録、会員詳細「メール」タブ、定型文、添付送信、スレッド結合)。
-M3 の対応歴自動記録の要否は M2 完了後に判断。
+M3 の対応歴自動記録は 2026-09-16 に実装(migration 93。会員に紐付けたスレッドのメールを DB トリガーで `activities` に記録。§5.7)。
 
 ### 5.16 メール取込ルール(メール → 問合せ) ★2026-09-15 追加(設計承認待ち → 承認後に migration)
 **目的**: メーラーの「取込候補」(§5.15)に溜まるフォーム通知メール(例: 【未来予測分析レポート請求】本人確認完了)から
