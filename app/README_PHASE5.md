@@ -30,7 +30,7 @@
 
 ### 問合せ → 会員化(仕様書 §8.1)
 
-`/inquiries/[id]` の `ConvertButton` から:
+`/inquiries/[id]` の `LeadActions`(会員検索 / 新規会員登録。2026-09-16 に `ConvertButton` から置き換え)から:
 1. **既存会員に紐づける** — `K-XXXXXXX` を入力して既存 members レコードと結合
 2. **新規会員として作成** — 問合せの email / phone / address / ad_id を転記して新規会員作成
    - 新規 ID は `members` の最大値 +1 を 7 桁ゼロ埋め(`generateMemberId()` で採番)

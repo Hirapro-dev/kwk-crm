@@ -17,7 +17,7 @@ import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ConvertButton } from './ConvertButton';
+import { LeadActions } from '../LeadActions';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -78,7 +78,8 @@ export default async function InquiryDetailPage({ params }: PageProps) {
       </Link>
 
       {/* Highlight Panel: レイアウトエディタの「ハイライト」設定に従う(未設定時は既定4項目)。
-          未会員化の場合のみ会員化ボタンをアクションに出す。 */}
+          会員化の操作は一覧(メール取込分)と同じ LeadActions: 会員検索(自動照合の候補 + 手動検索で
+          既存会員かどうかを確認して紐付け)/ 新規会員登録 / 確認済み。会員化済みなら状態だけ出す。 */}
       <HighlightPanel
         iconLabel="INQ"
         iconColor="#fea130"
@@ -89,9 +90,7 @@ export default async function InquiryDetailPage({ params }: PageProps) {
         actions={
           <>
             <ShareLinkButton />
-            {inquiry.member ? null : (
-              <ConvertButton inquiryId={inquiry.id} defaultName={inquiry.name} />
-            )}
+            <LeadActions inquiry={inquiry} />
           </>
         }
       />
