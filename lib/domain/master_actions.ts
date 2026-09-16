@@ -93,3 +93,52 @@ export async function upsertAcquisitionPoint(
   revalidatePath('/settings/acquisition-points');
   return { ok: true };
 }
+
+/** 広告マスタの検索(【取得】ボタンの選択ダイアログ用。全ロール。有効な広告のみ、最大 200 件) */
+export async function searchAdMasters(input: {
+  q?: string;
+  adType?: string;
+}): Promise<{
+  error?: string;
+  rows?: Array<{ id: string; ad_type: string; name: string }>;
+  adTypes?: string[];
+}> {
+  await getCurrentUser();
+  const supabase = await createClient();
+  let query = supabase
+    .from('ad_masters')
+    .select('id, ad_type, name')
+    .eq('is_active', true)
+    .order('ad_type', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(200);
+  if (input.adType) query = query.eq('ad_type', input.adType);
+  const q = (input.q ?? '').trim().replace(/[%_]/g, '\\$&');
+  if (q) query = query.or(`id.ilike.%${q}%,name.ilike.%${q}%`);
+  const [{ data, error }, { data: types }] = await Promise.all([
+    query,
+    supabase.from('ad_masters').select('ad_type').eq('is_active', true),
+  ]);
+  if (error) return { error: `広告マスタの取得に失敗しました: ${error.message}` };
+  const adTypes = [
+    ...new Set(((types ?? []) as unknown as Array<{ ad_type: string }>).map((t) => t.ad_type)),
+  ].sort();
+  return {
+    rows: (data ?? []) as unknown as Array<{ id: string; ad_type: string; name: string }>,
+    adTypes,
+  };
+}
+
+/** 顧客情報取得ポイントマスタの有効な名前一覧(会員の新規登録フォームの選択肢用。全ロール) */
+export async function listAcquisitionPointNames(): Promise<string[]> {
+  await getCurrentUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('acquisition_point_masters')
+    .select('name')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true });
+  if (error) return [];
+  return ((data ?? []) as unknown as Array<{ name: string }>).map((r) => r.name);
+}

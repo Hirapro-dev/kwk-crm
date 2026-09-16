@@ -11,7 +11,7 @@
  */
 
 import { getCurrentUser } from '@/lib/domain/auth';
-import { convertInquiryToMember } from '@/lib/domain/inquiry_actions';
+import { type ConvertMemberFields, convertInquiryToMember } from '@/lib/domain/inquiry_actions';
 import type { MemberMatch } from '@/lib/domain/inquiry_lead';
 import { normalizeMatchInput } from '@/lib/domain/mail_import_match';
 import { createClient } from '@/lib/supabase/server';
@@ -158,10 +158,15 @@ export async function linkInquiryToMember(
 export async function createMemberFromInquiry(
   inquiryId: string,
   name: string,
+  fields?: ConvertMemberFields,
 ): Promise<{ error?: string; memberId?: string }> {
   const denied = await requireWriter();
   if (denied) return { error: denied };
-  const res = await convertInquiryToMember({ inquiry_id: inquiryId, new_member_name: name });
+  const res = await convertInquiryToMember({
+    inquiry_id: inquiryId,
+    new_member_name: name,
+    member_fields: fields,
+  });
   if (!res.ok) return { error: res.error ?? '会員の作成に失敗しました' };
   await setMatchReviewed(inquiryId);
   revalidate(inquiryId);

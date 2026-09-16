@@ -1,5 +1,6 @@
 'use client';
 
+import { AdMasterPicker } from '@/components/masters/AdMasterPicker';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import type { InquiryListItem } from '@/lib/domain/inquiries';
 import { matchedFieldsLabel, memberMatchLabel } from '@/lib/domain/inquiry_lead';
 import {
@@ -21,6 +23,7 @@ import {
   markInquiryReviewed,
   searchMembersForInquiry,
 } from '@/lib/domain/inquiry_lead_actions';
+import { listAcquisitionPointNames } from '@/lib/domain/master_actions';
 import { ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
@@ -86,6 +89,22 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<MemberBrief[] | null>(null);
   const [newName, setNewName] = useState(inquiry.name ?? '');
+  // 新規会員登録で一緒に入れる項目(§5.4)。広告は【取得】で広告マスタから選ぶと両方に入る
+  const [adId, setAdId] = useState(inquiry.ad_id ?? '');
+  const [adMedium, setAdMedium] = useState('');
+  const [pointName, setPointName] = useState('');
+  const [pointOptions, setPointOptions] = useState<string[] | null>(null);
+  const [acquiredDate, setAcquiredDate] = useState(() =>
+    new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10),
+  );
+  const [mailmagAt, setMailmagAt] = useState('');
+  const [adPickerOpen, setAdPickerOpen] = useState(false);
+
+  // 新規会員登録を開いたら取得ポイントの選択肢(有効なマスタ)を読む
+  useEffect(() => {
+    if (dialog !== 'create' || pointOptions !== null) return;
+    listAcquisitionPointNames().then(setPointOptions);
+  }, [dialog, pointOptions]);
 
   const label = memberMatchLabel(inquiry.member_match ?? null, inquiry.member_id);
   const linked = !!inquiry.member_id;
@@ -117,7 +136,17 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
   };
   const create = () => {
     setError(null);
-    startTransition(async () => finish(await createMemberFromInquiry(inquiry.id, newName)));
+    startTransition(async () =>
+      finish(
+        await createMemberFromInquiry(inquiry.id, newName, {
+          ad_id: adId || null,
+          ad_medium: adMedium || null,
+          info_acquired_points: pointName || null,
+          info_acquired_date: acquiredDate || null,
+          mailmag_registered_at: mailmagAt || null,
+        }),
+      ),
+    );
   };
   const review = () => {
     setError(null);
@@ -244,7 +273,7 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
       </Dialog>
 
       <Dialog open={dialog === 'create'} onOpenChange={(o) => !o && setDialog('closed')}>
-        <DialogContent className="max-w-[90%] sm:max-w-[480px]">
+        <DialogContent className="max-w-[92%] sm:max-w-[640px]">
           <DialogHeader>
             <DialogTitle>新規会員登録</DialogTitle>
           </DialogHeader>
@@ -262,6 +291,76 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
               <dt>電話</dt>
               <dd>{inquiry.phone ?? '-'}</dd>
             </dl>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label>広告ID</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={adId}
+                    onChange={(e) => setAdId(e.target.value)}
+                    placeholder="例: N0000003"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAdPickerOpen(true)}
+                    title="広告マスタから選んで、広告ID と広告媒体名の両方に入れます"
+                  >
+                    取得
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>広告媒体名</Label>
+                <div className="flex items-center gap-2">
+                  <Input value={adMedium} onChange={(e) => setAdMedium(e.target.value)} />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAdPickerOpen(true)}
+                  >
+                    取得
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>個人情報取得ポイント</Label>
+                <Select value={pointName} onChange={(e) => setPointName(e.target.value)}>
+                  <option value="">(未設定)</option>
+                  {(pointOptions ?? []).map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>顧客情報取得日</Label>
+                <Input
+                  type="date"
+                  value={acquiredDate}
+                  onChange={(e) => setAcquiredDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>メルマガ登録日時</Label>
+                <Input
+                  type="datetime-local"
+                  value={mailmagAt}
+                  onChange={(e) => setMailmagAt(e.target.value)}
+                />
+              </div>
+            </div>
+            <AdMasterPicker
+              open={adPickerOpen}
+              onOpenChange={setAdPickerOpen}
+              onPick={(ad) => {
+                setAdId(ad.id);
+                setAdMedium(ad.name);
+              }}
+            />
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>

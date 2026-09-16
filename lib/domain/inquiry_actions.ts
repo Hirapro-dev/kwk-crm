@@ -1,8 +1,8 @@
 'use server';
 
+import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from './auth';
 
 /**
@@ -32,6 +32,20 @@ const ConvertSchema = z
       .max(200)
       .optional()
       .or(z.literal('').transform(() => undefined)),
+    /** 新規会員作成時に一緒に入れる項目(問合せの値に加えて画面で指定。§5.4) */
+    member_fields: z
+      .object({
+        ad_id: z.string().max(50).nullable().optional(),
+        ad_medium: z.string().max(200).nullable().optional(),
+        info_acquired_points: z.string().max(200).nullable().optional(),
+        info_acquired_date: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .nullable()
+          .optional(),
+        mailmag_registered_at: z.string().max(40).nullable().optional(),
+      })
+      .optional(),
   })
   .refine(
     (v) => Boolean(v.existing_member_id) !== Boolean(v.new_member_name),
@@ -59,10 +73,19 @@ async function generateMemberId(
   return { id: data };
 }
 
+export interface ConvertMemberFields {
+  ad_id?: string | null;
+  ad_medium?: string | null;
+  info_acquired_points?: string | null;
+  info_acquired_date?: string | null;
+  mailmag_registered_at?: string | null;
+}
+
 export async function convertInquiryToMember(input: {
   inquiry_id: string;
   existing_member_id?: string;
   new_member_name?: string;
+  member_fields?: ConvertMemberFields;
 }): Promise<ConvertResult> {
   const parsed = ConvertSchema.safeParse(input);
   if (!parsed.success) {
@@ -104,6 +127,17 @@ export async function convertInquiryToMember(input: {
     const gen = await generateMemberId(supabase);
     if ('error' in gen) return { ok: false, error: gen.error };
     memberId = gen.id;
+    // 画面で指定した項目(空文字は未設定扱い)。広告ID は指定が無ければ問合せの値を使う
+    const mf = parsed.data.member_fields ?? {};
+    const nz = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
+    const mailmag = nz(mf.mailmag_registered_at);
+    const extraCols = {
+      ad_id: nz(mf.ad_id) ?? inquiry.ad_id,
+      ad_medium: nz(mf.ad_medium),
+      info_acquired_points: nz(mf.info_acquired_points),
+      info_acquired_date: nz(mf.info_acquired_date),
+      mailmag_registered_at: mailmag ? new Date(mailmag).toISOString() : null,
+    };
     const { error: insErr } = await supabase.from('members').insert({
       id: memberId,
       name: parsed.data.new_member_name!,
@@ -111,7 +145,7 @@ export async function convertInquiryToMember(input: {
       phone1: inquiry.phone,
       postal_code: inquiry.postal_code,
       address: inquiry.address,
-      ad_id: inquiry.ad_id,
+      ...extraCols,
       owner_id: me.id,
       registered_at: new Date().toISOString(),
     });
@@ -128,7 +162,7 @@ export async function convertInquiryToMember(input: {
           phone1: inquiry.phone,
           postal_code: inquiry.postal_code,
           address: inquiry.address,
-          ad_id: inquiry.ad_id,
+          ...extraCols,
           owner_id: me.id,
           registered_at: new Date().toISOString(),
         });
