@@ -107,6 +107,7 @@ export async function loadActivitiesPage(
     memberId?: string;
     ownerId?: string;
     dBunrui?: string;
+    dBunruiIn?: string[];
     mBunrui?: string;
     sBunrui?: string;
     from?: string;

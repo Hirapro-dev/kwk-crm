@@ -43,17 +43,18 @@ interface Props {
 const STATUS_OPTIONS = ['通電', '不在', '接触対応', '申込獲得', '受信', '送信'] as const;
 
 interface Filters {
-  dBunrui: string;
+  /** 接触種別(複数可。いずれかに一致。空 = すべて) */
+  dBunrui: string[];
   sBunrui: string;
   from: string;
   to: string;
 }
-const EMPTY_FILTERS: Filters = { dBunrui: '', sBunrui: '', from: '', to: '' };
+const EMPTY_FILTERS: Filters = { dBunrui: [], sBunrui: '', from: '', to: '' };
 
 function toParams(memberId: string, f: Filters) {
   return {
     memberId,
-    dBunrui: f.dBunrui || undefined,
+    dBunruiIn: f.dBunrui.length > 0 ? f.dBunrui : undefined,
     sBunrui: f.sBunrui || undefined,
     from: f.from || undefined,
     // 終了日はその日の終わりまで含める
@@ -71,7 +72,10 @@ export function MemberActivityTimeline({
 }: Props) {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const filtering =
-    filters.dBunrui !== '' || filters.sBunrui !== '' || filters.from !== '' || filters.to !== '';
+    filters.dBunrui.length > 0 ||
+    filters.sBunrui !== '' ||
+    filters.from !== '' ||
+    filters.to !== '';
   const [rows, setRows] = useState<ActivityListItem[]>(initialRows);
   const [filteredTotal, setFilteredTotal] = useState(total);
   const [page, setPage] = useState(1);
@@ -164,27 +168,39 @@ export function MemberActivityTimeline({
   const remaining = Math.max(0, filteredTotal - rows.length);
   const set = (patch: Partial<Filters>) => setFilters((f) => ({ ...f, ...patch }));
   const bunruiOptions = [...new Set(bunruiList)];
+  const toggleBunrui = (b: string) =>
+    setFilters((f) => ({
+      ...f,
+      dBunrui: f.dBunrui.includes(b) ? f.dBunrui.filter((x) => x !== b) : [...f.dBunrui, b],
+    }));
 
   return (
     <div className="min-w-0">
       {/* 絞り込み: 接触種別 / 状態 / 期間 */}
       <div className="mb-2 flex flex-wrap items-end gap-2 text-xs">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-muted-foreground">接触種別</span>
-          <Select
-            value={filters.dBunrui}
-            onChange={(e) => set({ dBunrui: e.target.value })}
-            className="h-8 text-xs"
-            aria-label="接触種別で絞り込み"
-          >
-            <option value="">すべて</option>
-            {bunruiOptions.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </Select>
-        </div>
+        {/* 接触種別: チェックボックス(複数選択 = いずれかに一致。例: アウトとインだけ) */}
+        <fieldset className="flex flex-col gap-0.5">
+          <legend className="text-muted-foreground">接触種別(複数選択可)</legend>
+          <div className="flex flex-wrap gap-1">
+            {bunruiOptions.map((b) => {
+              const on = filters.dBunrui.includes(b);
+              return (
+                <label
+                  key={b}
+                  className={`flex cursor-pointer items-center gap-1 rounded border px-2 py-1 ${on ? 'border-primary bg-primary/10 font-medium' : 'hover:bg-accent'}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => toggleBunrui(b)}
+                    className="h-3 w-3"
+                  />
+                  {b}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
         <div className="flex flex-col gap-0.5">
           <span className="text-muted-foreground">状態</span>
           <Select
