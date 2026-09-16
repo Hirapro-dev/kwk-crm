@@ -9,9 +9,11 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { listProjects } from '@/lib/domain/projects';
+import { listAllUsers } from '@/lib/domain/users_admin';
 import { Suspense } from 'react';
 import { ApplicationsFilterBar } from './ApplicationsFilterBar';
 import { ApplicationsInfinite } from './ApplicationsInfinite';
+import { NewApplicationDialog } from './NewApplicationDialog';
 
 interface PageProps {
   searchParams: Promise<{
@@ -32,7 +34,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
       ? (sp.status as AppStatus)
       : undefined;
 
-  const [me, result, projects, listFields] = await Promise.all([
+  const [me, result, projects, listFields, users] = await Promise.all([
     getCurrentUser(),
     listApplications({
       q: sp.q,
@@ -46,6 +48,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
     listProjects(),
     // オブジェクト管理 (/settings/objects/applications) の一覧表示制御に従う
     getVisibleFields('applications', 'list'),
+    listAllUsers({ activeOnly: true }),
   ]);
 
   return (
@@ -56,6 +59,15 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
           iconColor="#00C896"
           viewName="申込一覧"
           totalCount={result.total}
+          actions={
+            me.role !== 'viewer' ? (
+              <NewApplicationDialog
+                projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+                users={users.map((u) => ({ id: u.id, name: u.full_name ?? u.email }))}
+                currentUserId={me.id}
+              />
+            ) : undefined
+          }
         />
 
         <PanelFilterBar>
