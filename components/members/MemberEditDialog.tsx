@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { updateMember } from '@/lib/domain/member_actions';
 import { EDITABLE_MEMBER_EXTRA_KEYS } from '@/lib/domain/member_extra_edit';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
@@ -55,6 +56,11 @@ interface Props {
   protectUsers?: ProtectUserOption[];
   /** 詳細フィールド定義 (is_visible_detail=true, sort_order_detail 順)。動的編集フォームの元。 */
   detailFields?: FieldDefinition[];
+  /**
+   * 選択式にする項目とその選択肢(field_name → 選択肢)。例: 個人情報取得ポイント → マスタ(§5.19)。
+   * 現在の値が選択肢に無いときも失わないよう、その値を選択肢に足して描画する
+   */
+  selectOptions?: Record<string, string[]>;
 }
 
 /** ISO/タイムスタンプ文字列を input[type=date] 用の YYYY-MM-DD に変換 */
@@ -82,6 +88,7 @@ export function MemberEditDialog({
   currentUserRole,
   protectUsers = [],
   detailFields = [],
+  selectOptions,
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -203,6 +210,7 @@ export function MemberEditDialog({
                     field={f}
                     value={form[f.field_name]}
                     onChange={(v) => setField(f.field_name, v)}
+                    options={selectOptions?.[f.field_name]}
                   />
                 ))}
               </div>
@@ -284,17 +292,37 @@ export function MemberEditDialog({
   );
 }
 
-/** データ型に応じた入力欄を描画する */
+/** データ型に応じた入力欄を描画する。options があればマスタからの選択式(空 = 未設定) */
 function FieldInput({
   field,
   value,
   onChange,
+  options,
 }: {
   field: FieldDefinition;
   value: string | boolean | undefined;
   onChange: (v: string | boolean) => void;
+  options?: string[];
 }) {
   const label = field.label ?? field.field_name;
+
+  if (options) {
+    const current = typeof value === 'string' ? value : '';
+    // 現在の値がマスタに無い(無効化された等)場合も、そのまま保持できるように選択肢へ足す
+    const list = current && !options.includes(current) ? [current, ...options] : options;
+    return (
+      <Field label={label}>
+        <Select value={current} onChange={(e) => onChange(e.target.value)}>
+          <option value="">(未設定)</option>
+          {list.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </Select>
+      </Field>
+    );
+  }
 
   if (field.data_type === 'boolean') {
     return (
