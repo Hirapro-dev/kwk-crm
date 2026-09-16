@@ -9,11 +9,13 @@ import type { MailCategory, MailStatus, MailThreadListItem } from '@/lib/domain/
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { MailBulkActions } from './MailBulkActions';
 
 /**
  * メーラーのスレッド一覧(無限スクロール)。CLAUDE.md §5.15 / §8.1
- * メールディーラーの一覧に合わせ、列は 状態 / 件名 / From / 受信箱 / 日付 / 担当。
+ * 列は 日付 / 状態 / 件名 / From / 受信箱 / 担当 /(取込候補では 取込ルール / 処理結果)。
  * 件名クリックでスレッド画面へ(一覧の絞り込みを URL で引き継ぎ、前後移動に使う)。未読は太字。
+ * 左端のチェックで複数選び、状態・分類・担当・既読/未読をまとめて変更できる(viewer 以外)。
  */
 interface Props {
   initialRows: MailThreadListItem[];
@@ -31,6 +33,10 @@ interface Props {
   showBoxColumn?: boolean;
   /** mail_box_id → アドレス(受信箱列の表示用) */
   boxAddresses?: Record<number, string>;
+  /** true なら左端にチェックボックスを出し、一括操作できる(viewer 以外) */
+  canEdit?: boolean;
+  /** 一括操作の担当の選択肢 */
+  assigneeOptions?: Array<{ id: string; name: string }>;
 }
 
 const STATUS_CLASS: Record<MailStatus, string> = {
@@ -39,13 +45,24 @@ const STATUS_CLASS: Record<MailStatus, string> = {
   完了: 'bg-gray-100 text-gray-700 border-gray-200',
 };
 
-export function MailInfinite({ initialRows, total, params, showBoxColumn, boxAddresses }: Props) {
+export function MailInfinite({
+  initialRows,
+  total,
+  params,
+  showBoxColumn,
+  boxAddresses,
+  canEdit,
+  assigneeOptions = [],
+}: Props) {
   const searchParams = useSearchParams();
   const qs = searchParams.toString();
   const columns: InfiniteCol[] = [
+    { header: '日付', headClassName: 'w-36' },
     { header: '状態', headClassName: 'w-28' },
     { header: '件名' },
     { header: 'From', headClassName: 'w-64' },
+    ...(showBoxColumn ? [{ header: '受信箱', headClassName: 'w-48' }] : []),
+    { header: '担当', headClassName: 'w-28' },
     // 取込候補(§5.16)では、一致する取込ルールと、ルールで問合せを作った結果を出す
     ...(params.importCandidate
       ? [
@@ -53,9 +70,6 @@ export function MailInfinite({ initialRows, total, params, showBoxColumn, boxAdd
           { header: '処理結果', headClassName: 'w-64' },
         ]
       : []),
-    ...(showBoxColumn ? [{ header: '受信箱', headClassName: 'w-48' }] : []),
-    { header: '日付', headClassName: 'w-36' },
-    { header: '担当', headClassName: 'w-28' },
   ];
 
   const renderRow = (t: MailThreadListItem) => {
@@ -65,6 +79,9 @@ export function MailInfinite({ initialRows, total, params, showBoxColumn, boxAdd
       ? `${t.last_from_name} <${t.last_from_address ?? ''}>`
       : (t.last_from_address ?? '-');
     const cells = [
+      <TableCell key="last" className="whitespace-nowrap py-2 text-xs">
+        {formatDateTime(t.last_message_at)}
+      </TableCell>,
       <TableCell key="status" className="whitespace-nowrap py-2">
         <Badge variant="outline" className={`text-[11px] ${STATUS_CLASS[t.status] ?? ''}`}>
           {t.status}
@@ -97,6 +114,22 @@ export function MailInfinite({ initialRows, total, params, showBoxColumn, boxAdd
         {from}
       </TableCell>,
     ];
+    if (showBoxColumn) {
+      cells.push(
+        <TableCell
+          key="box"
+          className="max-w-[200px] truncate py-2 text-xs text-muted-foreground"
+          title={boxAddresses?.[t.mail_box_id] ?? ''}
+        >
+          {boxAddresses?.[t.mail_box_id] ?? '-'}
+        </TableCell>,
+      );
+    }
+    cells.push(
+      <TableCell key="assignee" className="whitespace-nowrap py-2 text-xs">
+        {t.assignee?.full_name ?? <span className="text-muted-foreground">--</span>}
+      </TableCell>,
+    );
     if (params.importCandidate) {
       const status = t.last_import_status ?? null;
       cells.push(
@@ -137,25 +170,6 @@ export function MailInfinite({ initialRows, total, params, showBoxColumn, boxAdd
         </TableCell>,
       );
     }
-    if (showBoxColumn) {
-      cells.push(
-        <TableCell
-          key="box"
-          className="max-w-[200px] truncate py-2 text-xs text-muted-foreground"
-          title={boxAddresses?.[t.mail_box_id] ?? ''}
-        >
-          {boxAddresses?.[t.mail_box_id] ?? '-'}
-        </TableCell>,
-      );
-    }
-    cells.push(
-      <TableCell key="last" className="whitespace-nowrap py-2 text-xs">
-        {formatDateTime(t.last_message_at)}
-      </TableCell>,
-      <TableCell key="assignee" className="whitespace-nowrap py-2 text-xs">
-        {t.assignee?.full_name ?? <span className="text-muted-foreground">--</span>}
-      </TableCell>,
-    );
     return cells;
   };
 
@@ -171,6 +185,15 @@ export function MailInfinite({ initialRows, total, params, showBoxColumn, boxAdd
       emptyMessage="該当するメールがありません"
       fillParent
       rowClassName={(t) => (t.is_read ? 'sf-row-hover' : 'sf-row-hover bg-orange-50/40')}
+      selection={
+        canEdit
+          ? {
+              getId: (t) => t.id,
+              objectLabel: 'メール',
+              actions: (ctx) => <MailBulkActions ctx={ctx} assigneeOptions={assigneeOptions} />,
+            }
+          : undefined
+      }
     />
   );
 }

@@ -105,6 +105,8 @@ export default async function MailPage({ searchParams }: PageProps) {
           params={listParams}
           showBoxColumn={!mailBoxId}
           boxAddresses={Object.fromEntries(boxes.map((b) => [b.id, b.address]))}
+          canEdit={me.role !== 'viewer'}
+          assigneeOptions={assigneeOptions}
         />
       </div>
     </div>
