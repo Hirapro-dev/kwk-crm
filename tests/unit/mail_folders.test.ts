@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   domainOfAddress,
   expandedDomainForBox,
+  groupAddressesByDomain,
   groupMailBoxesByDomain,
   moveBoxInList,
   pinnedFolderItems,
@@ -191,5 +192,31 @@ describe('moveBoxInList(フォルダ内の並び替え)', () => {
   it('自分自身の前に置く・差し込み先が無い場合は並びを変えない', () => {
     expect(moveBoxInList([1, 2, 3], 2, 2)).toEqual([1, 2, 3]);
     expect(moveBoxInList([1, 2, 3], 2, 999)).toEqual([1, 2, 3]);
+  });
+});
+
+/**
+ * 返信・新規作成の「送信元」プルダウン(CLAUDE.md §8.1)。受信箱が数百件あるため、
+ * ドメインごとのセクション(optgroup)に分けて探しやすくする。並びは決定論的。
+ */
+describe('groupAddressesByDomain(送信元プルダウンのセクション分け)', () => {
+  it('ドメインごとにまとめ、ドメイン・アドレスとも昇順に並べる(元の並びに依らない)', () => {
+    const out = groupAddressesByDomain([
+      { id: 3, address: 'support@y.jp' },
+      { id: 1, address: 'info@x.jp' },
+      { id: 2, address: 'aff@x.jp' },
+    ]);
+    expect(out.map((g) => g.domain)).toEqual(['x.jp', 'y.jp']);
+    expect(out[0]?.items.map((i) => i.address)).toEqual(['aff@x.jp', 'info@x.jp']);
+    expect(out[1]?.items.map((i) => i.id)).toEqual([3]);
+  });
+  it('大文字小文字の違うドメインは同じセクションにし、空なら空配列', () => {
+    const out = groupAddressesByDomain([
+      { id: 1, address: 'a@X.jp' },
+      { id: 2, address: 'b@x.jp' },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.domain).toBe('x.jp');
+    expect(groupAddressesByDomain([])).toEqual([]);
   });
 });
