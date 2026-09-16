@@ -63,7 +63,8 @@ export async function updateApplicationStatus(input: {
 
 /**
  * 申込の新規登録(申込一覧の「新規登録」。CLAUDE.md §5.6 / §8.1)。
- * ID は DB の連番 gen_application_id()(migration 94)で採番する。会員・案件は必須。
+ * ID は DB の連番 gen_application_m_id()(migration 94)で採番する。会員・案件は必須。
+ * (gen_application_id という名前は本番 DB に uuid を返す別物が存在するため使わない)
  * viewer は不可(RLS でも書込は viewer 以外)。
  */
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日付は YYYY-MM-DD 形式で指定してください');
@@ -119,7 +120,7 @@ export async function createApplication(
   if (!project) return { ok: false, error: '案件が見つかりません' };
 
   // ID 採番(連番。migration 94)
-  const { data: newId, error: idErr } = await supabase.rpc('gen_application_id');
+  const { data: newId, error: idErr } = await supabase.rpc('gen_application_m_id');
   if (idErr || typeof newId !== 'string' || !APPLICATION_ID_RE.test(newId)) {
     return {
       ok: false,

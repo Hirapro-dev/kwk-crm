@@ -11,6 +11,8 @@
 --     離れた番号帯にして CSV 取込時の衝突(別の申込の上書き)を避ける(K-000100000 / TA-001000000 と同じ考え方)。
 --   - 申込作成の Server Action から実行ユーザーの権限で呼ぶため authenticated に EXECUTE を許可
 --     (採番するだけで applications への書込権限は広げない)。
+--   - 関数名は gen_application_m_id(): 本番 DB には migration に無い gen_application_id()(uuid を返す)が
+--     既に存在し(2026-09-16 に確認。由来不明のため触らない)、同名では戻り値の型を変えられないため別名にする。
 -- ============================================================================
 
 CREATE SEQUENCE IF NOT EXISTS public.applications_id_seq
@@ -19,7 +21,7 @@ CREATE SEQUENCE IF NOT EXISTS public.applications_id_seq
   MINVALUE 1000000
   NO CYCLE;
 
-CREATE OR REPLACE FUNCTION public.gen_application_id()
+CREATE OR REPLACE FUNCTION public.gen_application_m_id()
 RETURNS text
 LANGUAGE sql
 VOLATILE
@@ -28,8 +30,8 @@ AS $$
   SELECT 'M-' || lpad(nextval('public.applications_id_seq')::text, 9, '0');
 $$;
 
-COMMENT ON FUNCTION public.gen_application_id() IS
+COMMENT ON FUNCTION public.gen_application_m_id() IS
   '新規申込IDを M- 形式(9桁ゼロ埋め)で採番する。M-001000000 から。CLAUDE.md §5.6';
 
 GRANT USAGE ON SEQUENCE public.applications_id_seq TO authenticated;
-GRANT EXECUTE ON FUNCTION public.gen_application_id() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.gen_application_m_id() TO authenticated;
