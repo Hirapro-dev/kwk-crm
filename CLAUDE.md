@@ -615,6 +615,8 @@ Salesforce の「広告IDマスタ」(広告一覧 CSV 4 ファイル: KAWARA版
 - `name` text — 広告媒体名
 - `is_active` boolean、`created_at`、`updated_at`。物理削除はしない(案件マスタと同じ)
 - RLS: SELECT 全ロール / 書込 admin。初期データは migration 96 で投入。画面は `/settings/ads`(検索・種別の絞り込み・追加・行内編集)
+- **表示**(2026-09-16): 問合せ・会員・LP の一覧と詳細で、広告ID の列に媒体名を併記する(「N0000003 【KAWARA版広告】…」。
+  マスタに無い ID はそのまま)。純粋関数 `adLabel`(`lib/domain/ad_label.ts`)、対応表は `getAdNameMap()`(無効な広告も含む)
 
 ### 5.19 acquisition_point_masters (顧客情報取得ポイントマスタ) ★2026-09-16 追加 (migration 96)
 会員の「個人情報取得ポイント」(`members.info_acquired_points`)の選択肢。Salesforce の「個人情報取得ポイント集計」CSV の 2 行目

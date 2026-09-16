@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { listLpEntries, listLpFormNames } from '@/lib/domain/lp';
+import { getAdNameMap } from '@/lib/domain/masters';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import Link from 'next/link';
 import { LpInfinite } from './LpInfinite';
@@ -23,11 +24,12 @@ export default async function LpPage({ searchParams }: PageProps) {
   const dir = sp.dir === 'asc' ? 'asc' : 'desc';
   const formName = sp.form || undefined;
 
-  const [me, result, listFields, formNames] = await Promise.all([
+  const [me, result, listFields, formNames, adNames] = await Promise.all([
     getCurrentUser(),
     listLpEntries({ q: sp.q, formName, sort: sp.sort, dir, page: 1, pageSize: LIST_PAGE_SIZE }),
     getVisibleFields('lp_entries', 'list'),
     listLpFormNames(),
+    getAdNameMap(),
   ]);
   const listKey = `${sp.q ?? ''}|${formName ?? ''}|${sp.sort ?? ''}|${dir}`;
 
@@ -79,6 +81,7 @@ export default async function LpPage({ searchParams }: PageProps) {
           total={result.total}
           params={{ q: sp.q, formName, sort: sp.sort, dir }}
           canDelete={me.role === 'admin'}
+          adNames={adNames}
         />
       </Card>
     </div>

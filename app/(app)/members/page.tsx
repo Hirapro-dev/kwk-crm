@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
+import { getAdNameMap } from '@/lib/domain/masters';
 import { listMembers } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import Link from 'next/link';
@@ -47,9 +48,10 @@ export default async function MembersPage({ searchParams }: PageProps) {
   const isSplit = sp.view === 'split';
   const selected = sp.selected;
 
-  const [result, listFields] = await Promise.all([
+  const [result, listFields, adNames] = await Promise.all([
     listMembers({ ...memberParams, page: 1, pageSize: LIST_PAGE_SIZE }),
     getVisibleFields('members', 'list'),
+    getAdNameMap(),
   ]);
 
   // 表示条件を維持したままモードだけ切り替えるリンクを作る
@@ -110,6 +112,7 @@ export default async function MembersPage({ searchParams }: PageProps) {
                 key={listKey}
                 initialRows={result.rows}
                 fields={listFields}
+                adNames={adNames}
                 total={result.total}
                 params={memberParams}
                 splitMode
@@ -191,6 +194,7 @@ export default async function MembersPage({ searchParams }: PageProps) {
           key={listKey}
           initialRows={result.rows}
           fields={listFields}
+          adNames={adNames}
           total={result.total}
           params={memberParams}
           canDelete={me.role === 'admin'}

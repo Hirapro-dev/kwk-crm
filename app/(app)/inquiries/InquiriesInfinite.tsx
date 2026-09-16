@@ -3,6 +3,7 @@
 import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTable';
 import { PhoneLink } from '@/components/layout/PhoneLink';
 import { TableCell } from '@/components/ui/table';
+import { adLabel } from '@/lib/domain/ad_label';
 import { deleteRecords } from '@/lib/domain/delete_actions';
 import type { InquiryListItem } from '@/lib/domain/inquiries';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
@@ -27,9 +28,18 @@ interface Props {
   };
   /** 左端の選択チェックボックス・削除ボタンを出すか (admin のみ) */
   canDelete?: boolean;
+  /** 広告ID → 広告媒体名(§5.18。広告ID の列に媒体名を併記する) */
+  adNames?: Record<string, string>;
 }
 
-export function InquiriesInfinite({ initialRows, fields, total, params, canDelete }: Props) {
+export function InquiriesInfinite({
+  initialRows,
+  fields,
+  total,
+  params,
+  canDelete,
+  adNames = {},
+}: Props) {
   const leadMode = !!params.mailImported;
   const columns: InfiniteCol[] = [
     ...(leadMode ? [{ header: '会員照合 / 操作', headClassName: 'w-80' }] : []),
@@ -99,9 +109,12 @@ export function InquiriesInfinite({ initialRows, fields, total, params, canDelet
         );
       }
 
-      // 汎用(日付/数値/テキスト/extra)
+      // 汎用(日付/数値/テキスト/extra)。広告ID は媒体名を併記
       const raw = getFieldValue(rec, f.field_name, f.is_in_db, f.csv_column_name);
-      const formatted = formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
+      const formatted =
+        f.field_name === 'ad_id'
+          ? adLabel(typeof raw === 'string' ? raw : null, adNames)
+          : formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
       const text = formatted === '' ? '-' : formatted;
       if (isFirst) {
         return (

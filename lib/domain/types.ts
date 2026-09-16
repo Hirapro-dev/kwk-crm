@@ -16,6 +16,8 @@ export interface AppUser {
 }
 
 export interface Member {
+  /** 広告ID(members.ad_id。§5.18 の広告マスタで媒体名を併記) */
+  ad_id?: string | null;
   id: string;
   name: string;
   name_kana: string | null;

@@ -3,6 +3,7 @@
 import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTable';
 import { PhoneLink } from '@/components/layout/PhoneLink';
 import { TableCell } from '@/components/ui/table';
+import { adLabel } from '@/lib/domain/ad_label';
 import { deleteRecords } from '@/lib/domain/delete_actions';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { loadMoreMembers } from '@/lib/domain/list_more_actions';
@@ -23,6 +24,8 @@ interface Props {
   selectedId?: string;
   /** 左端の選択チェックボックス・削除ボタンを出すか (admin のみ) */
   canDelete?: boolean;
+  /** 広告ID → 広告媒体名(§5.18。広告ID の列に媒体名を併記する) */
+  adNames?: Record<string, string>;
 }
 
 export function MembersInfinite({
@@ -33,6 +36,7 @@ export function MembersInfinite({
   splitMode,
   selectedId,
   canDelete,
+  adNames = {},
 }: Props) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -111,9 +115,12 @@ export function MembersInfinite({
         );
       }
 
-      // --- 汎用レンダリング ---
+      // --- 汎用レンダリング(広告ID は媒体名を併記) ---
       const raw = getFieldValue(rec, f.field_name, f.is_in_db, f.csv_column_name);
-      const formatted = formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
+      const formatted =
+        f.field_name === 'ad_id'
+          ? adLabel(typeof raw === 'string' ? raw : null, adNames)
+          : formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
       const isPhone = f.field_name === 'phone1' || f.field_name === 'phone';
       return (
         <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">

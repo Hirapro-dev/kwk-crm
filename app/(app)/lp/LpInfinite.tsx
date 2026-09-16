@@ -8,6 +8,7 @@
 
 import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTable';
 import { TableCell } from '@/components/ui/table';
+import { adLabel } from '@/lib/domain/ad_label';
 import { deleteRecords } from '@/lib/domain/delete_actions';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { loadMoreLpEntries } from '@/lib/domain/list_more_actions';
@@ -23,9 +24,11 @@ interface Props {
   total: number;
   params: { q?: string; formName?: string; sort?: string; dir?: 'asc' | 'desc' };
   canDelete?: boolean;
+  /** 広告ID → 広告媒体名(§5.18) */
+  adNames?: Record<string, string>;
 }
 
-export function LpInfinite({ initialRows, fields, total, params, canDelete }: Props) {
+export function LpInfinite({ initialRows, fields, total, params, canDelete, adNames = {} }: Props) {
   if (fields.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -64,7 +67,10 @@ export function LpInfinite({ initialRows, fields, total, params, canDelete }: Pr
         );
       }
       const raw = getFieldValue(row, f.field_name, f.is_in_db, f.csv_column_name);
-      const formatted = formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
+      const formatted =
+        f.field_name === 'ad_id'
+          ? adLabel(typeof raw === 'string' ? raw : null, adNames)
+          : formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
       return (
         <TableCell
           key={f.id}

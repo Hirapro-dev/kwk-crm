@@ -6,7 +6,9 @@
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
 import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
 import { Card } from '@/components/ui/card';
+import { adLabel } from '@/lib/domain/ad_label';
 import { getLpEntry } from '@/lib/domain/lp';
+import { getAdNameMap } from '@/lib/domain/masters';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -23,7 +25,7 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
 
 export default async function LpDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const lp = await getLpEntry(id);
+  const [lp, adNames] = await Promise.all([getLpEntry(id), getAdNameMap()]);
   if (!lp) notFound();
 
   const memberLink = lp.member_id ? (
@@ -60,7 +62,7 @@ export default async function LpDetailPage({ params }: { params: Promise<{ id: s
             <DetailRow label="フォーム名">{lp.form_name ?? '-'}</DetailRow>
             <DetailRow label="登録日時">{formatDateTime(lp.registered_at) || '-'}</DetailRow>
             <DetailRow label="登録月">{lp.registered_month ?? '-'}</DetailRow>
-            <DetailRow label="広告ID">{lp.ad_id ?? '-'}</DetailRow>
+            <DetailRow label="広告ID">{adLabel(lp.ad_id, adNames)}</DetailRow>
           </div>
           <div>
             <DetailRow label="氏名">{lp.name ?? '-'}</DetailRow>
