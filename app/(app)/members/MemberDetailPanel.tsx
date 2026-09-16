@@ -36,6 +36,7 @@ import { getReactionsByMember } from '@/lib/domain/article_reactions';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { listInquiries } from '@/lib/domain/inquiries';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
+import { listLpEntriesByMember } from '@/lib/domain/lp';
 import { getMember } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { listAllUsers } from '@/lib/domain/users_admin';
@@ -78,6 +79,7 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     relApps,
     relInqs,
     relReactions,
+    relLps,
   ] = await Promise.all([
     // 先頭ページのみ。以降は MemberActivityTimeline が無限スクロールで追記する。
     // ページサイズは追加取得(loadMoreActivities)と必ず揃えること。
@@ -90,6 +92,7 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     listApplications({ memberId, pageSize: 100, page: 1 }),
     listInquiries({ memberId, pageSize: 100, page: 1 }),
     getReactionsByMember(memberId, 100),
+    listLpEntriesByMember(memberId, 100),
   ]);
 
   const canAssignRegularContact = ['admin', 'manager', 'sales', 'support'].includes(me.role);
@@ -323,6 +326,49 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                             </TableCell>
                             <TableCell className="whitespace-nowrap py-2">
                               {q.name ?? '-'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CollapsibleSection>
+
+              {/* LP登録(§5.17。LP・メルマガ登録系フォームの問合せ) */}
+              <CollapsibleSection title="LP登録" count={relLps.length} bodyClassName="p-0">
+                {relLps.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">LP登録はありません</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50 hover:bg-gray-50">
+                          <TableHead className="h-9 whitespace-nowrap">問合せID</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">フォーム</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">登録日時</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">メール</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {relLps.map((l) => (
+                          <TableRow key={l.id} className="sf-row-hover">
+                            <TableCell className="whitespace-nowrap py-2">
+                              <Link href={`/lp/${l.id}`} className="text-primary hover:underline">
+                                {l.id}
+                              </Link>
+                            </TableCell>
+                            <TableCell
+                              className="max-w-[320px] truncate py-2"
+                              title={l.form_name ?? ''}
+                            >
+                              {l.form_name ?? '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {formatDateTime(l.registered_at) || '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {l.email ?? '-'}
                             </TableCell>
                           </TableRow>
                         ))}

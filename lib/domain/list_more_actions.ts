@@ -10,6 +10,7 @@ import { listApplications } from './applications';
 import { listArticleReactions } from './article_reactions';
 import { listInquiries } from './inquiries';
 import { LIST_PAGE_SIZE } from './list_constants';
+import { listLpEntries } from './lp';
 import { listMailThreads } from './mail';
 import type { MailCategory, MailStatus } from './mail_types';
 import { listMembers } from './members';
@@ -78,6 +79,14 @@ export async function loadMoreWithdrawalChildren(
   page: number,
 ) {
   const r = await listWithdrawalChildren({ ...params, page, pageSize: LIST_PAGE_SIZE });
+  return r.rows;
+}
+
+export async function loadMoreLpEntries(
+  params: { q?: string; formName?: string; sort?: string; dir?: 'asc' | 'desc' },
+  page: number,
+) {
+  const r = await listLpEntries({ ...params, page, pageSize: LIST_PAGE_SIZE });
   return r.rows;
 }
 
