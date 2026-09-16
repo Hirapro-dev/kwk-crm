@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { listForms, listInquiries } from '@/lib/domain/inquiries';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
+import { getAdNameMap } from '@/lib/domain/masters';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { Suspense } from 'react';
 import { InquiriesFilterBar } from './InquiriesFilterBar';
@@ -29,7 +30,7 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
   const formId = sp.form ? Number.parseInt(sp.form, 10) : undefined;
   const mailImported = sp.mail === '1';
 
-  const [me, result, forms, listFields] = await Promise.all([
+  const [me, result, forms, listFields, adNames] = await Promise.all([
     getCurrentUser(),
     listInquiries({
       q: sp.q,
@@ -44,6 +45,7 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
     listForms(),
     // オブジェクト管理 (/settings/objects/inquiries) の一覧表示制御に従う
     getVisibleFields('inquiries', 'list'),
+    getAdNameMap(),
   ]);
 
   return (
@@ -86,6 +88,7 @@ export default async function InquiriesPage({ searchParams }: PageProps) {
           key={`${sp.q ?? ''}|${sp.form ?? ''}|${sp.unassigned ?? ''}|${sp.mail ?? ''}|${sp.sort ?? ''}|${sp.dir ?? ''}`}
           initialRows={result.rows}
           fields={listFields}
+          adNames={adNames}
           total={result.total}
           params={{
             q: sp.q,

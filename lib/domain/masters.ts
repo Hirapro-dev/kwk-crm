@@ -69,3 +69,14 @@ export async function listAcquisitionPoints(opts?: {
   if (error) return [];
   return (data ?? []) as AcquisitionPointMaster[];
 }
+
+/** 広告ID → 広告媒体名 の対応表(無効な広告も含む。過去の値の表示用)。未適用なら空 */
+export async function getAdNameMap(): Promise<Record<string, string>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('ad_masters').select('id, name');
+  if (error) return {};
+  const out: Record<string, string> = {};
+  for (const r of (data ?? []) as unknown as Array<{ id: string; name: string }>)
+    out[r.id] = r.name;
+  return out;
+}

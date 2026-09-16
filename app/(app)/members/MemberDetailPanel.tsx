@@ -31,13 +31,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { getDBunruiList, getRecentBunruiPairs, listActivities } from '@/lib/domain/activities';
+import { adLabel } from '@/lib/domain/ad_label';
 import { listApplications } from '@/lib/domain/applications';
 import { getReactionsByMember } from '@/lib/domain/article_reactions';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { listInquiries } from '@/lib/domain/inquiries';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { listLpEntriesByMember } from '@/lib/domain/lp';
-import { listAcquisitionPoints } from '@/lib/domain/masters';
+import { getAdNameMap, listAcquisitionPoints } from '@/lib/domain/masters';
 import { getMember } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { listAllUsers } from '@/lib/domain/users_admin';
@@ -82,6 +83,7 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     relReactions,
     relLps,
     acquisitionPoints,
+    adNames,
   ] = await Promise.all([
     // 先頭ページのみ。以降は MemberActivityTimeline が無限スクロールで追記する。
     // ページサイズは追加取得(loadMoreActivities)と必ず揃えること。
@@ -97,6 +99,7 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     listLpEntriesByMember(memberId, 100),
     // 編集フォームの「個人情報取得ポイント」の選択肢(有効なマスタのみ。§5.19)
     listAcquisitionPoints({ activeOnly: true }),
+    getAdNameMap(),
   ]);
 
   const canAssignRegularContact = ['admin', 'manager', 'sales', 'support'].includes(me.role);
@@ -188,6 +191,8 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                 fields={detailFields}
                 fullWidthFields={['remarks']}
                 fieldOverrides={{
+                  // 広告ID: 広告マスタの媒体名を併記(§5.18)
+                  ad_id: adLabel(member.ad_id, adNames),
                   remarks: (
                     <RemarksEditor
                       objectType="members"

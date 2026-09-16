@@ -12,7 +12,9 @@ import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { RemarksEditor } from '@/components/objects/RemarksEditor';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { adLabel } from '@/lib/domain/ad_label';
 import { getInquiry } from '@/lib/domain/inquiries';
+import { getAdNameMap } from '@/lib/domain/masters';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
@@ -25,12 +27,13 @@ interface PageProps {
 
 export default async function InquiryDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const [inquiry, detailFields, highlightFields] = await Promise.all([
+  const [inquiry, detailFields, highlightFields, adNames] = await Promise.all([
     getInquiry(id),
     // オブジェクト管理 (/settings/objects/inquiries) で「詳細」表示ONのフィールドのみ
     getVisibleFields('inquiries', 'detail'),
     // レイアウトエディタの「ハイライト」設定(is_visible_highlight 順)
     getVisibleFields('inquiries', 'highlight'),
+    getAdNameMap(),
   ]);
   if (!inquiry) notFound();
 
@@ -122,6 +125,8 @@ export default async function InquiryDetailPage({ params }: PageProps) {
               ),
               // フォーム: 生ID(form_id)ではなくフォーム名を表示(ハイライトと統一)
               form_id: inquiry.form?.name ?? '-',
+              // 広告ID: 広告マスタの媒体名を併記(§5.18)
+              ad_id: adLabel(inquiry.ad_id, adNames),
               name: inquiry.member ? (
                 <Link
                   href={`/members/${inquiry.member.id}`}
