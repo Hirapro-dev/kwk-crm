@@ -76,7 +76,7 @@ export function HeaderSearch() {
         // クリックによる遷移(onMouseDown)を先に処理させるため、blur は少し遅延させて閉じる
         onBlur={() => setTimeout(() => setFocused(false), 120)}
         onKeyDown={onKeyDown}
-        placeholder="検索... (会員/問合せ/申込)"
+        placeholder="検索... (会員/問合せ/LP/申込)"
         aria-label="全体検索"
         autoComplete="off"
         className="h-8 w-full rounded border-0 bg-white/95 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-white"
@@ -107,9 +107,7 @@ export function HeaderSearch() {
                   <span className="truncate text-sm font-medium text-foreground">{it.title}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">{it.objectLabel}</span>
                 </div>
-                {it.sub && (
-                  <div className="truncate text-xs text-muted-foreground">{it.sub}</div>
-                )}
+                {it.sub && <div className="truncate text-xs text-muted-foreground">{it.sub}</div>}
               </button>
             ))
           )}

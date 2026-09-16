@@ -2,20 +2,21 @@
 
 /**
  * ヘッダー検索ボックスのインクリメンタル検索(候補ドロップダウン)用 Server Action。
- * 会員/問合せ/申込を横断し、各カテゴリ最大5件を整形して返す。
+ * 会員/問合せ/LP/申込を横断し、各カテゴリ最大5件を整形して返す。
  * 既存の一覧検索(listMembers / listInquiries / listApplications)を再利用するため、
  * RLS は実行ユーザーの権限で自然に適用される(全体検索ページ /search と同じ挙動)。
  */
 
 import { listApplications } from './applications';
 import { listInquiries } from './inquiries';
+import { listLpEntries } from './lp';
 import { listMembers } from './members';
 
-export type QuickSearchKind = 'member' | 'inquiry' | 'application';
+export type QuickSearchKind = 'member' | 'inquiry' | 'lp' | 'application';
 
 export interface QuickSearchItem {
   kind: QuickSearchKind;
-  /** 表示用オブジェクト名(顧客情報 / 問合せ / 申込) */
+  /** 表示用オブジェクト名(顧客情報 / 問合せ / LP / 申込) */
   objectLabel: string;
   /** クリック時の遷移先(詳細ページ) */
   href: string;
@@ -32,9 +33,10 @@ export async function quickSearch(qRaw: string): Promise<QuickSearchItem[]> {
   const q = (qRaw ?? '').trim();
   if (!q) return [];
 
-  const [members, inquiries, applications] = await Promise.all([
+  const [members, inquiries, lp, applications] = await Promise.all([
     listMembers({ q, page: 1, pageSize: 10 }),
     listInquiries({ q, page: 1, pageSize: 10 }),
+    listLpEntries({ q, page: 1, pageSize: 10 }),
     listApplications({ q, page: 1, pageSize: 10 }),
   ]);
 
@@ -59,6 +61,17 @@ export async function quickSearch(qRaw: string): Promise<QuickSearchItem[]> {
       href: `/inquiries/${r.id}`,
       title: r.name ?? '(氏名なし)',
       sub: [r.id, r.email, r.form?.name].filter(Boolean).join(' ・ '),
+    });
+  }
+
+  // LP: ID・メール・フォーム名(§5.17)
+  for (const r of lp.rows.slice(0, PER_KIND)) {
+    items.push({
+      kind: 'lp',
+      objectLabel: 'LP',
+      href: `/lp/${r.id}`,
+      title: r.name ?? '(氏名なし)',
+      sub: [r.id, r.email, r.form_name].filter(Boolean).join(' ・ '),
     });
   }
 

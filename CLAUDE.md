@@ -605,7 +605,8 @@ LP・メルマガ登録系フォーム(54 種類)の問合せは、Salesforce �
 **取込**: `scripts/import/import_lp_entries.ts --file <csv> | --dir <dir> [--dry-run] [--limit N]`(Shift_JIS 対応、冪等)。
 **画面**: `/lp`(一覧。問合せID/メール/氏名/かな/会員ID の部分一致検索、フォーム名の絞り込み、無限スクロール、
 一覧カラムは項目管理 `lp_entries` に従う。admin は一括削除可 §5.14)/ `/lp/[id]`(詳細。編集なし)/
-会員詳細の関連に「LP登録」。メニューは「LP」(問合せの次、全ロール)。`object_definitions` に `lp_entries`(sort 92)。
+会員詳細の関連に「LP登録」。ヘッダー検索の候補と全体検索(`/search`)にも「LP」として出す(問合せの次。問合せID/メール/氏名/かな/会員IDの
+部分一致。2026-09-16)。メニューは「LP」(問合せの次、全ロール)。`object_definitions` に `lp_entries`(sort 92)。
 
 ### 5.18 ad_masters (広告マスタ) ★2026-09-16 追加 (migration 96)
 Salesforce の「広告IDマスタ」(広告一覧 CSV 4 ファイル: KAWARA版 105 / カジノIR 33 / 仮想通貨長者 37 / 紳士協定.com 1 = 176 件)。
