@@ -5,10 +5,10 @@
  * 各設定エリアへのリンクカードを並べる。今後 /settings/* が増えたら追加する。
  */
 
-import { Boxes, Briefcase, ChevronRight, GitBranch, Users } from 'lucide-react';
-import Link from 'next/link';
 import { PanelHeader } from '@/components/layout/PanelHeader';
 import { Card } from '@/components/ui/card';
+import { Boxes, Briefcase, ChevronRight, GitBranch, Megaphone, Tags, Users } from 'lucide-react';
+import Link from 'next/link';
 
 interface QuickLink {
   href: string;
@@ -31,6 +31,18 @@ const QUICK_LINKS: QuickLink[] = [
     icon: <Briefcase className="h-5 w-5" />,
   },
   {
+    href: '/settings/ads',
+    title: '広告マスタ',
+    description: '広告ID・広告種別・広告媒体名の一覧と追加・編集',
+    icon: <Megaphone className="h-5 w-5" />,
+  },
+  {
+    href: '/settings/acquisition-points',
+    title: '顧客情報取得ポイントマスタ',
+    description: '会員の「個人情報取得ポイント」の選択肢を管理',
+    icon: <Tags className="h-5 w-5" />,
+  },
+  {
     href: '/settings/objects',
     title: 'オブジェクト管理',
     description: '各オブジェクトのフィールド表示制御・カスタム項目追加',
@@ -48,11 +60,7 @@ export default function SettingsHomePage() {
   return (
     <div className="space-y-3">
       <Card className="overflow-hidden p-0 shadow-sm">
-        <PanelHeader
-          iconLabel="SET"
-          iconColor="#04844b"
-          viewName="設定ホーム"
-        />
+        <PanelHeader iconLabel="SET" iconColor="#04844b" viewName="設定ホーム" />
         <div className="px-4 py-3 text-sm text-muted-foreground">
           管理者向け設定メニュー。左のサイドメニュー、または下のクイックリンクから各設定エリアへ移動してください。
         </div>
