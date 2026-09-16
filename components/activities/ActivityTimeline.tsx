@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { deleteActivity, updateActivity } from '@/lib/domain/activity_actions';
 import type { ActivityListItem } from '@/lib/domain/types';
 import { formatDateTime } from '@/lib/utils/date';
+import { ExternalLink, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
@@ -294,7 +295,9 @@ export function ActivityTimeline({
                     <TableCell className="whitespace-nowrap py-2 text-sm">
                       {a.member?.id ? (
                         <Link
-                          href={splitMode ? buildSelectHref(a.member.id) : `/members/${a.member.id}`}
+                          href={
+                            splitMode ? buildSelectHref(a.member.id) : `/members/${a.member.id}`
+                          }
                           scroll={!splitMode}
                           replace={splitMode}
                           className="text-primary hover:underline"
@@ -319,7 +322,22 @@ export function ActivityTimeline({
                     {a.s_bunrui ?? '-'}
                   </TableCell>
                   <TableCell className="py-2 text-sm text-muted-foreground">
-                    {description || '-'}
+                    {a.mail_thread_id ? (
+                      // メーラーのメール由来(migration 93): 件名をクリックでスレッドを別タブで開く
+                      <a
+                        href={`/mail/${a.mail_thread_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                        title="メーラーでこのメールを開く"
+                      >
+                        <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        <span>{description || '(件名なし)'}</span>
+                        <ExternalLink className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
+                      </a>
+                    ) : (
+                      description || '-'
+                    )}
                   </TableCell>
                   {hasAnyEditable && (
                     <TableCell className="py-2">

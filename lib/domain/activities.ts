@@ -26,6 +26,7 @@ const ACTIVITY_SELECT = `
   id, legacy_sf_id, owner_id, member_id, created_by_id,
   description, d_bunrui, m_bunrui, s_bunrui,
   registered_date, registered_datetime, created_at, updated_at,
+  mail_thread_id, mail_message_id,
   owner:users!activities_owner_id_fkey(id, full_name),
   member:members!activities_member_id_fkey(id, name)
 `;
