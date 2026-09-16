@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  IMPORT_TARGETS,
   type MailImportRule,
   applyRule,
   findMatchingRule,
@@ -42,6 +43,8 @@ function rule(over: Partial<MailImportRule> = {}): MailImportRule {
     from_address: null,
     subject_contains: '【未来予測分析レポート請求】本人確認完了',
     body_contains: null,
+    form_name_contains: null,
+    target: 'inquiry',
     form_name_source: 'body_line',
     form_name_param: '1',
     field_map: {
@@ -291,5 +294,70 @@ describe('guessFieldTarget / guessFormLabel(新規ルールの初期割当て)',
     // 「フォームID」だけではフォーム名にしない
     expect(guessFormLabel(['フォームID', 'お名前'])).toBeNull();
     expect(guessFormLabel([])).toBeNull();
+  });
+});
+
+describe('取込先(target)とフォーム名キーワード(form_name_contains)', () => {
+  // LP・メルマガ系のフォーム通知は問合せではなく LP(lp_entries)に入れる(§5.16 / §5.17。migration 99)。
+  // 「フォーム名に○○を含むフォームは LP へ」をルールで表せるよう、フォーム名に対するキーワード条件を持つ。
+  const EXPA_BODY = [
+    '登録日時: 2026/09/16 10:00:00',
+    'フォームID: 123',
+    'フォーム名: 【FB広告】【KAWARA版】１・仮想通貨レスキューサービスLP',
+    'メールアドレス: test@example.com',
+    'お名前(姓・名): テスト 太郎',
+  ].join('\n');
+  const msg = {
+    mailBoxId: 60,
+    fromAddress: 'noreply@example.com',
+    subject: '[エキスパ]フォーム登録通知',
+    textBody: EXPA_BODY,
+  };
+  const lpRule = (over: Partial<MailImportRule> = {}) =>
+    rule({
+      subject_contains: '[エキスパ]フォーム登録通知',
+      form_name_source: 'body_label',
+      form_name_param: 'フォーム名',
+      target: 'lp',
+      ...over,
+    });
+  it('取込先は問合せ / LP の2種類', () => {
+    expect(IMPORT_TARGETS).toEqual(['inquiry', 'lp']);
+  });
+  it('フォーム名キーワードは、ルールの取り方で決めたフォーム名に対して判定する(すべて含む・語順不問)', () => {
+    expect(ruleMatches(lpRule({ form_name_contains: 'LP' }), msg)).toBe(true);
+    expect(ruleMatches(lpRule({ form_name_contains: 'KAWARA版 LP' }), msg)).toBe(true);
+    expect(ruleMatches(lpRule({ form_name_contains: 'メールマガジン' }), msg)).toBe(false);
+    // 本文の他の場所に語があってもフォーム名に無ければ一致しない(本文キーワードとの違い)
+    expect(
+      ruleMatches(lpRule({ form_name_contains: 'example' }), {
+        ...msg,
+        textBody: `${EXPA_BODY}\n参照元: https://example.com/LP`,
+      }),
+    ).toBe(false);
+    // フォーム名が取れないメールは、フォーム名キーワード条件のあるルールに一致しない
+    expect(ruleMatches(lpRule({ form_name_contains: 'LP' }), { ...msg, textBody: null })).toBe(
+      false,
+    );
+    // 条件が空ならフォーム名では絞らない
+    expect(ruleMatches(lpRule({ form_name_contains: '  ' }), msg)).toBe(true);
+  });
+  it('判定順で LP ルールを先に置けば、同じメールに一致する問合せルールより優先される', () => {
+    const inquiryRule = rule({
+      id: 11,
+      sort_order: 100,
+      subject_contains: '[エキスパ]フォーム登録通知',
+      body_contains: 'KAWARA版',
+      form_name_source: 'body_label',
+      form_name_param: 'フォーム名',
+    });
+    const lp = lpRule({ id: 20, sort_order: 10, form_name_contains: 'LP' });
+    expect(findMatchingRule([inquiryRule, lp], msg)?.id).toBe(20);
+    expect(
+      findMatchingRule(
+        [inquiryRule, lpRule({ id: 20, sort_order: 10, form_name_contains: 'メールマガジン' })],
+        msg,
+      )?.id,
+    ).toBe(11);
   });
 });

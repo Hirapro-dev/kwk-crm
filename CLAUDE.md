@@ -607,6 +607,9 @@ LP・メルマガ登録系フォーム(54 種類)の問合せは、Salesforce �
 一覧カラムは項目管理 `lp_entries` に従う。admin は一括削除可 §5.14)/ `/lp/[id]`(詳細。編集なし)/
 会員詳細の関連に「LP登録」。ヘッダー検索の候補と全体検索(`/search`)にも「LP」として出す(問合せの次。問合せID/メール/氏名/かな/会員IDの
 部分一致。2026-09-16)。メニューは「LP」(問合せの次、全ロール)。`object_definitions` に `lp_entries`(sort 92)。
+- `source_mail_message_id` text unique nullable — メール取込(§5.16。取込先が LP のルール)で作った LP の元メール(migration 99)。
+  CSV 取込分は NULL。一覧の「メール取込分のみ」(`?mail=1`)で絞れる。メール取込分は会員を紐付けない(`member_id` NULL)。
+  ※「取込は今回の CSV のみ」の方針は変わらず、以後の新規分はメーラーから自動で入る(2026-09-16)。
 
 ### 5.18 ad_masters (広告マスタ) ★2026-09-16 追加 (migration 96)
 Salesforce の「広告IDマスタ」(広告一覧 CSV 4 ファイル: KAWARA版 105 / カジノIR 33 / 仮想通貨長者 37 / 紳士協定.com 1 = 176 件)。
@@ -832,6 +835,9 @@ M3 の対応歴自動記録は 2026-09-16 に実装(migration 93。会員に紐�
   `body_contains` text nullable(本文に含むキーワード。件名と同じ空白区切り・すべて含むときに一致。本文はテキスト版、無ければ HTML 版を
   テキスト化したもの `mailBodyText`。「受信データ」「本人確認完了」のように件名に無く本文1行目にしかない区別に使う。
   2026-09-15 追加, migration 90) /
+  `form_name_contains` text nullable(**フォーム名に含むキーワード**。空白区切り・すべて含む。本文全体ではなく、このルールの
+  取り方で決めたフォーム名に対して判定する。「フォーム名に LP を含むフォームは LP へ」のような振り分けに使う。2026-09-16 追加, migration 99) /
+  `target` text NOT NULL DEFAULT `inquiry` check in (`inquiry`, `lp`)(**取込先**。`lp` は問合せではなく LP(§5.17)を作る。2026-09-16 追加, migration 99) /
   フォーム名の取り方: `form_name_source` text check in (`subject`=件名そのまま, `subject_without_name`=件名から「○○ 様」を除く,
   `body_line`=本文のN行目(空行は数えない), `body_label`=本文の「ラベル: 値」の値, `fixed`=固定文字列) / `form_name_param` text(行番号・ラベル・固定文字列) /
   `field_map` jsonb(本文のラベル → 問合せ項目。例 `{"お名前":"name","メールアドレス":"email","電話番号":"phone","住所":"address",
@@ -848,7 +854,14 @@ M3 の対応歴自動記録は 2026-09-16 に実装(migration 93。会員に紐�
   Salesforce も 47 万台の TA- を振り続けるため、離れた番号帯にする(会員IDの K-000100000 と同じ考え方)。
 
 **決定論的ルール**(コードで実装。純粋関数 `lib/domain/mail_import_rules.ts` に置き、ユニットテストで固定):
-- ルール判定: 取込候補のメッセージに対し、`sort_order` 順に条件(受信箱・差出人・件名キーワード・本文キーワード)がすべて一致した**最初の1件**を適用。無ければ `import_status='pending'`、note「ルール未一致」で候補に残す。
+- ルール判定: 取込候補のメッセージに対し、`sort_order` 順に条件(受信箱・差出人・件名キーワード・本文キーワード・フォーム名キーワード)がすべて一致した**最初の1件**を適用。無ければ `import_status='pending'`、note「ルール未一致」で候補に残す。
+- **取込先が LP のルール**(2026-09-16, migration 99): フォームの解決・Salesforce 併用の重複防止・会員照合は行わず、`lp_entries` を1件作る
+  (`id` は問合せと同じ `gen_inquiry_id()` で TA- 採番。Salesforce でも LP は TA- だったため。同じ連番なので衝突しない)。入れる項目は
+  フォーム名(名称のまま。`forms` には登録しない)・氏名・かな・メール・広告ID・登録日時(無ければ受信日時)・登録月(登録日時から `YYYY/MM`)。
+  可変項目(`extra:`)は入らない。**会員の紐付けはしない**(`member_id` = NULL。メールだけの照合は誤紐付けの恐れがあるため。ユーザー決定)。
+  二重取込の防止は `lp_entries.source_mail_message_id`(1メール1件)。処理結果は `mail_messages.lp_entry_id` に記録し、取込候補の一覧・
+  メール詳細で「LP TA-…」へのリンクを出す。初期ルールは「フォーム名に LP を含む」「フォーム名に メールマガジン を含む」の 2 本
+  (件名 `[エキスパ]フォーム登録通知`、フォーム名は本文ラベル「フォーム名」)を判定順の先頭に置く(`importAsLpEntry`)。
 - 本文の解析: `text_body`(無ければ `html_body` をテキスト化)を行に分け、「ラベル: 値」(半角/全角コロン)を辞書にする。
   `field_map` のラベルがある項目だけ取り込む。日時「2026/9/15 9:42:03」は日本時間として解釈。電話は数字のみ(先頭の 0 は残す)。メールは小文字化。
 - フォーム名: `form_name_source` で決め、`forms` を名前で**非破壊**解決(無ければ追加。CSV 取込 `import_inquiries.ts` と同方式)。取れなければ `error`(勝手に別名を付けない)。

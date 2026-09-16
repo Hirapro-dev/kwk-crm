@@ -161,6 +161,15 @@ export function MailInfinite({
                 {t.last_import_note}
               </span>
             </>
+          ) : t.last_lp_entry_id ? (
+            <>
+              <Link href={`/lp/${t.last_lp_entry_id}`} className="sf-link" target="_blank">
+                LP {t.last_lp_entry_id}
+              </Link>
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {t.last_import_note}
+              </span>
+            </>
           ) : status === 'error' ? (
             <span className="block truncate text-destructive">エラー: {t.last_import_note}</span>
           ) : status === 'pending' ? (

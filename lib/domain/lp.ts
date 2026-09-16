@@ -16,13 +16,15 @@ export interface LpEntryRow {
   name: string | null;
   name_kana: string | null;
   registered_at: string | null;
+  /** メール取込(§5.16)で作った LP の元メール。CSV 取込分は null(migration 99) */
+  source_mail_message_id?: string | null;
   created_at: string;
   updated_at: string;
   member?: { id: string; name: string } | null;
 }
 
 const LP_COLS =
-  'id,member_id,registered_month,form_name,ad_id,email,name,name_kana,registered_at,created_at,updated_at,member:members!lp_entries_member_id_fkey(id,name)';
+  'id,member_id,registered_month,form_name,ad_id,email,name,name_kana,registered_at,source_mail_message_id,created_at,updated_at,member:members!lp_entries_member_id_fkey(id,name)';
 
 /** 一覧でソート可能なカラム */
 const LP_SORTABLE = new Set([
@@ -41,6 +43,8 @@ export interface LpListParams {
   q?: string;
   /** フォーム名(完全一致) */
   formName?: string;
+  /** true = メール取込分のみ(source_mail_message_id あり。§5.16) */
+  mailImported?: boolean;
   sort?: string;
   dir?: 'asc' | 'desc';
   page?: number;
@@ -66,6 +70,7 @@ export async function listLpEntries(params: LpListParams = {}): Promise<LpListRe
     .select(LP_COLS, { count: 'exact' })
     .is('deleted_at', null);
   if (params.formName) query = query.eq('form_name', params.formName);
+  if (params.mailImported) query = query.not('source_mail_message_id', 'is', null);
   if (params.q?.trim()) {
     const q = params.q.trim().replace(/[%_]/g, '\\$&');
     query = query.or(

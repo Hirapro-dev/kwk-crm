@@ -141,7 +141,7 @@ export async function listMailThreads(
       .from('mail_messages')
       .select(
         // 取込候補のときはルールの本文キーワード判定のため本文も引く(通常の一覧では引かない)
-        `thread_id, from_address, from_name, subject, sent_at, direction, import_status, import_note, inquiry_id${
+        `thread_id, from_address, from_name, subject, sent_at, direction, import_status, import_note, inquiry_id, lp_entry_id${
           params.importCandidate ? ', text_body, html_body' : ''
         }`,
       )
@@ -161,6 +161,7 @@ export async function listMailThreads(
       import_status: 'pending' | 'done' | 'error' | null;
       import_note: string | null;
       inquiry_id: string | null;
+      lp_entry_id: string | null;
     }>) {
       if (seen.has(m.thread_id)) continue;
       seen.add(m.thread_id);
@@ -171,6 +172,7 @@ export async function listMailThreads(
         row.last_import_status = m.import_status ?? null;
         row.last_import_note = m.import_note ?? null;
         row.last_inquiry_id = m.inquiry_id ?? null;
+        row.last_lp_entry_id = m.lp_entry_id ?? null;
         if (params.importCandidate) {
           const rule = findMatchingRule(rules, {
             mailBoxId: row.mail_box_id,
@@ -254,7 +256,7 @@ export async function getMailThread(id: string): Promise<MailThreadDetail | null
         id, thread_id, direction, message_id, in_reply_to, references_header,
         from_address, from_name, to_addresses, cc_addresses, subject,
         text_body, html_body, sent_at, provider_message_id, delivery_status,
-        import_status, import_note, inquiry_id,
+        import_status, import_note, inquiry_id, lp_entry_id,
         sender_user_id, source, created_at,
         sender:users!mail_messages_sender_user_id_fkey(id, full_name),
         attachments:mail_attachments(id, message_id, filename, content_type, size_bytes, storage_path)
@@ -351,7 +353,7 @@ export async function listMailImportRules(): Promise<MailImportRule[]> {
   const { data, error } = await supabase
     .from('mail_import_rules')
     .select(
-      'id, name, is_active, sort_order, mail_box_id, from_address, subject_contains, body_contains, form_name_source, form_name_param, field_map',
+      'id, name, is_active, sort_order, mail_box_id, from_address, subject_contains, body_contains, form_name_contains, target, form_name_source, form_name_param, field_map',
     )
     .order('sort_order', { ascending: true })
     .order('id', { ascending: true });

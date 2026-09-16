@@ -49,6 +49,15 @@ export const FIELD_COLUMN_LABELS: Record<FieldColumn, string> = {
   registered_at: '登録日時',
 };
 
+/** 取込先(migration 99)。inquiry = 問合せ(既定) / lp = LP(lp_entries。会員の紐付けはしない) */
+export const IMPORT_TARGETS = ['inquiry', 'lp'] as const;
+export type ImportTarget = (typeof IMPORT_TARGETS)[number];
+
+export const IMPORT_TARGET_LABELS: Record<ImportTarget, string> = {
+  inquiry: '問合せ',
+  lp: 'LP',
+};
+
 export interface MailImportRule {
   id: number;
   name: string;
@@ -65,6 +74,13 @@ export interface MailImportRule {
    * 「受信データ」「本人確認完了」のように件名に無く本文1行目にしかない区別に使う
    */
   body_contains: string | null;
+  /**
+   * null = フォーム名で絞らない。空白区切りのキーワード(このルールの取り方で決めたフォーム名にすべて含むときに一致。
+   * migration 99)。「フォーム名に LP を含むフォームは LP へ」のように、本文の他の場所ではなくフォーム名だけで判定する
+   */
+  form_name_contains: string | null;
+  /** 取込先(migration 99)。lp のときは問合せではなく LP(lp_entries)を作る */
+  target: ImportTarget;
   form_name_source: FormNameSource;
   form_name_param: string | null;
   /** 本文のラベル → 問合せの項目(FieldColumn または "extra:<キー>") */
@@ -348,6 +364,13 @@ export function ruleMatches(rule: MailImportRule, msg: RuleMatchInput): boolean 
   if (bodyKeywords.length > 0) {
     const body = mailBodyText(msg.textBody, msg.htmlBody);
     if (!body || !bodyKeywords.every((k) => body.includes(k))) return false;
+  }
+  const formKeywords = subjectKeywords(rule.form_name_contains);
+  if (formKeywords.length > 0) {
+    // このルールの取り方で決めたフォーム名に対して判定する(本文全体ではない)。取れなければ一致しない
+    const parsed = parseMailBody(msg.textBody ?? null, msg.htmlBody ?? null);
+    const formName = resolveFormName(rule, msg.subject ?? '', parsed);
+    if (!formName || !formKeywords.every((k) => formName.includes(k))) return false;
   }
   return true;
 }

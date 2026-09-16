@@ -75,6 +75,8 @@ export interface MailThreadListItem {
   last_import_status?: 'pending' | 'done' | 'error' | null;
   last_import_note?: string | null;
   last_inquiry_id?: string | null;
+  /** 取込先が LP のとき作成した LP(migration 99) */
+  last_lp_entry_id?: string | null;
   /** 取込候補の一覧用: 最新の受信メッセージに一致する取込ルール(無ければ null。§5.16) */
   last_import_rule?: { id: number; name: string } | null;
 }
@@ -111,6 +113,8 @@ export interface MailMessage {
   import_status?: 'pending' | 'done' | 'error' | null;
   import_note?: string | null;
   inquiry_id?: string | null;
+  /** 取込先が LP のとき作成した LP(lp_entries.id。migration 99) */
+  lp_entry_id?: string | null;
   created_at: string;
   sender: { id: string; full_name: string | null } | null;
   attachments: MailAttachment[];

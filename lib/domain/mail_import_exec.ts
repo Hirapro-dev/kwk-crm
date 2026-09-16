@@ -14,11 +14,19 @@
  *      既にあれば作らず紐付ける
  *   6. 会員の自動照合(4点中3点以上で自動紐付け)
  *   7. 問合せを作成(TA- 採番)し、メールに処理結果を記録
+ *
+ * 取込先が LP のルール(migration 99)は 3 の後で分岐し、フォームの解決・重複防止・会員照合をせずに
+ * lp_entries を1件作る(§5.17。会員の紐付けはしない: メールだけの照合は誤紐付けの恐れがあるため)。
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { decideMemberMatch, jstDateKey, normalizeMatchInput } from './mail_import_match';
-import { type MailImportRule, applyRule, findMatchingRule } from './mail_import_rules';
+import {
+  IMPORT_TARGET_LABELS,
+  type MailImportRule,
+  applyRule,
+  findMatchingRule,
+} from './mail_import_rules';
 
 export interface ImportableMessage {
   /** mail_messages.id */
@@ -39,6 +47,8 @@ export interface ImportOutcome {
   status: ImportStatus;
   note: string;
   inquiryId: string | null;
+  /** 取込先が LP のとき作成した lp_entries.id(migration 99) */
+  lpEntryId?: string | null;
 }
 
 const NOTE_MAX = 300;
@@ -48,7 +58,7 @@ export async function fetchMailImportRules(supabase: SupabaseClient): Promise<Ma
   const { data, error } = await supabase
     .from('mail_import_rules')
     .select(
-      'id, name, is_active, sort_order, mail_box_id, from_address, subject_contains, body_contains, form_name_source, form_name_param, field_map',
+      'id, name, is_active, sort_order, mail_box_id, from_address, subject_contains, body_contains, form_name_contains, target, form_name_source, form_name_param, field_map',
     )
     .order('sort_order', { ascending: true })
     .order('id', { ascending: true });
@@ -94,6 +104,7 @@ async function recordOutcome(
       import_status: outcome.status,
       import_note: outcome.note.slice(0, NOTE_MAX),
       inquiry_id: outcome.inquiryId,
+      lp_entry_id: outcome.lpEntryId ?? null,
     })
     .eq('id', msg.id);
   return outcome;
@@ -138,6 +149,8 @@ export async function importMailMessage(
       inquiryId: null,
     });
   }
+
+  if (rule.target === 'lp') return importAsLpEntry(supabase, msg, rule, applied);
 
   try {
     // 3) 同じメールから作成済み(冪等)
@@ -256,6 +269,74 @@ export async function importMailMessage(
       status: 'done',
       note: `${inquiryId} を作成(会員照合: ${matchNote})`,
       inquiryId,
+    });
+  } catch (e) {
+    return recordOutcome(supabase, msg, {
+      status: 'error',
+      note: `${rule.name}: ${e instanceof Error ? e.message : String(e)}`,
+      inquiryId: null,
+    });
+  }
+}
+
+/** 登録月「YYYY/MM」(日本時間。CSV 取込の lp_entries.registered_month と同じ形) */
+function jstMonthKey(iso: string): string {
+  const t = new Date(iso).getTime() + 9 * 60 * 60 * 1000;
+  const d = new Date(t).toISOString();
+  return `${d.slice(0, 4)}/${d.slice(5, 7)}`;
+}
+
+/**
+ * 取込先が LP のルール: lp_entries を1件作る(§5.17 / migration 99)。
+ * フォームは forms に登録せず名称のまま持つ。重複防止は元メール(source_mail_message_id)だけ。
+ * 会員の紐付けはしない(member_id = NULL)。
+ */
+async function importAsLpEntry(
+  supabase: SupabaseClient,
+  msg: ImportableMessage,
+  rule: MailImportRule,
+  applied: ReturnType<typeof applyRule>,
+): Promise<ImportOutcome> {
+  try {
+    const existing = await supabase
+      .from('lp_entries')
+      .select('id')
+      .eq('source_mail_message_id', msg.message_id)
+      .maybeSingle();
+    if (existing.error) throw new Error(existing.error.message);
+    if (existing.data) {
+      const id = (existing.data as { id: string }).id;
+      return recordOutcome(supabase, msg, {
+        status: 'done',
+        note: `${IMPORT_TARGET_LABELS.lp} ${id}(作成済み)`,
+        inquiryId: null,
+        lpEntryId: id,
+      });
+    }
+    const registeredAt = applied.registeredAt ?? msg.sent_at ?? new Date().toISOString();
+    const { data: idData, error: idErr } = await supabase.rpc('gen_inquiry_id');
+    if (idErr || typeof idData !== 'string') {
+      throw new Error(`LP の ID の採番に失敗: ${idErr?.message ?? '不明'}`);
+    }
+    const lpId = idData;
+    const { error: insErr } = await supabase.from('lp_entries').insert({
+      id: lpId,
+      member_id: null,
+      registered_month: jstMonthKey(registeredAt),
+      form_name: applied.formName,
+      ad_id: applied.fields.ad_id ?? null,
+      email: applied.fields.email ?? null,
+      name: applied.fields.name ?? null,
+      name_kana: applied.fields.name_kana ?? null,
+      registered_at: registeredAt,
+      source_mail_message_id: msg.message_id,
+    });
+    if (insErr) throw new Error(`LP の作成に失敗: ${insErr.message}`);
+    return recordOutcome(supabase, msg, {
+      status: 'done',
+      note: `${IMPORT_TARGET_LABELS.lp} ${lpId} を作成(会員の紐付けなし)`,
+      inquiryId: null,
+      lpEntryId: lpId,
     });
   } catch (e) {
     return recordOutcome(supabase, msg, {

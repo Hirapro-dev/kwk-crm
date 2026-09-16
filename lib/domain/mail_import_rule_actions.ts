@@ -10,6 +10,8 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import {
   FORM_NAME_SOURCES,
   type FormNameSource,
+  IMPORT_TARGETS,
+  type ImportTarget,
   normalizeFieldMap,
 } from '@/lib/domain/mail_import_rules';
 import { createClient } from '@/lib/supabase/server';
@@ -29,6 +31,10 @@ export interface SaveMailImportRuleInput {
   subjectContains: string | null;
   /** 本文に含むキーワード(空白区切り。migration 90) */
   bodyContains?: string | null;
+  /** フォーム名に含むキーワード(空白区切り。migration 99) */
+  formNameContains?: string | null;
+  /** 取込先(inquiry / lp。省略時は inquiry。migration 99) */
+  target?: string;
   formNameSource: string;
   formNameParam: string | null;
   fieldMap: Record<string, string>;
@@ -74,6 +80,8 @@ export async function saveMailImportRule(
       error: source === 'body_label' ? 'ラベルを指定してください' : 'フォーム名を入力してください',
     };
   }
+  const target = (input.target ?? 'inquiry') as ImportTarget;
+  if (!IMPORT_TARGETS.includes(target)) return { error: '取込先が不正です' };
   const fieldMap = normalizeFieldMap(input.fieldMap);
   const mailBoxId =
     input.mailBoxId !== null && Number.isInteger(input.mailBoxId) && input.mailBoxId > 0
@@ -87,6 +95,8 @@ export async function saveMailImportRule(
     from_address: trimOrNull(input.fromAddress)?.toLowerCase() ?? null,
     subject_contains: trimOrNull(input.subjectContains),
     body_contains: trimOrNull(input.bodyContains),
+    form_name_contains: trimOrNull(input.formNameContains),
+    target,
     form_name_source: source,
     form_name_param: source === 'subject' || source === 'subject_without_name' ? null : param,
     field_map: fieldMap,

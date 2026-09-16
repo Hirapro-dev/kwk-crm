@@ -15,6 +15,9 @@ import {
   FORM_NAME_SOURCES,
   FORM_NAME_SOURCE_LABELS,
   type FormNameSource,
+  IMPORT_TARGETS,
+  IMPORT_TARGET_LABELS,
+  type ImportTarget,
   type MailImportRule,
   subjectKeywords,
 } from '@/lib/domain/mail_import_rules';
@@ -56,6 +59,8 @@ export function ImportRuleEditDialog({ rule, boxes, inquiryFields, onClose }: Pr
   const [fromAddress, setFromAddress] = useState(rule.from_address ?? '');
   const [subjectContains, setSubjectContains] = useState(rule.subject_contains ?? '');
   const [bodyContains, setBodyContains] = useState(rule.body_contains ?? '');
+  const [formNameContains, setFormNameContains] = useState(rule.form_name_contains ?? '');
+  const [target, setImportTarget] = useState<ImportTarget>(rule.target ?? 'inquiry');
   const [source, setSource] = useState<FormNameSource>(rule.form_name_source);
   const [param, setParam] = useState(rule.form_name_param ?? '');
   // ラベルの並びを保つため配列で持つ(オブジェクトのキー順に頼らない)
@@ -104,6 +109,8 @@ export function ImportRuleEditDialog({ rule, boxes, inquiryFields, onClose }: Pr
         fromAddress: fromAddress.trim() || null,
         subjectContains: subjectContains.trim() || null,
         bodyContains: bodyContains.trim() || null,
+        formNameContains: formNameContains.trim() || null,
+        target,
         formNameSource: source,
         formNameParam: param,
         fieldMap,
@@ -184,6 +191,38 @@ export function ImportRuleEditDialog({ rule, boxes, inquiryFields, onClose }: Pr
                   {bodyKeywords.length > 0
                     ? `${bodyKeywords.map((k) => `「${k}」`).join('')} をすべて含む本文に一致`
                     : '件名で区別できない型を分けるときに使います(例: 「受信データ」)'}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">取込先</Label>
+                <select
+                  className={selectClass}
+                  value={target}
+                  onChange={(e) => setImportTarget(e.target.value as ImportTarget)}
+                >
+                  {IMPORT_TARGETS.map((t) => (
+                    <option key={t} value={t}>
+                      {IMPORT_TARGET_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  LP を選ぶと問合せではなく LP
+                  に入れます(氏名・かな・メール・広告ID・登録日時のみ。会員の紐付けなし)
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">
+                  フォーム名に含むキーワード(空白区切り)
+                </Label>
+                <Input
+                  value={formNameContains}
+                  onChange={(e) => setFormNameContains(e.target.value)}
+                  placeholder="空欄ならフォーム名で絞らない"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  「フォーム名の取り方」で決めたフォーム名にすべて含むときに一致(例:
+                  「LP」「メールマガジン」)
                 </p>
               </div>
             </div>

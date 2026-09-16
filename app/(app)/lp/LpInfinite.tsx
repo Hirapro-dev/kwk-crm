@@ -22,7 +22,13 @@ interface Props {
   initialRows: Row[];
   fields: FieldDefinition[];
   total: number;
-  params: { q?: string; formName?: string; sort?: string; dir?: 'asc' | 'desc' };
+  params: {
+    q?: string;
+    formName?: string;
+    mailImported?: boolean;
+    sort?: string;
+    dir?: 'asc' | 'desc';
+  };
   canDelete?: boolean;
   /** 広告ID → 広告媒体名(§5.18) */
   adNames?: Record<string, string>;

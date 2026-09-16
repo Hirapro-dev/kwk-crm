@@ -270,6 +270,7 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
           importStatus={lastInbound.import_status ?? null}
           importNote={lastInbound.import_note ?? null}
           inquiryId={lastInbound.inquiry_id ?? null}
+          lpEntryId={lastInbound.lp_entry_id ?? null}
         />
       )}
 
