@@ -228,3 +228,110 @@ export async function deleteMember(id: string): Promise<{ error?: string }> {
   revalidatePath('/members');
   return {};
 }
+
+/**
+ * 会員の新規登録(会員一覧の「新規登録」。CLAUDE.md §8.1 / §5.16「会員IDの採番」)。
+ * 問合せを経由せずに会員を作る。ID は DB の連番 gen_member_id()(K- 形式)。viewer は不可。
+ * 同じメール(email1〜3)または電話(phone1)の会員が既にあるときは、allowDuplicate が true でなければ
+ * 登録せずに候補を返す(重複登録の防止。画面で確認してから登録し直せる)。
+ */
+export interface CreateMemberInput {
+  name: string;
+  name_kana?: string | null;
+  email1?: string | null;
+  phone1?: string | null;
+  postal_code?: string | null;
+  address?: string | null;
+  ad_id?: string | null;
+  ad_medium?: string | null;
+  info_acquired_points?: string | null;
+  info_acquired_date?: string | null;
+  mailmag_registered_at?: string | null;
+  /** 担当(users.id)。未指定なら実行者 */
+  owner_id?: string | null;
+  allowDuplicate?: boolean;
+}
+
+export interface CreateMemberResult {
+  ok: boolean;
+  id?: string;
+  error?: string;
+  /** 同じメール/電話の既存会員(重複の可能性)。これがあるときは登録していない */
+  duplicates?: Array<{
+    id: string;
+    name: string | null;
+    email1: string | null;
+    phone1: string | null;
+  }>;
+}
+
+export async function createMember(input: CreateMemberInput): Promise<CreateMemberResult> {
+  const me = await getCurrentUser();
+  if (me.role === 'viewer') return { ok: false, error: '閲覧専用ユーザーは登録できません' };
+  const nz = (v: string | null | undefined, max = 200) => {
+    const s = (v ?? '').trim();
+    return s ? s.slice(0, max) : null;
+  };
+  const name = nz(input.name);
+  if (!name) return { ok: false, error: '氏名を入力してください' };
+  const email1 = nz(input.email1)?.toLowerCase() ?? null;
+  const phone1 = nz(input.phone1, 50);
+  const infoDate = nz(input.info_acquired_date, 10);
+  if (infoDate && !/^\d{4}-\d{2}-\d{2}$/.test(infoDate)) {
+    return { ok: false, error: '顧客情報取得日は YYYY-MM-DD 形式で指定してください' };
+  }
+  const mailmag = nz(input.mailmag_registered_at, 40);
+  const mailmagIso = mailmag ? new Date(mailmag) : null;
+  if (mailmagIso && Number.isNaN(mailmagIso.getTime())) {
+    return { ok: false, error: 'メルマガ登録日時の形式が不正です' };
+  }
+
+  const supabase = await createClient();
+
+  // 重複の確認(メール・電話の完全一致。あいまい一致はしない)
+  if (!input.allowDuplicate && (email1 || phone1)) {
+    const ors: string[] = [];
+    if (email1) {
+      const e = email1.replace(/[%_,]/g, '');
+      ors.push(`email1.ilike.${e}`, `email2.ilike.${e}`, `email3.ilike.${e}`);
+    }
+    if (phone1) ors.push(`phone1.eq.${phone1.replace(/[^0-9+-]/g, '')}`);
+    const { data: dups } = await supabase
+      .from('members')
+      .select('id, name, email1, phone1')
+      .is('deleted_at', null)
+      .or(ors.join(','))
+      .limit(5);
+    const list = (dups ?? []) as CreateMemberResult['duplicates'];
+    if (list && list.length > 0) {
+      return { ok: false, error: '同じメールまたは電話番号の会員が既にあります', duplicates: list };
+    }
+  }
+
+  // ID 採番(連番。migration 86)
+  const { data: newId, error: idErr } = await supabase.rpc('gen_member_id');
+  if (idErr || typeof newId !== 'string' || !/^K-\d{9}$/.test(newId)) {
+    return { ok: false, error: `会員IDの採番に失敗しました: ${idErr?.message ?? ''}` };
+  }
+
+  const ownerId = nz(input.owner_id, 64) ?? me.id;
+  const { error } = await supabase.from('members').insert({
+    id: newId,
+    name,
+    name_kana: nz(input.name_kana),
+    email1,
+    phone1,
+    postal_code: nz(input.postal_code, 20),
+    address: nz(input.address, 500),
+    ad_id: nz(input.ad_id, 50),
+    ad_medium: nz(input.ad_medium),
+    info_acquired_points: nz(input.info_acquired_points),
+    info_acquired_date: infoDate,
+    mailmag_registered_at: mailmagIso ? mailmagIso.toISOString() : null,
+    owner_id: ownerId,
+    registered_at: new Date().toISOString(),
+  });
+  if (error) return { ok: false, error: `登録に失敗しました: ${error.message}` };
+  revalidatePath('/members');
+  return { ok: true, id: newId };
+}
