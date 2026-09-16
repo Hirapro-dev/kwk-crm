@@ -159,7 +159,7 @@
 
 ### 3.1 既存ID体系(維持必須)
 - 会員: `K-XXXXXXX` (9桁ゼロ埋め。旧版はこの表記を7桁と誤記していたため 2026-09-11 に修正)
-- 申込情報: `M-XXXXXXX`
+- 申込情報: `M-XXXXXXX` (実データは 9 桁ゼロ埋め。例 `M-000051826`。2026-09-16 に確認)
 - 問合せ: `TA-XXXXXXX`
 - 従業員: SupabaseのUUID。ただし旧Salesforce ID(`0055i000…`)も別カラムで保持
 
@@ -362,7 +362,9 @@ erDiagram
 **初期データ(44案件)** は `seeds/projects.sql` に列挙、移行スクリプトで投入。
 
 ### 5.6 applications (申込情報)
-- `id` text PK — `M-XXXXXXX`
+- `id` text PK — `M-XXXXXXX`(実データは 9 桁ゼロ埋め)。申込一覧の**新規登録**(2026-09-16 追加)で作る申込は
+  `gen_application_id()`(migration 94。連番 `applications_id_seq`、M-001000000 から)で採番する。既存の `gen_m_id()`(migration 03)は
+  7 桁・MAX+1 方式のため使わない。開始番号は Salesforce 併用中の衝突を避けて離れた番号帯(K- / TA- と同じ考え方)
 - `inquiry_id` text FK → inquiries (nullable)
 - `member_id` text FK → members (not null)
 - `project_id` int FK → projects (not null)
@@ -916,7 +918,7 @@ Supabase RLSで以下を実装:
 | `/inquiries/[id]` | 問合せ詳細 | フォーム固有情報表示、会員作成、メモ |
 | `/members` | 会員一覧 | フィルタ(担当/種別/期間)、CSV出力 |
 | `/members/[id]` | 会員詳細 | 基本情報、申込履歴、活動履歴タイムライン、活動追加。対応歴は**接触種別(チェックボックスで複数選択 = いずれかに一致。例: アウトとインだけ)・状態(通電/不在/接触対応/申込獲得/受信/送信)・期間**で絞り込める(サーバー側で絞り、先頭ページを読み直す。`MemberActivityTimeline`。メール由来の対応歴(§5.7)が増えたため。2026-09-16) |
-| `/applications` | 申込一覧 | フィルタ(案件/ステータス/担当) |
+| `/applications` | 申込一覧 | フィルタ(案件/ステータス/担当)。ヘッダー右の**「新規登録」**(viewer 以外)で申込を作成: 会員を検索して選択(必須)・案件(必須)・申込日(既定は今日)・ステータス(既定 対応中)・区分・担当(既定 自分)・申込獲得者・入金予定日/予定額・入金日/入金額・契約期間。登録後はその申込の詳細へ移動(Server Action `createApplication`、ID は `gen_application_id()`。2026-09-16) |
 | `/applications/[id]` | 申込詳細 | 全項目編集、ステータス遷移 |
 | `/activities` | 活動一覧(ログ中心) | **本システムの主役画面**。新規入力フォーム上部固定。CSV出力ボタンあり(`/activities/export`。画面の絞り込み条件をそのまま引き継ぎ、UTF-8 BOM付き。上限50,000件を超える場合は出力せず絞り込みを促す) |
 | `/projects` | 案件マスタ | admin のみ編集可 |
