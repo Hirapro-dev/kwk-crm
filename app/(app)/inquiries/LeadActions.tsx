@@ -1,6 +1,7 @@
 'use client';
 
 import { AdMasterPicker } from '@/components/masters/AdMasterPicker';
+import { MemberEditDialog } from '@/components/members/MemberEditDialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,18 +14,25 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import type { InquiryListItem } from '@/lib/domain/inquiries';
-import { matchedFieldsLabel, memberMatchLabel } from '@/lib/domain/inquiry_lead';
+import {
+  type InquiryOverrides,
+  matchedFieldsLabel,
+  memberMatchLabel,
+} from '@/lib/domain/inquiry_lead';
 import {
   type MatchCandidate,
   type MemberBrief,
   createMemberFromInquiry,
   getInquiryMatchCandidates,
   linkInquiryToMember,
+  loadMemberForLink,
   markInquiryReviewed,
   searchMembersForInquiry,
 } from '@/lib/domain/inquiry_lead_actions';
 import { listAcquisitionPointNames } from '@/lib/domain/master_actions';
 import { GENDER_OPTIONS } from '@/lib/domain/member_gender';
+import type { FieldDefinition } from '@/lib/domain/object_metadata';
+import type { MemberWithOwner } from '@/lib/domain/types';
 import { ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
@@ -135,9 +143,31 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
     router.refresh();
   };
 
+  // 「この会員に紐付け」: 紐付ける前に会員の編集フォーム(会員詳細と同じ部品)を開き、問合せの値を空欄に
+  // 差し込んだ状態で確認・編集してから、保存と同時に紐付ける(2026-09-17)
+  const [linkTarget, setLinkTarget] = useState<{
+    member: MemberWithOwner;
+    detailFields: FieldDefinition[];
+    users: Array<{ id: string; full_name: string | null }>;
+    acquisitionPoints: string[];
+    overrides: InquiryOverrides;
+  } | null>(null);
   const link = (memberId: string) => {
     setError(null);
-    startTransition(async () => finish(await linkInquiryToMember(inquiry.id, memberId)));
+    startTransition(async () => {
+      const r = await loadMemberForLink(inquiry.id, memberId);
+      if (r.error || !r.member) {
+        setError(r.error ?? '会員の読込に失敗しました');
+        return;
+      }
+      setLinkTarget({
+        member: r.member,
+        detailFields: r.detailFields ?? [],
+        users: r.users ?? [],
+        acquisitionPoints: r.acquisitionPoints ?? [],
+        overrides: r.overrides ?? { columns: {}, extra: {} },
+      });
+    });
   };
   const create = () => {
     setError(null);
@@ -279,6 +309,39 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {linkTarget && (
+        <MemberEditDialog
+          key={linkTarget.member.id}
+          member={linkTarget.member}
+          protectUsers={linkTarget.users}
+          detailFields={linkTarget.detailFields}
+          selectOptions={{
+            info_acquired_points: linkTarget.acquisitionPoints,
+            gender: GENDER_OPTIONS,
+          }}
+          open
+          onOpenChange={(o) => !o && setLinkTarget(null)}
+          title={`会員情報を確認して紐付け: ${linkTarget.member.name ?? linkTarget.member.id}`}
+          submitLabel="保存して紐付け"
+          note={
+            Object.keys(linkTarget.overrides.columns).length +
+              Object.keys(linkTarget.overrides.extra).length >
+            0
+              ? '会員側が空だった項目に問合せの値を入れています(緑の印)。内容を確認し、必要なら直してから保存してください。既にある値は上書きしていません。'
+              : '問合せから追加できる値はありません。必要なら会員情報を直してから紐付けてください。'
+          }
+          initialOverrides={linkTarget.overrides}
+          onSubmit={async (input) => {
+            const r = await linkInquiryToMember(inquiry.id, linkTarget.member.id, input);
+            if (!r.error) {
+              setLinkTarget(null);
+              finish({});
+            }
+            return r;
+          }}
+        />
+      )}
 
       <Dialog open={dialog === 'create'} onOpenChange={(o) => !o && setDialog('closed')}>
         <DialogContent className="max-w-[92%] sm:max-w-[640px]">
