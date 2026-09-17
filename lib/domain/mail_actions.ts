@@ -138,6 +138,34 @@ export async function bulkUpdateMailThreads(
   return { updated: (data ?? []).length };
 }
 
+const DELETE_MAX = 500;
+
+/**
+ * 選択したスレッドを論理削除する(一覧のゴミ箱・一括削除。CLAUDE.md §5.14 と同じ方針: admin のみ、1 回 500 件まで、
+ * deleted_at をセットするだけ)。会員に紐付いたスレッドは DB トリガー(migration 93)で対応歴も論理削除される。
+ * 2026-09-17 追加。
+ */
+export async function deleteMailThreads(
+  ids: string[],
+): Promise<{ deleted?: number; error?: string }> {
+  const me = await getCurrentUser();
+  if (me.role !== 'admin') return { error: '削除は管理者のみ可能です' };
+  const cleaned = [...new Set((ids ?? []).filter((id) => typeof id === 'string' && id))];
+  if (cleaned.length === 0) return { error: '削除するメールが選択されていません' };
+  if (cleaned.length > DELETE_MAX)
+    return { error: `一度に削除できるのは ${DELETE_MAX} 件までです` };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('mail_threads')
+    .update({ deleted_at: new Date().toISOString() })
+    .in('id', cleaned)
+    .is('deleted_at', null)
+    .select('id');
+  if (error) return { error: `削除に失敗しました: ${error.message}` };
+  revalidatePath('/mail', 'layout');
+  return { deleted: (data ?? []).length };
+}
+
 /**
  * スレッドを開いたときに既読にする(Server Component から呼ぶ用)。
  * 失敗しても画面表示は止めない。

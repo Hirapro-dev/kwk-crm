@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { TableCell } from '@/components/ui/table';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { loadMoreMailThreads } from '@/lib/domain/list_more_actions';
+import { deleteMailThreads } from '@/lib/domain/mail_actions';
 import type { MailCategory, MailStatus, MailThreadListItem } from '@/lib/domain/mail_types';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
@@ -37,6 +38,8 @@ interface Props {
   boxAddresses?: Record<number, string>;
   /** true なら左端にチェックボックスを出し、一括操作できる(viewer 以外) */
   canEdit?: boolean;
+  /** true なら行のゴミ箱と一括削除(論理削除)を出す(admin のみ渡す。2026-09-17) */
+  canDelete?: boolean;
   /** 一括操作の担当の選択肢 */
   assigneeOptions?: Array<{ id: string; name: string }>;
   /** 取込候補で、未設定のメールに既存ルールを当てはめる(admin のみ渡す。§5.16。2026-09-17) */
@@ -56,6 +59,7 @@ export function MailInfinite({
   showBoxColumn,
   boxAddresses,
   canEdit,
+  canDelete,
   assigneeOptions = [],
   importRules,
 }: Props) {
@@ -206,6 +210,8 @@ export function MailInfinite({
           ? {
               getId: (t) => t.id,
               objectLabel: 'メール',
+              getLabel: (t) => t.subject ?? t.id,
+              onDelete: canDelete ? deleteMailThreads : undefined,
               actions: (ctx) => (
                 <MailBulkActions
                   ctx={ctx}

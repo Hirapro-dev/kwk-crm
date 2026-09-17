@@ -126,6 +126,7 @@ export default async function MailPage({ searchParams }: PageProps) {
           showBoxColumn={unsorted || !mailBoxId}
           boxAddresses={Object.fromEntries(boxes.map((b) => [b.id, b.address]))}
           canEdit={me.role !== 'viewer'}
+          canDelete={me.role === 'admin'}
           assigneeOptions={assigneeOptions}
           importRules={importRules}
         />

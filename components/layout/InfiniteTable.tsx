@@ -399,18 +399,21 @@ export function InfiniteTable<T>({
                             onChange={() => toggleOne(rowId)}
                             className="h-4 w-4 cursor-pointer accent-primary"
                           />
-                          <button
-                            type="button"
-                            aria-label={`この${selection.objectLabel}を削除`}
-                            title="削除"
-                            onClick={() => {
-                              setDeleteError(null);
-                              setPendingIds([rowId]);
-                            }}
-                            className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          {/* 削除処理(onDelete)が無い一覧では出さない(メーラーで押しても何も起きないボタンが出ていた。2026-09-17) */}
+                          {selection.onDelete && (
+                            <button
+                              type="button"
+                              aria-label={`この${selection.objectLabel}を削除`}
+                              title="削除"
+                              onClick={() => {
+                                setDeleteError(null);
+                                setPendingIds([rowId]);
+                              }}
+                              className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                       </TableCell>
                     )}
