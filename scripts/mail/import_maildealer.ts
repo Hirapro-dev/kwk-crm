@@ -68,8 +68,11 @@ import { logger } from '../migrate/lib/logger';
 
 const CHUNK_SIZE = 500;
 // message_id/thread_id の事前照会は RPC(POST body)経由にしたため URL 長の制約は無いが、
-// 1回のクエリが大きくなりすぎないよう分割する(migration 80。詳細は下記コメント参照)。
-const RPC_LOOKUP_CHUNK_SIZE = 5000;
+// PostgREST は RPC の戻り(RETURNS TABLE)にも 1 回の応答上限(db-max-rows = 1000 行)を掛けるため、
+// 1 回の照会で返る行数が上限を超えないよう入力を 1000 件ずつに分ける(戻りは入力以下)。
+// 5000 件ずつにしていた 2026-09-17 以前は、各回の先頭 1000 件しか「取込済み」と認識されず、
+// 再取込(差分取込)で既存メールが「新規」と誤判定されていた(確認モードで発覚。書込み前に修正)。
+const RPC_LOOKUP_CHUNK_SIZE = 1000;
 
 /**
  * 「担当者名」→ users.email。一意に確定できるものだけ列挙する(あいまいなものは含めない)。
@@ -237,10 +240,13 @@ function resolveFiles(args: { file?: string; dir?: string }): string[] {
   if (args.dir) {
     const dir = resolve(args.dir);
     if (!existsSync(dir)) throw new Error(`ディレクトリが見つかりません: ${dir}`);
-    return readdirSync(dir)
-      .filter((f) => extname(f).toLowerCase() === '.csv')
-      .sort()
-      .map((f) => join(dir, f));
+    return (
+      readdirSync(dir)
+        // macOS が外付けボリュームに作る AppleDouble ファイル(._xxx.csv)は CSV ではないので除く
+        .filter((f) => extname(f).toLowerCase() === '.csv' && !f.startsWith('._'))
+        .sort()
+        .map((f) => join(dir, f))
+    );
   }
   if (args.file) {
     const filepath = resolve(args.file);
