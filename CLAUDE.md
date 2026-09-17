@@ -781,6 +781,11 @@ Webhook(`app/api/mail/inbound/route.ts`)・過去データ取込のどちらも�
 `scripts/mail/repair_maildealer_recipients.ts`(migration 85 の RPC `repair_mail_message_recipients`)で CSV から
 宛先を読み直して補正する(message_id で突合。冪等)。リード/問合せへの実際の取込(項目の切り出し・レコード作成)は未実装で、
 まずは候補の確認用。
+※ 過去データ取込スクリプト(`scripts/mail/import_maildealer.ts`)の「取込済み」判定は RPC `lookup_mail_message_thread_ids`(migration 80)で
+行うが、PostgREST は RPC の戻り(RETURNS TABLE)にも 1 回 1,000 行の上限(db-max-rows)を掛けるため、入力を 1,000 件ずつに分けて呼ぶ
+(2026-09-17 修正。5,000 件ずつだと各回の先頭 1,000 件しか既存と認識されず、差分取込で既存メールが「新規」と誤判定されていた。
+書込みは message_id の upsert(ignoreDuplicates)なので二重登録はしないが、空スレッドが増える恐れがあった)。差分取込は同じ
+ディレクトリを `--dir` で再実行すればよい(冪等。macOS の `._*.csv` は無視する)。
 
 **受信箱のピン留め(ユーザーごと)** (2026-09-14 追加, migration 84): 受信箱が数百件あるため、各ユーザーが自分の確認する
 受信箱をピン留めして左フォルダ上部の「ピン留め」区画にまとめられる。テーブル `mail_box_pins`(`user_id` FK → users /
