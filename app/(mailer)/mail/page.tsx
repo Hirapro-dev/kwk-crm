@@ -12,6 +12,7 @@ import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import {
   countMailThreads,
   listMailBoxes,
+  listMailImportRules,
   listMailThreads,
   listMyMailUserFolders,
 } from '@/lib/domain/mail';
@@ -57,6 +58,13 @@ export default async function MailPage({ searchParams }: PageProps) {
   } as const;
   // 「取込候補」では状態タブを適用しない(状態・分類を問わず全件を仕訳の対象にする)
   const listParams = { ...baseParams, ...mailTabFilter(tab, { importCandidate }) } as const;
+  // 取込候補で admin なら、未設定のメールに既存ルールを当てはめる選択肢(有効なルールのみ)を渡す
+  const importRules =
+    importCandidate && me.role === 'admin'
+      ? (await listMailImportRules())
+          .filter((r) => r.is_active)
+          .map((r) => ({ id: r.id, name: r.name }))
+      : undefined;
 
   const [result, users, tabCounts] = await Promise.all([
     listMailThreads({ ...listParams, page: 1, pageSize: LIST_PAGE_SIZE }),
@@ -119,6 +127,7 @@ export default async function MailPage({ searchParams }: PageProps) {
           boxAddresses={Object.fromEntries(boxes.map((b) => [b.id, b.address]))}
           canEdit={me.role !== 'viewer'}
           assigneeOptions={assigneeOptions}
+          importRules={importRules}
         />
       </div>
     </div>

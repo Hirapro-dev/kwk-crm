@@ -375,6 +375,50 @@ export function ruleMatches(rule: MailImportRule, msg: RuleMatchInput): boolean 
   return true;
 }
 
+/**
+ * ルールに一致しなかった理由(注釈用。2026-09-17)。ruleMatches と同じ条件を1つずつ見て、外れたものを日本語で返す。
+ * 取込候補で「未設定」のメールに既存ルールを手で当てはめるときに出し、処理結果にも残す(ルールを直す手がかり)。
+ * 一致していれば空配列。
+ */
+export function ruleMismatchReasons(rule: MailImportRule, msg: RuleMatchInput): string[] {
+  const reasons: string[] = [];
+  if (!rule.is_active) reasons.push('ルールが無効になっている');
+  if (rule.mail_box_id !== null && rule.mail_box_id !== msg.mailBoxId) {
+    reasons.push(`受信箱が違う(ルールは受信箱 #${rule.mail_box_id} 限定)`);
+  }
+  if (
+    rule.from_address &&
+    rule.from_address.toLowerCase() !== msg.fromAddress.trim().toLowerCase()
+  ) {
+    reasons.push(`差出人が違う(ルールは ${rule.from_address} 限定)`);
+  }
+  const quote = (ks: string[]) => ks.map((k) => `「${k}」`).join('');
+  const subject = msg.subject ?? '';
+  const missingSubject = subjectKeywords(rule.subject_contains).filter((k) => !subject.includes(k));
+  if (missingSubject.length > 0) reasons.push(`件名にキーワード${quote(missingSubject)}を含まない`);
+  const bodyKeywords = subjectKeywords(rule.body_contains);
+  if (bodyKeywords.length > 0) {
+    const body = mailBodyText(msg.textBody, msg.htmlBody);
+    const missing = bodyKeywords.filter((k) => !body || !body.includes(k));
+    if (missing.length > 0) reasons.push(`本文にキーワード${quote(missing)}を含まない`);
+  }
+  const formKeywords = subjectKeywords(rule.form_name_contains);
+  if (formKeywords.length > 0) {
+    const parsed = parseMailBody(msg.textBody ?? null, msg.htmlBody ?? null);
+    const formName = resolveFormName(rule, subject, parsed);
+    if (!formName) {
+      const how = FORM_NAME_SOURCE_LABELS[rule.form_name_source] ?? rule.form_name_source;
+      const param = rule.form_name_param ? `「${rule.form_name_param}」` : '';
+      reasons.push(`フォーム名を取得できない(ルールの取り方: ${how}${param})`);
+    } else {
+      const missing = formKeywords.filter((k) => !formName.includes(k));
+      if (missing.length > 0)
+        reasons.push(`フォーム名「${formName}」にキーワード${quote(missing)}を含まない`);
+    }
+  }
+  return reasons;
+}
+
 /** 判定順(sort_order → id)で最初に一致するルール。無ければ null */
 export function findMatchingRule(
   rules: readonly MailImportRule[],

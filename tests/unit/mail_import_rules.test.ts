@@ -12,6 +12,7 @@ import {
   parseMailBody,
   resolveFormName,
   ruleMatches,
+  ruleMismatchReasons,
   subjectKeywords,
   subjectWithoutName,
 } from '../../lib/domain/mail_import_rules';
@@ -359,5 +360,62 @@ describe('取込先(target)とフォーム名キーワード(form_name_contains)
         msg,
       )?.id,
     ).toBe(11);
+  });
+});
+
+describe('ruleMismatchReasons', () => {
+  // 取込候補で「未設定」のメールに既存ルールを手で当てはめるとき、そのルールに一致しなかった理由を
+  // 注釈として出す(ルールを直す手がかり。2026-09-17)。判定は ruleMatches と同じ条件を1つずつ見る
+  const msg = {
+    mailBoxId: 60,
+    fromAddress: 'noreply@kawaraban.co.jp',
+    subject: SUBJECT,
+    textBody: BODY,
+  };
+  it('一致するルールは理由なし(空配列)', () => {
+    expect(ruleMismatchReasons(rule(), msg)).toEqual([]);
+  });
+  it('受信箱・差出人・件名キーワード・本文キーワード・フォーム名キーワード・無効 を個別に説明する', () => {
+    expect(ruleMismatchReasons(rule({ mail_box_id: 61 }), msg)).toEqual([
+      '受信箱が違う(ルールは受信箱 #61 限定)',
+    ]);
+    expect(ruleMismatchReasons(rule({ from_address: 'other@example.com' }), msg)).toEqual([
+      '差出人が違う(ルールは other@example.com 限定)',
+    ]);
+    expect(ruleMismatchReasons(rule({ subject_contains: '本人確認完了 受信データ' }), msg)).toEqual(
+      ['件名にキーワード「受信データ」を含まない'],
+    );
+    expect(ruleMismatchReasons(rule({ body_contains: 'メールマガジン LP' }), msg)).toEqual([
+      '本文にキーワード「メールマガジン」「LP」を含まない',
+    ]);
+    expect(
+      ruleMismatchReasons(
+        rule({ form_name_source: 'body_line', form_name_param: '1', form_name_contains: 'LP' }),
+        msg,
+      ),
+    ).toEqual([
+      'フォーム名「【未来予測分析レポート請求】本人確認完了（kioxia）【Google広告経由】」にキーワード「LP」を含まない',
+    ]);
+    expect(
+      ruleMismatchReasons(
+        rule({
+          form_name_source: 'body_label',
+          form_name_param: 'フォーム名',
+          form_name_contains: 'LP',
+        }),
+        msg,
+      ),
+    ).toEqual(['フォーム名を取得できない(ルールの取り方: 本文のラベルの値「フォーム名」)']);
+    expect(ruleMismatchReasons(rule({ is_active: false }), msg)).toEqual([
+      'ルールが無効になっている',
+    ]);
+  });
+  it('複数の条件に外れていれば理由を全部並べる', () => {
+    expect(
+      ruleMismatchReasons(rule({ mail_box_id: 61, subject_contains: 'メールマガジン' }), msg),
+    ).toEqual([
+      '受信箱が違う(ルールは受信箱 #61 限定)',
+      '件名にキーワード「メールマガジン」を含まない',
+    ]);
   });
 });

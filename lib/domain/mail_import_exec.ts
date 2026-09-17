@@ -26,6 +26,7 @@ import {
   type MailImportRule,
   applyRule,
   findMatchingRule,
+  ruleMismatchReasons,
 } from './mail_import_rules';
 
 export interface ImportableMessage {
@@ -97,12 +98,13 @@ async function recordOutcome(
   supabase: SupabaseClient,
   msg: ImportableMessage,
   outcome: ImportOutcome,
+  notePrefix = '',
 ): Promise<ImportOutcome> {
   await supabase
     .from('mail_messages')
     .update({
       import_status: outcome.status,
-      import_note: outcome.note.slice(0, NOTE_MAX),
+      import_note: `${notePrefix}${outcome.note}`.slice(0, NOTE_MAX),
       inquiry_id: outcome.inquiryId,
       lp_entry_id: outcome.lpEntryId ?? null,
     })
@@ -116,25 +118,47 @@ const MATCH_LABEL: Record<string, string> = {
   none: '該当なし',
 };
 
+export interface ImportOptions {
+  /**
+   * 手動適用(2026-09-17): 条件に一致しなくてもこのルールで取り込む(取込候補で「未設定」のメールに既存ルールを当てはめる)。
+   * 一致しなかった理由(ruleMismatchReasons)を処理結果の注釈に残す
+   */
+  forceRule?: MailImportRule;
+}
+
 /** メール1通を取り込む。結果は mail_messages に記録して返す(例外は投げない) */
 export async function importMailMessage(
   supabase: SupabaseClient,
   msg: ImportableMessage,
   rules: readonly MailImportRule[],
+  options: ImportOptions = {},
 ): Promise<ImportOutcome> {
-  const rule = findMatchingRule(rules, {
+  const matchInput = {
     mailBoxId: msg.mail_box_id,
     fromAddress: msg.from_address,
     subject: msg.subject,
     textBody: msg.text_body,
     htmlBody: msg.html_body,
-  });
+  };
+  const rule = options.forceRule ?? findMatchingRule(rules, matchInput);
+  let notePrefix = '';
+  if (options.forceRule) {
+    const reasons = ruleMismatchReasons(options.forceRule, matchInput);
+    notePrefix = `手動適用「${options.forceRule.name}」${
+      reasons.length > 0 ? `(条件不一致: ${reasons.join(' / ')})` : ''
+    }: `;
+  }
   if (!rule) {
-    return recordOutcome(supabase, msg, {
-      status: 'pending',
-      note: 'ルール未一致',
-      inquiryId: null,
-    });
+    return recordOutcome(
+      supabase,
+      msg,
+      {
+        status: 'pending',
+        note: 'ルール未一致',
+        inquiryId: null,
+      },
+      notePrefix,
+    );
   }
 
   const applied = applyRule(rule, {
@@ -143,14 +167,15 @@ export async function importMailMessage(
     htmlBody: msg.html_body,
   });
   if (!applied.formName) {
-    return recordOutcome(supabase, msg, {
-      status: 'error',
-      note: `${rule.name}: ${applied.errors.join(' / ')}`,
-      inquiryId: null,
-    });
+    return recordOutcome(
+      supabase,
+      msg,
+      { status: 'error', note: `${rule.name}: ${applied.errors.join(' / ')}`, inquiryId: null },
+      notePrefix,
+    );
   }
 
-  if (rule.target === 'lp') return importAsLpEntry(supabase, msg, rule, applied);
+  if (rule.target === 'lp') return importAsLpEntry(supabase, msg, rule, applied, notePrefix);
 
   try {
     // 3) 同じメールから作成済み(冪等)
@@ -162,11 +187,12 @@ export async function importMailMessage(
     if (existing.error) throw new Error(existing.error.message);
     if (existing.data) {
       const id = (existing.data as { id: string }).id;
-      return recordOutcome(supabase, msg, {
-        status: 'done',
-        note: `${id}(作成済み)`,
-        inquiryId: id,
-      });
+      return recordOutcome(
+        supabase,
+        msg,
+        { status: 'done', note: `${id}(作成済み)`, inquiryId: id },
+        notePrefix,
+      );
     }
 
     // 4) フォーム
@@ -197,11 +223,16 @@ export async function importMailMessage(
             .update({ source_mail_message_id: msg.message_id })
             .eq('id', d.id);
         }
-        return recordOutcome(supabase, msg, {
-          status: 'done',
-          note: `既存 ${d.id} に紐付け(同じフォーム・メール・登録日)`,
-          inquiryId: d.id,
-        });
+        return recordOutcome(
+          supabase,
+          msg,
+          {
+            status: 'done',
+            note: `既存 ${d.id} に紐付け(同じフォーム・メール・登録日)`,
+            inquiryId: d.id,
+          },
+          notePrefix,
+        );
       }
     }
 
@@ -265,17 +296,27 @@ export async function importMailMessage(
     const matchNote = match.memberId
       ? `${MATCH_LABEL.auto} ${match.memberId}`
       : `${MATCH_LABEL[match.status] ?? match.status}`;
-    return recordOutcome(supabase, msg, {
-      status: 'done',
-      note: `${inquiryId} を作成(会員照合: ${matchNote})`,
-      inquiryId,
-    });
+    return recordOutcome(
+      supabase,
+      msg,
+      {
+        status: 'done',
+        note: `${inquiryId} を作成(会員照合: ${matchNote})`,
+        inquiryId,
+      },
+      notePrefix,
+    );
   } catch (e) {
-    return recordOutcome(supabase, msg, {
-      status: 'error',
-      note: `${rule.name}: ${e instanceof Error ? e.message : String(e)}`,
-      inquiryId: null,
-    });
+    return recordOutcome(
+      supabase,
+      msg,
+      {
+        status: 'error',
+        note: `${rule.name}: ${e instanceof Error ? e.message : String(e)}`,
+        inquiryId: null,
+      },
+      notePrefix,
+    );
   }
 }
 
@@ -296,6 +337,7 @@ async function importAsLpEntry(
   msg: ImportableMessage,
   rule: MailImportRule,
   applied: ReturnType<typeof applyRule>,
+  notePrefix = '',
 ): Promise<ImportOutcome> {
   try {
     const existing = await supabase
@@ -306,12 +348,17 @@ async function importAsLpEntry(
     if (existing.error) throw new Error(existing.error.message);
     if (existing.data) {
       const id = (existing.data as { id: string }).id;
-      return recordOutcome(supabase, msg, {
-        status: 'done',
-        note: `${IMPORT_TARGET_LABELS.lp} ${id}(作成済み)`,
-        inquiryId: null,
-        lpEntryId: id,
-      });
+      return recordOutcome(
+        supabase,
+        msg,
+        {
+          status: 'done',
+          note: `${IMPORT_TARGET_LABELS.lp} ${id}(作成済み)`,
+          inquiryId: null,
+          lpEntryId: id,
+        },
+        notePrefix,
+      );
     }
     const registeredAt = applied.registeredAt ?? msg.sent_at ?? new Date().toISOString();
     const { data: idData, error: idErr } = await supabase.rpc('gen_inquiry_id');
@@ -332,18 +379,28 @@ async function importAsLpEntry(
       source_mail_message_id: msg.message_id,
     });
     if (insErr) throw new Error(`LP の作成に失敗: ${insErr.message}`);
-    return recordOutcome(supabase, msg, {
-      status: 'done',
-      note: `${IMPORT_TARGET_LABELS.lp} ${lpId} を作成(会員の紐付けなし)`,
-      inquiryId: null,
-      lpEntryId: lpId,
-    });
+    return recordOutcome(
+      supabase,
+      msg,
+      {
+        status: 'done',
+        note: `${IMPORT_TARGET_LABELS.lp} ${lpId} を作成(会員の紐付けなし)`,
+        inquiryId: null,
+        lpEntryId: lpId,
+      },
+      notePrefix,
+    );
   } catch (e) {
-    return recordOutcome(supabase, msg, {
-      status: 'error',
-      note: `${rule.name}: ${e instanceof Error ? e.message : String(e)}`,
-      inquiryId: null,
-    });
+    return recordOutcome(
+      supabase,
+      msg,
+      {
+        status: 'error',
+        note: `${rule.name}: ${e instanceof Error ? e.message : String(e)}`,
+        inquiryId: null,
+      },
+      notePrefix,
+    );
   }
 }
 

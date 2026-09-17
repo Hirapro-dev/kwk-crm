@@ -4,7 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { processMailMessageImport } from '@/lib/domain/mail_import_exec_actions';
+import {
+  applyImportRuleToThreads,
+  processMailMessageImport,
+} from '@/lib/domain/mail_import_exec_actions';
 import { saveMailImportRule } from '@/lib/domain/mail_import_rule_actions';
 import {
   FIELD_COLUMN_LABELS,
@@ -21,6 +24,7 @@ import {
   guessFormLabel,
   parseMailBody,
   ruleMatches,
+  ruleMismatchReasons,
   subjectWithoutName,
 } from '@/lib/domain/mail_import_rules';
 import { useRouter } from 'next/navigation';
@@ -57,6 +61,10 @@ interface Props {
   sample: MailImportRuleSample;
   /** このメールに一致している既存ルール(無ければ null = 新規作成) */
   existingRule: MailImportRule | null;
+  /** すべてのルール(一致しないときに手で当てはめる選択肢。§5.16。2026-09-17) */
+  allRules?: MailImportRule[];
+  /** このメールのスレッド(手で当てはめるときに使う) */
+  threadId?: string;
   isAdmin: boolean;
   /** 問合せオブジェクトの項目(項目管理 /settings/objects/inquiries の定義) */
   inquiryFields: InquiryFieldOption[];
@@ -87,6 +95,8 @@ function initialFieldMap(
 export function MailImportRulePanel({
   sample,
   existingRule,
+  allRules = [],
+  threadId,
   isAdmin,
   inquiryFields,
   messageRowId,
@@ -213,6 +223,39 @@ export function MailImportRulePanel({
   };
 
   // 「このメールを処理」: 保存済みのルールで実際に問合せを作る(結果はメールに記録される)
+  // 既存ルールを手で当てはめる(一致しなかった理由を注釈で出してから処理)
+  const [manualRuleId, setManualRuleId] = useState<number | null>(null);
+  const manualRule = allRules.find((r) => r.id === manualRuleId) ?? null;
+  const manualReasons = useMemo(
+    () =>
+      manualRule
+        ? ruleMismatchReasons(manualRule, {
+            mailBoxId: sample.mailBoxId,
+            fromAddress: sample.fromAddress,
+            subject: sample.subject,
+            textBody: sample.textBody,
+            htmlBody: sample.htmlBody,
+          })
+        : [],
+    [manualRule, sample],
+  );
+  const handleApplyExisting = () => {
+    if (!manualRule || !threadId) return;
+    setMessage(null);
+    startTransition(async () => {
+      const r = await applyImportRuleToThreads({ threadIds: [threadId], ruleId: manualRule.id });
+      if (r.error) {
+        setMessage({ kind: 'error', text: r.error });
+        return;
+      }
+      setMessage({
+        kind: (r.summary?.error ?? 0) > 0 ? 'error' : 'ok',
+        text: `処理結果: ${r.notes?.[0] ?? '処理しました'}`,
+      });
+      router.refresh();
+    });
+  };
+
   const handleProcess = () => {
     setMessage(null);
     startTransition(async () => {
@@ -295,6 +338,55 @@ export function MailImportRulePanel({
         </p>
       </CardHeader>
       <CardContent className="space-y-5 p-4 text-sm">
+        {!existingRule && isAdmin && allRules.length > 0 && threadId && (
+          <section className="space-y-2 rounded-md border border-amber-200 bg-amber-50/50 p-3">
+            <h3 className="text-xs font-semibold text-amber-800">
+              既存のルールを当てはめる(条件に一致しなくても、そのルールで取り込みます)
+            </h3>
+            <select
+              className={selectClass}
+              value={manualRuleId ?? ''}
+              onChange={(e) => setManualRuleId(e.target.value ? Number(e.target.value) : null)}
+              disabled={pending}
+            >
+              <option value="">ルールを選択…</option>
+              {allRules.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                  {r.is_active ? '' : '(無効)'}
+                </option>
+              ))}
+            </select>
+            {manualRule && (
+              <div className="text-xs text-amber-900">
+                {manualReasons.length === 0 ? (
+                  <p>このルールの条件には一致しています。</p>
+                ) : (
+                  <>
+                    <p>このメールが「{manualRule.name}」に一致しなかった理由:</p>
+                    <ul className="list-disc pl-5">
+                      {manualReasons.map((x) => (
+                        <li key={x}>{x}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  当てはめると、この理由は処理結果の注釈として残ります。今後も同じ型のメールを自動で取り込むには、下の条件を直して新しいルールとして保存してください。
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-1"
+                  onClick={handleApplyExisting}
+                  disabled={pending}
+                >
+                  {pending ? '処理中…' : 'このルールで処理'}
+                </Button>
+              </div>
+            )}
+          </section>
+        )}
         {/* 一致条件 */}
         <section className="space-y-2">
           <h3 className="text-xs font-semibold text-muted-foreground">

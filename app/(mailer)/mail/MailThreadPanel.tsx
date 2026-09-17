@@ -116,8 +116,9 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
           htmlBody: lastInbound.html_body,
         }
       : null;
+  const importRules = importRuleSample ? await listMailImportRules() : [];
   const matchingImportRule = importRuleSample
-    ? findMatchingRule(await listMailImportRules(), {
+    ? findMatchingRule(importRules, {
         mailBoxId: importRuleSample.mailBoxId,
         fromAddress: importRuleSample.fromAddress,
         subject: importRuleSample.subject,
@@ -264,6 +265,8 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
         <MailImportRulePanel
           sample={importRuleSample}
           existingRule={matchingImportRule}
+          allRules={importRules}
+          threadId={thread.id}
           isAdmin={me.role === 'admin'}
           inquiryFields={inquiryFields}
           messageRowId={lastInbound.id}
