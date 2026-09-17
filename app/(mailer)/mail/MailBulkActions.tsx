@@ -2,6 +2,7 @@
 
 import type { InfiniteSelectionContext } from '@/components/layout/InfiniteTable';
 import { bulkUpdateMailThreads } from '@/lib/domain/mail_actions';
+import { applyImportRuleToThreads } from '@/lib/domain/mail_import_exec_actions';
 import {
   MAIL_CATEGORIES,
   MAIL_STATUSES,
@@ -18,6 +19,8 @@ import { useState, useTransition } from 'react';
 interface Props {
   ctx: InfiniteSelectionContext;
   assigneeOptions: Array<{ id: string; name: string }>;
+  /** 取込候補で既存ルールを一括で当てはめる(admin のみ渡す。§5.16。2026-09-17) */
+  importRules?: Array<{ id: number; name: string }>;
 }
 
 const selectClass =
@@ -25,9 +28,28 @@ const selectClass =
 const buttonClass =
   'h-8 rounded-md border border-input bg-background px-2 text-xs hover:bg-accent disabled:opacity-50';
 
-export function MailBulkActions({ ctx, assigneeOptions }: Props) {
+export function MailBulkActions({ ctx, assigneeOptions, importRules }: Props) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+
+  const applyRule = (ruleId: number) => {
+    setMessage(null);
+    startTransition(async () => {
+      const r = await applyImportRuleToThreads({ threadIds: ctx.ids, ruleId });
+      if (r.error) {
+        setMessage(r.error);
+        return;
+      }
+      const s = r.summary;
+      setMessage(
+        s
+          ? `${s.processed} 件を処理しました(作成/紐付け ${s.done} / エラー ${s.error})。条件に一致しなかった理由は各行の処理結果に残ります`
+          : '処理しました',
+      );
+      await ctx.refresh();
+      ctx.clear();
+    });
+  };
 
   const run = (patch: Omit<Parameters<typeof bulkUpdateMailThreads>[0], 'ids'>, label: string) => {
     setMessage(null);
@@ -127,6 +149,27 @@ export function MailBulkActions({ ctx, assigneeOptions }: Props) {
         未読にする
       </button>
       {pending && <span className="text-muted-foreground">更新中…</span>}
+      {importRules && importRules.length > 0 && (
+        <label className="flex items-center gap-1">
+          取込ルールを当てはめる
+          <select
+            className={selectClass}
+            value=""
+            disabled={pending}
+            onChange={(e) => {
+              if (e.target.value) applyRule(Number(e.target.value));
+            }}
+            aria-label="選択したメールに既存の取込ルールを当てはめる"
+          >
+            <option value="">ルールを選択…</option>
+            {importRules.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {message && !pending && (
         <span
           className={

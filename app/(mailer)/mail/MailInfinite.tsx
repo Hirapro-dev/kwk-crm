@@ -9,6 +9,7 @@ import type { MailCategory, MailStatus, MailThreadListItem } from '@/lib/domain/
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { ApplyImportRuleCell } from './ApplyImportRuleCell';
 import { MailBulkActions } from './MailBulkActions';
 
 /**
@@ -38,6 +39,8 @@ interface Props {
   canEdit?: boolean;
   /** 一括操作の担当の選択肢 */
   assigneeOptions?: Array<{ id: string; name: string }>;
+  /** 取込候補で、未設定のメールに既存ルールを当てはめる(admin のみ渡す。§5.16。2026-09-17) */
+  importRules?: Array<{ id: number; name: string }>;
 }
 
 const STATUS_CLASS: Record<MailStatus, string> = {
@@ -54,6 +57,7 @@ export function MailInfinite({
   boxAddresses,
   canEdit,
   assigneeOptions = [],
+  importRules,
 }: Props) {
   const searchParams = useSearchParams();
   const qs = searchParams.toString();
@@ -143,6 +147,8 @@ export function MailInfinite({
             >
               {t.last_import_rule.name}
             </Badge>
+          ) : importRules && importRules.length > 0 && !t.last_inquiry_id && !t.last_lp_entry_id ? (
+            <ApplyImportRuleCell threadId={t.id} rules={importRules} />
           ) : (
             <span className="text-muted-foreground">未設定</span>
           )}
@@ -200,7 +206,13 @@ export function MailInfinite({
           ? {
               getId: (t) => t.id,
               objectLabel: 'メール',
-              actions: (ctx) => <MailBulkActions ctx={ctx} assigneeOptions={assigneeOptions} />,
+              actions: (ctx) => (
+                <MailBulkActions
+                  ctx={ctx}
+                  assigneeOptions={assigneeOptions}
+                  importRules={importRules}
+                />
+              ),
             }
           : undefined
       }
