@@ -12,8 +12,18 @@
 
 import { getCurrentUser } from '@/lib/domain/auth';
 import { type ConvertMemberFields, convertInquiryToMember } from '@/lib/domain/inquiry_actions';
-import type { MemberMatch } from '@/lib/domain/inquiry_lead';
+import {
+  type InquiryOverrides,
+  type MemberMatch,
+  inquiryOverridesForMember,
+} from '@/lib/domain/inquiry_lead';
 import { normalizeMatchInput } from '@/lib/domain/mail_import_match';
+import { listAcquisitionPoints } from '@/lib/domain/masters';
+import { type UpdateMemberInput, updateMember } from '@/lib/domain/member_actions';
+import { getMember } from '@/lib/domain/members';
+import { type FieldDefinition, getVisibleFields } from '@/lib/domain/object_metadata';
+import type { MemberWithOwner } from '@/lib/domain/types';
+import { listAllUsers } from '@/lib/domain/users_admin';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
@@ -138,12 +148,83 @@ async function setMatchReviewed(inquiryId: string): Promise<string | null> {
 }
 
 /** 既存会員に紐付ける(会員化)。照合結果は「確認済み」にする */
+/**
+ * 「この会員に紐付け」の前に、会員の編集フォームに必要なものをまとめて返す(2026-09-17)。
+ * 会員の現在値・詳細項目の定義・担当者候補・取得ポイントの選択肢と、問合せの値を空欄に差し込む初期値
+ * (純粋関数 inquiryOverridesForMember)。
+ */
+export async function loadMemberForLink(
+  inquiryId: string,
+  memberId: string,
+): Promise<{
+  error?: string;
+  member?: MemberWithOwner;
+  detailFields?: FieldDefinition[];
+  users?: Array<{ id: string; full_name: string | null }>;
+  acquisitionPoints?: string[];
+  overrides?: InquiryOverrides;
+}> {
+  const denied = await requireWriter();
+  if (denied) return { error: denied };
+  const supabase = await createClient();
+  const [member, detailFields, users, points, inquiryRes] = await Promise.all([
+    getMember(memberId),
+    getVisibleFields('members', 'detail'),
+    listAllUsers({ activeOnly: true }),
+    listAcquisitionPoints({ activeOnly: true }),
+    supabase
+      .from('inquiries')
+      .select('name_kana, email, phone, postal_code, address, ad_id')
+      .eq('id', inquiryId)
+      .is('deleted_at', null)
+      .maybeSingle(),
+  ]);
+  if (!member) return { error: '会員が見つかりません' };
+  if (inquiryRes.error || !inquiryRes.data) return { error: '問合せが見つかりません' };
+  const inq = inquiryRes.data as {
+    name_kana: string | null;
+    email: string | null;
+    phone: string | null;
+    postal_code: string | null;
+    address: string | null;
+    ad_id: string | null;
+  };
+  const overrides = inquiryOverridesForMember(inq, {
+    name_kana: member.name_kana,
+    email1: member.email1,
+    email2: member.email2,
+    email3: member.email3,
+    phone1: member.phone1,
+    postal_code: member.postal_code,
+    address: member.address,
+    ad_id: member.ad_id,
+    extra: (member as unknown as { extra?: Record<string, unknown> | null }).extra,
+  });
+  return {
+    member,
+    detailFields,
+    users: users.map((u) => ({ id: u.id, full_name: u.full_name })),
+    acquisitionPoints: points.map((p) => p.name),
+    overrides,
+  };
+}
+
+/**
+ * 既存会員に紐付ける。memberPatch があれば先に会員情報を更新する(会員の編集フォームで確認した値。
+ * updateMember と同じホワイトリスト・権限)。更新に失敗したら紐付けもしない。
+ */
 export async function linkInquiryToMember(
   inquiryId: string,
   memberId: string,
+  memberPatch?: UpdateMemberInput,
 ): Promise<{ error?: string; memberId?: string }> {
   const denied = await requireWriter();
   if (denied) return { error: denied };
+  if (memberPatch) {
+    if (memberPatch.id !== memberId) return { error: '会員IDが一致しません' };
+    const upd = await updateMember(memberPatch);
+    if (upd.error) return { error: `会員情報の更新に失敗しました: ${upd.error}` };
+  }
   const res = await convertInquiryToMember({
     inquiry_id: inquiryId,
     existing_member_id: memberId,

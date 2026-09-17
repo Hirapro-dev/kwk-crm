@@ -13,7 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { updateMember } from '@/lib/domain/member_actions';
+import { type UpdateMemberInput, updateMember } from '@/lib/domain/member_actions';
 import { EDITABLE_MEMBER_EXTRA_KEYS } from '@/lib/domain/member_extra_edit';
 import type { SelectOption } from '@/lib/domain/member_gender';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
@@ -63,6 +63,24 @@ interface Props {
    * 現在の値が選択肢に無いときも失わないよう、その値を選択肢に足して描画する
    */
   selectOptions?: Record<string, ReadonlyArray<string | SelectOption>>;
+  /**
+   * 制御モード(問合せの「この会員に紐付け」から使う。2026-09-17)。open を渡すと開閉を呼び出し側が持ち、
+   * 自前の「編集」ボタンは出さない
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** ダイアログの見出し(既定「会員情報の編集」)と保存ボタンの文言(既定「保存」) */
+  title?: string;
+  submitLabel?: string;
+  /** フォーム上部に出す説明 */
+  note?: React.ReactNode;
+  /**
+   * 会員側が空の項目に差し込む初期値(問合せの値など)。columns は DB 列、extra は電話番号2・3。
+   * 差し込んだ項目には「問合せから」の印を付ける。保存前に利用者が直せる
+   */
+  initialOverrides?: { columns: Record<string, string>; extra: Record<string, string> };
+  /** 保存処理の差し替え(既定は updateMember)。成功したら呼び出し側が閉じる・再読込する */
+  onSubmit?: (input: UpdateMemberInput) => Promise<{ error?: string }>;
 }
 
 /** ISO/タイムスタンプ文字列を input[type=date] 用の YYYY-MM-DD に変換 */
@@ -91,9 +109,22 @@ export function MemberEditDialog({
   protectUsers = [],
   detailFields = [],
   selectOptions,
+  open: openProp,
+  onOpenChange,
+  title = '会員情報の編集',
+  submitLabel = '保存',
+  note,
+  initialOverrides,
+  onSubmit,
 }: Props) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const controlled = openProp !== undefined;
+  const [openState, setOpenState] = useState(false);
+  const open = controlled ? openProp : openState;
+  const setOpen = (o: boolean) => {
+    onOpenChange?.(o);
+    if (!controlled) setOpenState(o);
+  };
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const isAdmin = currentUserRole === 'admin';
@@ -121,9 +152,18 @@ export function MemberEditDialog({
     for (const f of editableFields) {
       const raw = isExtraEditable(f) ? extraRecord[f.field_name] : record[f.field_name];
       o[f.field_name] = initValue(f.data_type, raw);
+      // 問合せなどからの差し込み(会員側が空の項目だけ。決め方は純粋関数 inquiryOverridesForMember)
+      const ov = isExtraEditable(f)
+        ? initialOverrides?.extra[f.field_name]
+        : initialOverrides?.columns[f.field_name];
+      if (ov !== undefined) o[f.field_name] = ov;
     }
     return o;
   });
+  const overriddenKeys = new Set<string>([
+    ...Object.keys(initialOverrides?.columns ?? {}),
+    ...Object.keys(initialOverrides?.extra ?? {}),
+  ]);
 
   // 定期連絡者 (ユーザー検索コンボボックス)
   const [regularContactId, setRegularContactId] = useState<string | null>(
@@ -164,20 +204,21 @@ export function MemberEditDialog({
         if (extraKeys.includes(k)) extraValues[k] = typeof v === 'string' ? v : '';
         else columnValues[k] = v;
       }
-      const result = await updateMember({
+      const input: UpdateMemberInput = {
         id: member.id,
         ...columnValues,
         do_not_call: doNotCall,
         regular_contact_id: regularContactId,
         ...(extraKeys.length > 0 ? { extra: extraValues } : {}),
         ...protectPayload,
-      });
+      };
+      const result = onSubmit ? await onSubmit(input) : await updateMember(input);
       if (result.error) {
         setError(result.error);
         return;
       }
       setOpen(false);
-      router.refresh();
+      if (!onSubmit) router.refresh();
     });
   };
 
@@ -192,17 +233,22 @@ export function MemberEditDialog({
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        編集
-      </Button>
+      {!controlled && (
+        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+          編集
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-[90%] sm:max-w-[720px]">
           <DialogHeader>
-            <DialogTitle>会員情報の編集</DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+            {note && (
+              <div className="rounded-md bg-emerald-50 p-2 text-xs text-emerald-800">{note}</div>
+            )}
             {groups.map((group, gi) => (
               <div key={group.name ?? `g${gi}`} className="space-y-3">
                 {group.name && (
@@ -215,6 +261,7 @@ export function MemberEditDialog({
                     value={form[f.field_name]}
                     onChange={(v) => setField(f.field_name, v)}
                     options={selectOptions?.[f.field_name]}
+                    hint={overriddenKeys.has(f.field_name) ? '問合せの値を入れました' : undefined}
                     trailing={
                       f.field_name === 'ad_id' || f.field_name === 'ad_medium' ? (
                         <Button
@@ -301,7 +348,7 @@ export function MemberEditDialog({
               キャンセル
             </Button>
             <Button onClick={handleSubmit} disabled={pending}>
-              {pending ? '保存中...' : '保存'}
+              {pending ? '保存中...' : submitLabel}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -326,6 +373,7 @@ function FieldInput({
   onChange,
   options,
   trailing,
+  hint,
 }: {
   field: FieldDefinition;
   value: string | boolean | undefined;
@@ -333,6 +381,8 @@ function FieldInput({
   options?: ReadonlyArray<string | SelectOption>;
   /** 入力欄の右に置く操作(例: 広告マスタの【取得】) */
   trailing?: React.ReactNode;
+  /** ラベルの横に出す短い注記(例: 問合せの値を入れました) */
+  hint?: string;
 }) {
   const label = field.label ?? field.field_name;
 
@@ -348,7 +398,7 @@ function FieldInput({
         ? [{ value: current, label: current }, ...normalized]
         : normalized;
     return (
-      <Field label={label}>
+      <Field label={label} hint={hint}>
         <Select value={current} onChange={(e) => onChange(e.target.value)}>
           <option value="">(未設定)</option>
           {list.map((o) => (
@@ -386,7 +436,7 @@ function FieldInput({
           : 'text';
 
   return (
-    <Field label={label}>
+    <Field label={label} hint={hint}>
       <div className="flex items-center gap-2">
         <Input
           type={inputType}
@@ -399,10 +449,21 @@ function FieldInput({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Label className="text-xs text-muted-foreground">
+        {label}
+        {hint && (
+          <span className="ml-2 rounded bg-emerald-100 px-1 py-0.5 text-[10px] text-emerald-800">
+            {hint}
+          </span>
+        )}
+      </Label>
       {children}
     </div>
   );
