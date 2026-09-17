@@ -109,7 +109,8 @@ async function recordOutcome(
       lp_entry_id: outcome.lpEntryId ?? null,
     })
     .eq('id', msg.id);
-  return outcome;
+  // 呼び出し側(画面の結果表示)にも注釈付きの note を返す
+  return notePrefix ? { ...outcome, note: `${notePrefix}${outcome.note}` } : outcome;
 }
 
 const MATCH_LABEL: Record<string, string> = {
