@@ -24,6 +24,7 @@ import {
   searchMembersForInquiry,
 } from '@/lib/domain/inquiry_lead_actions';
 import { listAcquisitionPointNames } from '@/lib/domain/master_actions';
+import { GENDER_OPTIONS } from '@/lib/domain/member_gender';
 import { ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
@@ -99,6 +100,10 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
   );
   const [mailmagAt, setMailmagAt] = useState('');
   const [adPickerOpen, setAdPickerOpen] = useState(false);
+  // 性別・郵便番号・住所(住所は問合せの値を初期値にして編集できる。2026-09-17)
+  const [gender, setGender] = useState('');
+  const [postalCode, setPostalCode] = useState(inquiry.postal_code ?? '');
+  const [address, setAddress] = useState(inquiry.address ?? '');
 
   // 新規会員登録を開いたら取得ポイントの選択肢(有効なマスタ)を読む
   useEffect(() => {
@@ -144,6 +149,9 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
           info_acquired_points: pointName || null,
           info_acquired_date: acquiredDate || null,
           mailmag_registered_at: mailmagAt || null,
+          gender: gender || null,
+          postal_code: postalCode || null,
+          address: address || null,
         }),
       ),
     );
@@ -282,7 +290,7 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
               <Label>会員の氏名</Label>
               <Input value={newName} onChange={(e) => setNewName(e.target.value)} />
               <p className="text-xs text-muted-foreground">
-                問合せのメール・電話・住所を引き継ぎます。会員IDは K- 形式で自動採番されます。
+                問合せのメール・電話を引き継ぎます。会員IDは K- 形式で自動採番されます。
               </p>
             </div>
             <dl className="grid grid-cols-[5rem_1fr] gap-x-2 gap-y-1 text-xs text-muted-foreground">
@@ -292,6 +300,26 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
               <dd>{inquiry.phone ?? '-'}</dd>
             </dl>
             <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label>性別</Label>
+                <Select value={gender} onChange={(e) => setGender(e.target.value)}>
+                  <option value="">(未設定)</option>
+                  {GENDER_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>郵便番号</Label>
+                <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label>住所</Label>
+                <Input value={address} onChange={(e) => setAddress(e.target.value)} />
+                <p className="text-xs text-muted-foreground">問合せの住所を初期値にしています</p>
+              </div>
               <div className="space-y-1">
                 <Label>広告ID</Label>
                 <div className="flex items-center gap-2">

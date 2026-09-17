@@ -14,6 +14,9 @@ export interface InquiryListItem {
   member: { id: string; name: string } | null;
   /** 広告ID(新規会員登録の既定値・一覧の媒体名併記に使う。§5.18) */
   ad_id?: string | null;
+  /** 郵便番号・住所(一覧でも取得済み。新規会員登録の初期値に使う。2026-09-17) */
+  postal_code?: string | null;
+  address?: string | null;
   /** メール取込(§5.16)で作った問合せの元メール。null なら CSV 取込・手入力 */
   source_mail_message_id?: string | null;
   /** 会員の自動照合結果(§5.16) */

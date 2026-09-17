@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { type CreateMemberResult, createMember } from '@/lib/domain/member_actions';
+import { GENDER_OPTIONS } from '@/lib/domain/member_gender';
 import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
@@ -44,6 +45,7 @@ export function NewMemberDialog({ users, currentUserId, acquisitionPoints }: Pro
 
   const [name, setName] = useState('');
   const [nameKana, setNameKana] = useState('');
+  const [gender, setGender] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [postalCode, setPostalCode] = useState('');
@@ -61,6 +63,7 @@ export function NewMemberDialog({ users, currentUserId, acquisitionPoints }: Pro
     setAllowDuplicate(false);
     setName('');
     setNameKana('');
+    setGender('');
     setEmail('');
     setPhone('');
     setPostalCode('');
@@ -80,6 +83,7 @@ export function NewMemberDialog({ users, currentUserId, acquisitionPoints }: Pro
       const r = await createMember({
         name,
         name_kana: nameKana,
+        gender,
         email1: email,
         phone1: phone,
         postal_code: postalCode,
@@ -130,6 +134,17 @@ export function NewMemberDialog({ users, currentUserId, acquisitionPoints }: Pro
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">氏名(カナ)</Label>
                 <Input value={nameKana} onChange={(e) => setNameKana(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">性別</Label>
+                <Select value={gender} onChange={(e) => setGender(e.target.value)}>
+                  <option value="">(未設定)</option>
+                  {GENDER_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">メール</Label>

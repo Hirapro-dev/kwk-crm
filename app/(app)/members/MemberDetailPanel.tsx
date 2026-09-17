@@ -39,6 +39,7 @@ import { listInquiries } from '@/lib/domain/inquiries';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { listLpEntriesByMember } from '@/lib/domain/lp';
 import { getAdNameMap, listAcquisitionPoints } from '@/lib/domain/masters';
+import { GENDER_OPTIONS } from '@/lib/domain/member_gender';
 import { getMember } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { listAllUsers } from '@/lib/domain/users_admin';
@@ -168,7 +169,10 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                   currentUserRole={me.role}
                   protectUsers={protectUsers}
                   detailFields={detailFields}
-                  selectOptions={{ info_acquired_points: acquisitionPoints.map((p) => p.name) }}
+                  selectOptions={{
+                    info_acquired_points: acquisitionPoints.map((p) => p.name),
+                    gender: GENDER_OPTIONS,
+                  }}
                 />
                 <MemberDeleteButton memberId={member.id} memberName={member.name ?? member.id} />
               </>

@@ -44,6 +44,9 @@ const ConvertSchema = z
           .nullable()
           .optional(),
         mailmag_registered_at: z.string().max(40).nullable().optional(),
+        gender: z.string().max(20).nullable().optional(),
+        postal_code: z.string().max(20).nullable().optional(),
+        address: z.string().max(500).nullable().optional(),
       })
       .optional(),
   })
@@ -79,6 +82,11 @@ export interface ConvertMemberFields {
   info_acquired_points?: string | null;
   info_acquired_date?: string | null;
   mailmag_registered_at?: string | null;
+  /** 性別(保存値は 男 / 女 / 法人 / その他。lib/domain/member_gender.ts。2026-09-17) */
+  gender?: string | null;
+  /** 郵便番号・住所(画面で編集した値。未指定なら問合せの値。2026-09-17) */
+  postal_code?: string | null;
+  address?: string | null;
 }
 
 export async function convertInquiryToMember(input: {
@@ -133,6 +141,7 @@ export async function convertInquiryToMember(input: {
     const mailmag = nz(mf.mailmag_registered_at);
     const extraCols = {
       ad_id: nz(mf.ad_id) ?? inquiry.ad_id,
+      gender: nz(mf.gender),
       ad_medium: nz(mf.ad_medium),
       info_acquired_points: nz(mf.info_acquired_points),
       info_acquired_date: nz(mf.info_acquired_date),
@@ -143,8 +152,8 @@ export async function convertInquiryToMember(input: {
       name: parsed.data.new_member_name!,
       email1: inquiry.email,
       phone1: inquiry.phone,
-      postal_code: inquiry.postal_code,
-      address: inquiry.address,
+      postal_code: nz(mf.postal_code) ?? inquiry.postal_code,
+      address: nz(mf.address) ?? inquiry.address,
       ...extraCols,
       owner_id: me.id,
       registered_at: new Date().toISOString(),
@@ -160,8 +169,8 @@ export async function convertInquiryToMember(input: {
           name: parsed.data.new_member_name!,
           email1: inquiry.email,
           phone1: inquiry.phone,
-          postal_code: inquiry.postal_code,
-          address: inquiry.address,
+          postal_code: nz(mf.postal_code) ?? inquiry.postal_code,
+          address: nz(mf.address) ?? inquiry.address,
           ...extraCols,
           owner_id: me.id,
           registered_at: new Date().toISOString(),

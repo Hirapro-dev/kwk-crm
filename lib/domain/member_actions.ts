@@ -238,6 +238,8 @@ export async function deleteMember(id: string): Promise<{ error?: string }> {
 export interface CreateMemberInput {
   name: string;
   name_kana?: string | null;
+  /** 性別(保存値は 男 / 女 / 法人 / その他。lib/domain/member_gender.ts) */
+  gender?: string | null;
   email1?: string | null;
   phone1?: string | null;
   postal_code?: string | null;
@@ -319,6 +321,7 @@ export async function createMember(input: CreateMemberInput): Promise<CreateMemb
     id: newId,
     name,
     name_kana: nz(input.name_kana),
+    gender: nz(input.gender, 20),
     email1,
     phone1,
     postal_code: nz(input.postal_code, 20),
