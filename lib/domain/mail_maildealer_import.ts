@@ -43,3 +43,31 @@ export function maildealerAssigneeToken(raw: string | null | undefined): string 
 export function looksLikeHtmlBody(body: string | null | undefined): boolean {
   return /<\s*(html|body|table|div|p)[\s>]/i.test(body ?? '');
 }
+
+/**
+ * ヘッダーに Message-ID が無い行の識別子(2026-09-17 追加)。メールディーラー側の「メールID」「メールID枝番」から
+ * 決定論的に作る。以前はランダム UUID(ensureMessageId)だったため、差分取込のたびに別 ID で再登録されて
+ * 重複していた。メールID も無ければ null(呼び出し側で従来どおりランダム ID にする)。
+ */
+export function maildealerSyntheticMessageId(
+  mailId: string | null | undefined,
+  branch: string | null | undefined,
+): string | null {
+  const id = (mailId ?? '').trim();
+  if (!id) return null;
+  const b = (branch ?? '').trim();
+  return `<md-${id}${b ? `-${b}` : ''}@maildealer.local>`;
+}
+
+/**
+ * 内容キー(送受信日時・差出人・方向・件名)。ランダム ID で既に取り込まれている行(message_id が
+ * `@crm.local`)と、決定論的 ID になった同じ行を突き合わせて二重登録を防ぐために使う。
+ */
+export function maildealerContentKey(input: {
+  sentAtIso: string;
+  fromAddress: string | null | undefined;
+  direction: 'in' | 'out';
+  subject: string | null | undefined;
+}): string {
+  return `${input.sentAtIso}|${(input.fromAddress ?? '').trim().toLowerCase()}|${input.direction}|${(input.subject ?? '').trim()}`;
+}
