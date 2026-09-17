@@ -6,7 +6,7 @@
  */
 
 import { getCurrentUser } from '@/lib/domain/auth';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { MAIL_CATEGORIES, MAIL_STATUSES, type MailCategory, type MailStatus } from './mail_types';
 
@@ -154,9 +154,8 @@ export async function deleteMailThreads(
   if (cleaned.length === 0) return { error: '削除するメールが選択されていません' };
   if (cleaned.length > DELETE_MAX)
     return { error: `一度に削除できるのは ${DELETE_MAX} 件までです` };
+  // 対象の確認は実行ユーザーの権限(RLS)で行う
   const supabase = await createClient();
-  // 対象件数は更新前に数える。削除日時を付けた行は閲覧ポリシー(deleted_at IS NULL)から外れるため、
-  // UPDATE で行を返そうとすると RLS で「new row violates row-level security policy」になる(2026-09-17 に発覚)
   const { data: targets, error: selErr } = await supabase
     .from('mail_threads')
     .select('id')
@@ -165,7 +164,12 @@ export async function deleteMailThreads(
   if (selErr) return { error: `削除対象の確認に失敗しました: ${selErr.message}` };
   const targetIds = ((targets ?? []) as Array<{ id: string }>).map((t) => t.id);
   if (targetIds.length === 0) return { deleted: 0 };
-  const { error } = await supabase
+  // 書込みはサービスロールで行う。PostgREST は UPDATE を常に RETURNING 付きの CTE で実行するため、削除日時を付けて
+  // 閲覧ポリシー(deleted_at IS NULL)から外れた行は「new row violates row-level security policy」で拒否される
+  // (2026-09-17 に発覚。他オブジェクトの論理削除が SECURITY DEFINER の RPC を使っているのも同じ理由。§5.14)。
+  // admin 判定は上で済ませている
+  const admin = createServiceRoleClient();
+  const { error } = await admin
     .from('mail_threads')
     .update({ deleted_at: new Date().toISOString() })
     .in('id', targetIds)
