@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { updateMember } from '@/lib/domain/member_actions';
 import { EDITABLE_MEMBER_EXTRA_KEYS } from '@/lib/domain/member_extra_edit';
+import type { SelectOption } from '@/lib/domain/member_gender';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import type { MemberWithOwner } from '@/lib/domain/types';
 import { useRouter } from 'next/navigation';
@@ -61,7 +62,7 @@ interface Props {
    * 選択式にする項目とその選択肢(field_name → 選択肢)。例: 個人情報取得ポイント → マスタ(§5.19)。
    * 現在の値が選択肢に無いときも失わないよう、その値を選択肢に足して描画する
    */
-  selectOptions?: Record<string, string[]>;
+  selectOptions?: Record<string, ReadonlyArray<string | SelectOption>>;
 }
 
 /** ISO/タイムスタンプ文字列を input[type=date] 用の YYYY-MM-DD に変換 */
@@ -329,7 +330,7 @@ function FieldInput({
   field: FieldDefinition;
   value: string | boolean | undefined;
   onChange: (v: string | boolean) => void;
-  options?: string[];
+  options?: ReadonlyArray<string | SelectOption>;
   /** 入力欄の右に置く操作(例: 広告マスタの【取得】) */
   trailing?: React.ReactNode;
 }) {
@@ -337,15 +338,22 @@ function FieldInput({
 
   if (options) {
     const current = typeof value === 'string' ? value : '';
+    // 文字列だけの選択肢は value = label。性別のように保存値と表示名が違うものは {value, label}
+    const normalized: SelectOption[] = options.map((o) =>
+      typeof o === 'string' ? { value: o, label: o } : o,
+    );
     // 現在の値がマスタに無い(無効化された等)場合も、そのまま保持できるように選択肢へ足す
-    const list = current && !options.includes(current) ? [current, ...options] : options;
+    const list =
+      current && !normalized.some((o) => o.value === current)
+        ? [{ value: current, label: current }, ...normalized]
+        : normalized;
     return (
       <Field label={label}>
         <Select value={current} onChange={(e) => onChange(e.target.value)}>
           <option value="">(未設定)</option>
           {list.map((o) => (
-            <option key={o} value={o}>
-              {o}
+            <option key={o.value} value={o.value}>
+              {o.label}
             </option>
           ))}
         </Select>
