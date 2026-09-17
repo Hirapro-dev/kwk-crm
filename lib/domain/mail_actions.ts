@@ -155,15 +155,24 @@ export async function deleteMailThreads(
   if (cleaned.length > DELETE_MAX)
     return { error: `一度に削除できるのは ${DELETE_MAX} 件までです` };
   const supabase = await createClient();
-  const { data, error } = await supabase
+  // 対象件数は更新前に数える。削除日時を付けた行は閲覧ポリシー(deleted_at IS NULL)から外れるため、
+  // UPDATE で行を返そうとすると RLS で「new row violates row-level security policy」になる(2026-09-17 に発覚)
+  const { data: targets, error: selErr } = await supabase
+    .from('mail_threads')
+    .select('id')
+    .in('id', cleaned)
+    .is('deleted_at', null);
+  if (selErr) return { error: `削除対象の確認に失敗しました: ${selErr.message}` };
+  const targetIds = ((targets ?? []) as Array<{ id: string }>).map((t) => t.id);
+  if (targetIds.length === 0) return { deleted: 0 };
+  const { error } = await supabase
     .from('mail_threads')
     .update({ deleted_at: new Date().toISOString() })
-    .in('id', cleaned)
-    .is('deleted_at', null)
-    .select('id');
+    .in('id', targetIds)
+    .is('deleted_at', null);
   if (error) return { error: `削除に失敗しました: ${error.message}` };
   revalidatePath('/mail', 'layout');
-  return { deleted: (data ?? []).length };
+  return { deleted: targetIds.length };
 }
 
 /**
