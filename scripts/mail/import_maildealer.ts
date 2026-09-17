@@ -58,6 +58,8 @@ import {
 import {
   looksLikeHtmlBody,
   maildealerAssigneeToken,
+  maildealerContentKey,
+  maildealerSyntheticMessageId,
   mapMaildealerThreadStatus,
 } from '../../lib/domain/mail_maildealer_import';
 import { OTHER_MAILBOX_ADDRESS } from '../../lib/domain/mail_types';
@@ -102,6 +104,8 @@ interface PreparedRow {
   direction: 'in' | 'out';
   headers: Record<string, string>;
   messageId: string;
+  /** Message-ID がヘッダーに無く、メールID/枝番から作った決定論的 ID か(2026-09-17) */
+  isSynthetic: boolean;
   inReplyTo: string | null;
   references: string | null;
   refIds: string[];
@@ -290,7 +294,15 @@ async function processFile(filepath: string, ctx: Ctx, dryRun: boolean): Promise
     const mailKind = row.メール種別 ?? '';
     const direction: 'in' | 'out' = mailKind === '送信メール' ? 'out' : 'in';
     const headers = parseRawHeaders(row.メールヘッダ全体 ?? '');
-    const messageId = ensureMessageId(headers['message-id'] ?? null);
+    // ヘッダーに Message-ID が無い行は、メールディーラーの「メールID/枝番」から決定論的な ID を作る
+    // (以前はランダム UUID だったため差分取込のたびに重複していた。2026-09-17)
+    const headerMessageId = (headers['message-id'] ?? '').trim();
+    const synthetic = headerMessageId
+      ? null
+      : maildealerSyntheticMessageId(row.メールID, row.メールID枝番);
+    const messageId = headerMessageId
+      ? ensureMessageId(headerMessageId)
+      : (synthetic ?? ensureMessageId(null));
     const inReplyTo = headers['in-reply-to'] ?? null;
     const references = headers.references ?? null;
     const toRaw = (row.Toアドレス ?? '').trim();
@@ -302,6 +314,7 @@ async function processFile(filepath: string, ctx: Ctx, dryRun: boolean): Promise
       direction,
       headers,
       messageId,
+      isSynthetic: synthetic !== null,
       inReplyTo,
       references,
       refIds: extractReferencedMessageIds(inReplyTo, references),
@@ -346,6 +359,62 @@ async function processFile(filepath: string, ctx: Ctx, dryRun: boolean): Promise
     }
   }
   logger.info(`既存メッセージ ${messageIdToThreadId.size} 件を事前照会`);
+
+  // ---- Message-ID 無し行の救済: 以前の取込でランダム ID(@crm.local)になっている同じ行を内容キーで突き合わせ、
+  // 既存扱い(スキップ)にする。決定論的 ID にした 2026-09-17 より前に取り込んだ分の二重登録を防ぐ ----
+  const syntheticRows = prepared.filter(
+    (p) => p.isSynthetic && !messageIdToThreadId.has(p.messageId),
+  );
+  if (syntheticRows.length > 0) {
+    const minIso = new Date(Math.min(...syntheticRows.map((p) => p.sentAtMs)) - 1000).toISOString();
+    const maxIso = new Date(Math.max(...syntheticRows.map((p) => p.sentAtMs)) + 1000).toISOString();
+    const legacy = new Map<string, string>();
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await supabase
+        .from('mail_messages')
+        .select('thread_id, sent_at, from_address, direction, subject')
+        .eq('source', 'import_maildealer')
+        .like('message_id', '%@crm.local>')
+        .gte('sent_at', minIso)
+        .lte('sent_at', maxIso)
+        .order('sent_at', { ascending: true })
+        .range(offset, offset + 999);
+      if (error) throw new Error(`ランダム ID 行の照会に失敗: ${error.message}`);
+      for (const r of (data ?? []) as Array<{
+        thread_id: string;
+        sent_at: string;
+        from_address: string | null;
+        direction: 'in' | 'out';
+        subject: string | null;
+      }>) {
+        const k = maildealerContentKey({
+          sentAtIso: new Date(r.sent_at).toISOString(),
+          fromAddress: r.from_address,
+          direction: r.direction,
+          subject: r.subject,
+        });
+        if (!legacy.has(k)) legacy.set(k, r.thread_id);
+      }
+      if (!data || data.length < 1000) break;
+    }
+    let rescued = 0;
+    for (const p of syntheticRows) {
+      const k = maildealerContentKey({
+        sentAtIso: p.sentAtIso,
+        fromAddress: p.fromAddress,
+        direction: p.direction,
+        subject: p.subjectRaw,
+      });
+      const t = legacy.get(k);
+      if (t) {
+        messageIdToThreadId.set(p.messageId, t);
+        rescued++;
+      }
+    }
+    logger.info(
+      `Message-ID 無し行 ${syntheticRows.length} 件のうち、既存のランダム ID 行と内容一致 ${rescued} 件(スキップ)`,
+    );
+  }
 
   // 上記で見つかった既存スレッドの現在の last_message_at(巻き戻し防止の基準値)
   // こちらも同じ理由で RPC (migration 80) を使う。

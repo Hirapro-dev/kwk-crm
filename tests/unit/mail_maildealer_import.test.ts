@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   looksLikeHtmlBody,
   maildealerAssigneeToken,
+  maildealerContentKey,
+  maildealerSyntheticMessageId,
   mapMaildealerThreadStatus,
 } from '../../lib/domain/mail_maildealer_import';
 
@@ -54,5 +56,44 @@ describe('looksLikeHtmlBody', () => {
   it('空・null は false', () => {
     expect(looksLikeHtmlBody('')).toBe(false);
     expect(looksLikeHtmlBody(null)).toBe(false);
+  });
+});
+
+describe('maildealerSyntheticMessageId / maildealerContentKey', () => {
+  // ヘッダーに Message-ID が無い行(受信メールのごく一部)は、以前はランダム UUID を ID にしていたため
+  // 差分取込のたびに別 ID で再登録され重複していた(2026-09-17 に発覚)。メールディーラー側の
+  // 「メールID」「メールID枝番」から決定論的に作れば、何度実行しても同じ ID になる。
+  it('メールID と枝番から毎回同じ Message-ID を作る(枝番が空なら省く)', () => {
+    expect(maildealerSyntheticMessageId('12345', '1')).toBe('<md-12345-1@maildealer.local>');
+    expect(maildealerSyntheticMessageId('12345', '')).toBe('<md-12345@maildealer.local>');
+    expect(maildealerSyntheticMessageId(' 12345 ', null)).toBe('<md-12345@maildealer.local>');
+    // メールID も無ければ null(呼び出し側で従来どおりランダム ID にする)
+    expect(maildealerSyntheticMessageId('', '1')).toBeNull();
+    expect(maildealerSyntheticMessageId(null, null)).toBeNull();
+  });
+  it('内容キーは 送受信日時・差出人(小文字)・方向・件名(前後空白除去)の組で、既に入っているランダム ID 行との突合に使う', () => {
+    const k = maildealerContentKey({
+      sentAtIso: '2026-07-01T03:00:00.000Z',
+      fromAddress: 'A@Example.com',
+      direction: 'in',
+      subject: ' 件名 ',
+    });
+    expect(k).toBe('2026-07-01T03:00:00.000Z|a@example.com|in|件名');
+    expect(
+      maildealerContentKey({
+        sentAtIso: '2026-07-01T03:00:00.000Z',
+        fromAddress: 'a@example.com',
+        direction: 'in',
+        subject: '件名',
+      }),
+    ).toBe(k);
+    expect(
+      maildealerContentKey({
+        sentAtIso: '2026-07-01T03:00:00.000Z',
+        fromAddress: null,
+        direction: 'out',
+        subject: null,
+      }),
+    ).toBe('2026-07-01T03:00:00.000Z||out|');
   });
 });
