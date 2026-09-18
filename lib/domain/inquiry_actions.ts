@@ -1,5 +1,7 @@
 'use server';
 
+import { EDITABLE_INQUIRY_COLUMNS, mergeInquiryExtra } from '@/lib/domain/inquiry_extra_edit';
+import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
@@ -227,6 +229,85 @@ export async function updateInquiryRemarks(
   }
 
   revalidatePath(`/inquiries/${inquiryId}`);
+  revalidatePath('/inquiries');
+  return {};
+}
+
+/**
+ * 問合せの編集(§8.1 `/inquiries/[id]` の編集ダイアログ。2026-09-18)。
+ * DB 列は EDITABLE_INQUIRY_COLUMNS のホワイトリスト、可変項目(extra)は項目管理で定義済みのキーだけ差し替える。
+ * viewer は不可(RLS の can_write と二重)。会員の紐付けは会員化の操作で扱うのでここでは変えない。
+ */
+export interface UpdateInquiryInput {
+  id: string;
+  form_id?: number | null;
+  name?: string | null;
+  name_kana?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  postal_code?: string | null;
+  address?: string | null;
+  ad_id?: string | null;
+  /** 登録日時(datetime-local の値 "YYYY-MM-DDTHH:mm" または ISO) */
+  registered_at?: string | null;
+  /** 可変項目の編集(ラベル → 値)。空文字はキー削除 */
+  extra?: Record<string, string>;
+}
+
+export async function updateInquiry(input: UpdateInquiryInput): Promise<{ error?: string }> {
+  const me = await getCurrentUser();
+  if (me.role === 'viewer') return { error: '閲覧専用ロールでは編集できません' };
+  const supabase = await createClient();
+  const { data: cur, error: curErr } = await supabase
+    .from('inquiries')
+    .select('id, extra')
+    .eq('id', input.id)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (curErr || !cur) return { error: '問合せが見つかりません' };
+
+  const patch: Record<string, unknown> = {};
+  const nz = (v: string | null | undefined, max = 500) => {
+    const s = (v ?? '').trim();
+    return s ? s.slice(0, max) : null;
+  };
+  if (input.form_id !== undefined) {
+    if (input.form_id !== null && (!Number.isInteger(input.form_id) || input.form_id <= 0))
+      return { error: 'フォームが不正です' };
+    patch.form_id = input.form_id;
+  }
+  for (const k of ['name', 'name_kana', 'phone', 'postal_code', 'address', 'ad_id'] as const) {
+    if (input[k] !== undefined) patch[k] = nz(input[k], k === 'address' ? 500 : 200);
+  }
+  if (input.email !== undefined) patch.email = nz(input.email, 200)?.toLowerCase() ?? null;
+  if (input.registered_at !== undefined) {
+    const v = nz(input.registered_at, 40);
+    if (!v) return { error: '登録日時は必須です' };
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return { error: '登録日時の形式が不正です' };
+    patch.registered_at = d.toISOString();
+  }
+  // 許可外の列が混ざっていないか(ホワイトリスト)
+  for (const k of Object.keys(patch)) {
+    if (!EDITABLE_INQUIRY_COLUMNS.has(k)) delete patch[k];
+  }
+  if (input.extra) {
+    const defs = await getVisibleFields('inquiries', 'detail');
+    const allowed = new Set(
+      defs
+        .filter((f) => !f.is_in_db && !f.is_placeholder && f.field_name !== '備考')
+        .map((f) => f.field_name),
+    );
+    patch.extra = mergeInquiryExtra(
+      (cur as { extra: Record<string, unknown> | null }).extra,
+      input.extra,
+      allowed,
+    );
+  }
+  if (Object.keys(patch).length === 0) return {};
+  const { error } = await supabase.from('inquiries').update(patch).eq('id', input.id);
+  if (error) return { error: `更新に失敗しました: ${error.message}` };
+  revalidatePath(`/inquiries/${input.id}`);
   revalidatePath('/inquiries');
   return {};
 }
