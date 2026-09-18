@@ -108,8 +108,9 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
 
   const canAssignRegularContact = ['admin', 'manager', 'sales', 'support'].includes(me.role);
 
+  // 編集ダイアログ(定期連絡者・プロテクト者の候補)は viewer 以外が使う
   const protectUsers =
-    me.role === 'admin'
+    me.role !== 'viewer'
       ? (await listAllUsers({ activeOnly: true })).map((u) => ({
           id: u.id,
           full_name: u.full_name,
@@ -165,20 +166,21 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
           <>
             {/* 共有ボタンは全ロール表示。編集/削除の左隣に配置する */}
             <ShareLinkButton />
+            {/* 編集は viewer 以外(2026-09-18 に admin 限定から開放。プロテクト設定はダイアログ内で admin のみ)。削除は admin のみ */}
+            {me.role !== 'viewer' && (
+              <MemberEditDialog
+                member={member}
+                currentUserRole={me.role}
+                protectUsers={protectUsers}
+                detailFields={detailFields}
+                selectOptions={{
+                  info_acquired_points: acquisitionPoints.map((p) => p.name),
+                  gender: GENDER_OPTIONS,
+                }}
+              />
+            )}
             {me.role === 'admin' && (
-              <>
-                <MemberEditDialog
-                  member={member}
-                  currentUserRole={me.role}
-                  protectUsers={protectUsers}
-                  detailFields={detailFields}
-                  selectOptions={{
-                    info_acquired_points: acquisitionPoints.map((p) => p.name),
-                    gender: GENDER_OPTIONS,
-                  }}
-                />
-                <MemberDeleteButton memberId={member.id} memberName={member.name ?? member.id} />
-              </>
+              <MemberDeleteButton memberId={member.id} memberName={member.name ?? member.id} />
             )}
           </>
         }
