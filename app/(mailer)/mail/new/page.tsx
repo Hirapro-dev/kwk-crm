@@ -6,7 +6,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
-import { listMailBoxes } from '@/lib/domain/mail';
+import { listMailBoxes, listMailSignatures } from '@/lib/domain/mail';
 import { splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
@@ -21,7 +21,10 @@ export default async function MailNewPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const me = await getCurrentUser();
   const cfg = getMailAwsConfig();
-  const { rest: boxes } = splitOtherMailBox(await listMailBoxes());
+  const [allBoxes, allSignatures] = await Promise.all([listMailBoxes(), listMailSignatures()]);
+  const { rest: boxes } = splitOtherMailBox(allBoxes);
+  // 署名は署名マスタの有効なものだけ選べる
+  const signatures = allSignatures.filter((s) => s.is_active);
 
   const options: ComposeBoxOption[] = await Promise.all(
     boxes
@@ -33,7 +36,7 @@ export default async function MailNewPage({ searchParams }: PageProps) {
           id: b.id,
           address: b.address,
           display_name: b.display_name,
-          signature: b.signature,
+          default_signature_id: b.default_signature_id,
           sendable,
         };
       }),
@@ -58,7 +61,7 @@ export default async function MailNewPage({ searchParams }: PageProps) {
           ) : !cfg ? (
             <p className="text-sm text-muted-foreground">送信基盤(SES)が未設定です。</p>
           ) : (
-            <MailComposeForm boxes={options} initialTo={sp.to} />
+            <MailComposeForm boxes={options} signatures={signatures} initialTo={sp.to} />
           )}
         </CardContent>
       </Card>

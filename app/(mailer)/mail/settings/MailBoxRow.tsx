@@ -3,10 +3,10 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { TableCell, TableRow } from '@/components/ui/table';
-import { Textarea } from '@/components/ui/textarea';
 import { updateMailBox } from '@/lib/domain/mail_box_actions';
-import type { MailBox } from '@/lib/domain/mail_types';
+import type { MailBox, MailSignature } from '@/lib/domain/mail_types';
 import type { DomainIdentityStatus } from '@/lib/mail/ses_identity';
 import { Pencil, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -14,19 +14,24 @@ import { useState, useTransition } from 'react';
 
 /**
  * 受信箱1行分(閲覧 ↔ 編集の切替を内部で持つ)。案件マスタの ProjectRow と同じ方式。
- * 編集できるのは表示名・署名・有効/無効。アドレスは受信判定キーのため変更不可(表示のみ)。
+ * 編集できるのは表示名・既定の署名(署名マスタから選択)・有効/無効。アドレスは受信判定キーのため変更不可(表示のみ)。
  */
 export function MailBoxRow({
   box,
   domainStatus,
+  signatures,
 }: {
   box: MailBox;
   domainStatus: DomainIdentityStatus;
+  /** 署名マスタ(無効化済みも含む。選択肢は有効なもの + 現在の既定) */
+  signatures: MailSignature[];
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(box.display_name ?? '');
-  const [signature, setSignature] = useState(box.signature ?? '');
+  const [signatureId, setSignatureId] = useState<string>(
+    box.default_signature_id != null ? String(box.default_signature_id) : '',
+  );
   const [isActive, setIsActive] = useState(box.is_active);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -34,7 +39,12 @@ export function MailBoxRow({
   const onSave = () => {
     setError(null);
     startTransition(async () => {
-      const res = await updateMailBox({ id: box.id, displayName: name, signature, isActive });
+      const res = await updateMailBox({
+        id: box.id,
+        displayName: name,
+        defaultSignatureId: signatureId ? Number(signatureId) : null,
+        isActive,
+      });
       if (res.error) {
         setError(res.error);
         return;
@@ -46,11 +56,17 @@ export function MailBoxRow({
 
   const onCancel = () => {
     setName(box.display_name ?? '');
-    setSignature(box.signature ?? '');
+    setSignatureId(box.default_signature_id != null ? String(box.default_signature_id) : '');
     setIsActive(box.is_active);
     setError(null);
     setEditing(false);
   };
+
+  const currentSignature = signatures.find((s) => s.id === box.default_signature_id) ?? null;
+  // 選択肢は有効な署名。現在の既定が無効化済みでも、その値は選択肢に残して失わない
+  const selectableSignatures = signatures.filter(
+    (s) => s.is_active || s.id === box.default_signature_id,
+  );
 
   const sendBadge =
     domainStatus === 'verified' && box.is_active ? (
@@ -71,9 +87,10 @@ export function MailBoxRow({
           {box.display_name || <span className="text-muted-foreground">(未設定)</span>}
         </TableCell>
         <TableCell className="max-w-[260px] py-2 text-xs text-muted-foreground">
-          {box.signature ? (
-            <span className="line-clamp-2 whitespace-pre-wrap" title={box.signature}>
-              {box.signature}
+          {currentSignature ? (
+            <span title={currentSignature.body}>
+              {currentSignature.name}
+              {currentSignature.is_active ? '' : '(無効)'}
             </span>
           ) : (
             '(なし)'
@@ -110,13 +127,19 @@ export function MailBoxRow({
         />
       </TableCell>
       <TableCell className="py-2">
-        <Textarea
-          rows={3}
-          value={signature}
-          onChange={(e) => setSignature(e.target.value)}
-          placeholder={'例:\n株式会社〇〇 サポート\nTEL 00-0000-0000'}
-          aria-label="署名"
-        />
+        <Select
+          aria-label="既定の署名"
+          value={signatureId}
+          onChange={(e) => setSignatureId(e.target.value)}
+        >
+          <option value="">署名なし</option>
+          {selectableSignatures.map((s) => (
+            <option key={s.id} value={String(s.id)}>
+              {s.name}
+              {s.is_active ? '' : '(無効)'}
+            </option>
+          ))}
+        </Select>
       </TableCell>
       <TableCell className="py-2 text-center">
         <input

@@ -24,7 +24,7 @@ const box = (id: number, address: string, is_active = true): MailBox => ({
   id,
   address,
   display_name: null,
-  signature: null,
+  default_signature_id: null,
   is_active,
 });
 

@@ -3,7 +3,8 @@
  *
  * メールディーラーから CRM への移行で「アドレスを増やす」作業をシステム内で完結に近づける画面。
  *   1. 転送先(受信用アドレス): 各サーバー(Xserver 等)の転送設定に貼る値と手順
- *   2. 受信箱(mail_boxes): 追加・表示名・署名・有効/無効
+ *   2. 受信箱(mail_boxes): 追加・表示名・既定の署名・有効/無効
+ *   2'. 署名(mail_signatures): 名前を付けた署名の追加・編集。受信箱はここから既定の署名を選ぶ(migration 105)
  *   3. 送信ドメイン: SES への登録(ボタン)と、DNS に貼る DKIM の CNAME 3本、検証状態
  * DNS の追加と各サーバーの転送設定は API が無いため手作業(ここに案内を出す)。
  * メーラー(app/(mailer))のレイアウトは admin 限定ではないため、ここで admin を確認し、それ以外は /mail へ戻す。
@@ -18,7 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { getCurrentUser } from '@/lib/domain/auth';
-import { listMailBoxes, listMailImportRules } from '@/lib/domain/mail';
+import { listMailBoxes, listMailImportRules, listMailSignatures } from '@/lib/domain/mail';
 import { uniqueDomains } from '@/lib/domain/mail_box_settings';
 import { domainOfAddress, splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { listFieldDefinitions } from '@/lib/domain/object_metadata';
@@ -30,7 +31,9 @@ import { CopyButton } from './CopyButton';
 import { DomainCard } from './DomainCard';
 import { ImportRuleList } from './ImportRuleList';
 import { MailBoxRow } from './MailBoxRow';
+import { MailSignatureRow } from './MailSignatureRow';
 import { NewMailBoxForm } from './NewMailBoxForm';
+import { NewMailSignatureForm } from './NewMailSignatureForm';
 import { ProcessCandidatesButton } from './ProcessCandidatesButton';
 import { ReassignOtherButton } from './ReassignOtherButton';
 
@@ -38,10 +41,11 @@ export default async function MailSettingsPage() {
   const me = await getCurrentUser();
   if (me.role !== 'admin') redirect('/mail');
 
-  const [allBoxes, importRules, inquiryFieldDefs] = await Promise.all([
+  const [allBoxes, importRules, inquiryFieldDefs, signatures] = await Promise.all([
     listMailBoxes(),
     listMailImportRules(),
     listFieldDefinitions('inquiries', 'detail'),
+    listMailSignatures(),
   ]);
   // 取込ルールの編集ダイアログの「入れる項目」: 問合せの全項目(空白セルは除く。メール詳細のパネルと同じ)
   const inquiryFields = inquiryFieldDefs
@@ -67,6 +71,16 @@ export default async function MailSettingsPage() {
   );
   const statusByDomain = new Map(identities.map((i) => [i.domain, i]));
   const inboundAddress = cfg?.inboundAddress ?? null;
+  // 署名ごとに「既定にしている受信箱の数」(設定画面の目安)
+  const usedBySignature = new Map<number, number>();
+  for (const b of boxes) {
+    if (b.default_signature_id != null) {
+      usedBySignature.set(
+        b.default_signature_id,
+        (usedBySignature.get(b.default_signature_id) ?? 0) + 1,
+      );
+    }
+  }
 
   return (
     <div className="space-y-3">
@@ -124,7 +138,7 @@ export default async function MailSettingsPage() {
       >
         <div className="border-b px-4 py-2 text-xs text-muted-foreground">
           差出人表示名はメーラーの返信・新規作成フォームの初期値になります(送信者がその場で書き換えても、ここでの既定値は変わりません)。
-          署名は送信時に本文の末尾に自動で付きます。無効にした受信箱は新しいメールを受け付けず、送信元にも選べません(過去のスレッドは残ります)。
+          既定の署名は下の「署名」で作ったものから選びます(返信・新規作成フォームの初期値。送信時にその場で別の署名に変えられます)。無効にした受信箱は新しいメールを受け付けず、送信元にも選べません(過去のスレッドは残ります)。
           まだ登録していないアドレス宛のメールは左の「その他(未振り分け)」に入り、そのアドレスをここに登録すると自動でこの一覧の受信箱へ移ります(「再振り分けを実行」でも手動で移せます)。
         </div>
         <Table>
@@ -132,7 +146,7 @@ export default async function MailSettingsPage() {
             <TableRow className="bg-gray-50 hover:bg-gray-50">
               <TableHead className="h-9">アドレス</TableHead>
               <TableHead className="h-9">差出人表示名(既定)</TableHead>
-              <TableHead className="h-9">署名</TableHead>
+              <TableHead className="h-9">既定の署名</TableHead>
               <TableHead className="h-9 w-16 text-center">有効</TableHead>
               <TableHead className="h-9 w-24 text-center">送信</TableHead>
               <TableHead className="h-9 w-24 text-right">操作</TableHead>
@@ -151,6 +165,50 @@ export default async function MailSettingsPage() {
                   key={b.id}
                   box={b}
                   domainStatus={statusByDomain.get(domainOfAddress(b.address))?.status ?? 'unknown'}
+                  signatures={signatures}
+                />
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </CollapsibleCard>
+
+      {/* 2'. 署名(署名マスタ。migration 105) */}
+      <CollapsibleCard
+        id="signatures"
+        iconLabel="SIG"
+        iconColor="#e8a33d"
+        viewName="署名"
+        totalCount={signatures.length}
+      >
+        <div className="border-b px-4 py-2 text-xs text-muted-foreground">
+          署名は受信箱とは別に名前を付けて管理し、複数の受信箱で使い回せます。各受信箱の「既定の署名」は上の受信箱の編集で選びます。
+          返信・新規作成フォームでは有効な署名をすべて選べます。無効にした署名は選択肢から消えます(既定にしていた受信箱は「署名なし」扱い)。削除はしません。
+        </div>
+        <NewMailSignatureForm />
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-gray-50 hover:bg-gray-50">
+              <TableHead className="h-9 w-48">署名名</TableHead>
+              <TableHead className="h-9">本文</TableHead>
+              <TableHead className="h-9 w-28 text-center">既定にしている受信箱</TableHead>
+              <TableHead className="h-9 w-16 text-center">有効</TableHead>
+              <TableHead className="h-9 w-24 text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {signatures.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                  署名が登録されていません。上のフォームから追加してください。
+                </TableCell>
+              </TableRow>
+            ) : (
+              signatures.map((s) => (
+                <MailSignatureRow
+                  key={s.id}
+                  signature={s}
+                  usedByCount={usedBySignature.get(s.id) ?? 0}
                 />
               ))
             )}

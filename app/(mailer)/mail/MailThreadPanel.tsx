@@ -16,6 +16,7 @@ import {
   getMailThread,
   listMailBoxes,
   listMailImportRules,
+  listMailSignatures,
 } from '@/lib/domain/mail';
 import { splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { findMatchingRule } from '@/lib/domain/mail_import_rules';
@@ -55,11 +56,12 @@ function formatBytes(n: number | null): string {
 }
 
 export async function MailThreadPanel({ threadId, embedded, showReply = true }: Props) {
-  const [thread, me, users, allBoxes] = await Promise.all([
+  const [thread, me, users, allBoxes, allSignatures] = await Promise.all([
     getMailThread(threadId),
     getCurrentUser(),
     listAllUsers({ activeOnly: true }),
     listMailBoxes(),
+    listMailSignatures(),
   ]);
 
   if (!thread) {
@@ -95,7 +97,7 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
           id: b.id,
           address: b.address,
           display_name: b.display_name,
-          signature: b.signature,
+          default_signature_id: b.default_signature_id,
           sendable: !!cfg && !!d && (await isDomainSendable(cfg, d)),
         };
       }),
@@ -285,6 +287,7 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
           disabledReason={disabledReason}
           defaultBoxId={thread.mail_box_id}
           boxes={fromOptions}
+          signatures={allSignatures.filter((s) => s.is_active)}
           initialQuote={initialQuote}
         />
       )}
