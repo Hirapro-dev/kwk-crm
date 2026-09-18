@@ -6,6 +6,7 @@ import {
   nextSortOrder,
   sortMyTasks,
   splitLinks,
+  storageSafeName,
 } from '../../lib/domain/task_pure';
 
 /**
@@ -134,5 +135,17 @@ describe('splitLinks', () => {
   it('URL が無ければ本文 1 断片。空文字は空配列', () => {
     expect(splitLinks('リンクなし')).toEqual([{ kind: 'text', value: 'リンクなし' }]);
     expect(splitLinks('')).toEqual([]);
+describe('storageSafeName', () => {
+  it('日本語・全角記号・特殊な空白を "_" にし、拡張子は残す(Storage は ASCII のキーしか受け付けない)', () => {
+    expect(storageSafeName('スクリーンショット 2026-03-18 14.29.32.png')).toBe(
+      '2026-03-18_14.29.32.png',
+    );
+    expect(storageSafeName('見積書（脱炭素マーケティング様）2023年32名様.pdf')).toBe('2023_32.pdf');
+    expect(storageSafeName('MainVisual２.png')).toBe('MainVisual.png');
+  });
+  it('英数字だけの名前はそのまま。空になったら file、長すぎれば 120 文字に収める', () => {
+    expect(storageSafeName('report_v2-final.PDF')).toBe('report_v2-final.pdf');
+    expect(storageSafeName('日本語')).toBe('file');
+    expect(storageSafeName(`${'a'.repeat(200)}.png`).length).toBe(120);
   });
 });
