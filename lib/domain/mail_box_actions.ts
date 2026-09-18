@@ -15,7 +15,7 @@ import { sanitizeDisplayName } from '@/lib/domain/mail_compose';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { type DomainIdentity, registerDomainIdentity } from '@/lib/mail/ses_identity';
 import { clearSendableCache } from '@/lib/mail/ses_send';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
 export interface MailBoxActionResult {
@@ -23,18 +23,21 @@ export interface MailBoxActionResult {
 }
 
 /**
- * 「その他」(未登録アドレス宛)に溜まっているスレッドのうち、現在有効な受信箱に
- * 一意に一致するものを移す(migration 78 の RPC)。失敗しても呼び出し元の処理は止めない
- * (登録・保存自体は成功しているため)。
+ * 「その他」(未登録アドレス宛)に溜まっているスレッドのうち、追加した受信箱のアドレス宛で、
+ * 有効な受信箱に一意に一致するものをその受信箱へ移す(migration 106 の受信箱単位 RPC)。
+ * 全件走査の RPC(migration 78/83)は「その他」が約 6 万スレッドあると 8 秒の statement_timeout で
+ * 止まり、登録前に届いたメールが残ったままになっていた(2026-09-18)。受信箱単位なら宛先の
+ * インデックスで引くため速い。失敗しても登録自体は成功しているので止めず、件数だけ返す。
  */
-async function reassignOtherMailThreadsBestEffort(
+async function reassignOtherMailThreadsForBox(
   supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<void> {
-  try {
-    await supabase.rpc('reassign_other_mail_threads');
-  } catch {
-    /* 手動の「再振り分け」ボタンでも実行できるため、ここでの失敗は無視する */
-  }
+  boxId: number,
+): Promise<number | null> {
+  const { data, error } = await supabase.rpc('reassign_other_mail_threads_for_box', {
+    p_box_id: boxId,
+  });
+  if (error) return null;
+  return (data as number | null) ?? 0;
 }
 
 async function requireAdmin(): Promise<string | null> {
@@ -46,7 +49,7 @@ async function requireAdmin(): Promise<string | null> {
 export async function createMailBox(input: {
   address: string;
   displayName?: string | null;
-}): Promise<MailBoxActionResult> {
+}): Promise<MailBoxActionResult & { moved?: number | null }> {
   const denied = await requireAdmin();
   if (denied) return { error: denied };
 
@@ -54,22 +57,26 @@ export async function createMailBox(input: {
   if (addr.error) return { error: addr.error };
 
   const supabase = await createClient();
-  const { error } = await supabase.from('mail_boxes').insert({
-    address: addr.address,
-    display_name: sanitizeDisplayName(input.displayName),
-    is_active: true,
-  });
+  const { data: created, error } = await supabase
+    .from('mail_boxes')
+    .insert({
+      address: addr.address,
+      display_name: sanitizeDisplayName(input.displayName),
+      is_active: true,
+    })
+    .select('id')
+    .single();
   if (error) {
     if (error.code === '23505') return { error: `${addr.address} は既に登録されています` };
     return { error: `登録に失敗しました: ${error.message}` };
   }
 
   // 登録直後に「その他」フォルダを見て、このアドレス宛のメールがあれば自動で移す
-  await reassignOtherMailThreadsBestEffort(supabase);
+  const moved = await reassignOtherMailThreadsForBox(supabase, (created as { id: number }).id);
 
   revalidatePath('/mail/settings');
   revalidatePath('/mail');
-  return {};
+  return { moved };
 }
 
 /** 受信箱の表示名・既定の署名・有効/無効を更新する(アドレスは変更しない) */
@@ -139,18 +146,31 @@ export async function recheckMailDomains(): Promise<MailBoxActionResult> {
   return {};
 }
 
+const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T00:00:00Z$/;
+
 /**
- * 「その他」フォルダの再振り分けを手動で実行する(受信箱を追加したときは自動でも実行される)。
+ * 「その他」フォルダの再振り分けを、指定した期間(last_message_at)について手動で実行する。
+ * 画面(ReassignOtherButton)が `reassignRanges()` の期間を順に渡す(1 回 = 1 期間)。
+ * 全件を 1 回の RPC で行うと約 6 万スレッドの走査で statement_timeout(8 秒)に掛かるため
+ * (2026-09-18)、migration 83 の範囲指定関数を期間ごとに呼ぶ。この関数は authenticated から
+ * 呼べない(SQL Editor / サービスロール専用)ので、admin を確認したうえでサービスロールで呼ぶ。
  * 移動できた件数を返す。
  */
-export async function reassignOtherMailThreads(): Promise<
-  MailBoxActionResult & { moved?: number }
-> {
+export async function reassignOtherMailThreadsRange(input: {
+  from: string;
+  to: string;
+}): Promise<MailBoxActionResult & { moved?: number }> {
   const denied = await requireAdmin();
   if (denied) return { error: denied };
+  if (!ISO_UTC_RE.test(input.from) || !ISO_UTC_RE.test(input.to) || input.from >= input.to) {
+    return { error: '期間の指定が不正です' };
+  }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc('reassign_other_mail_threads');
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase.rpc('reassign_other_mail_threads_range', {
+    p_from: input.from,
+    p_to: input.to,
+  });
   if (error) return { error: `再振り分けに失敗しました: ${error.message}` };
 
   revalidatePath('/mail/settings');

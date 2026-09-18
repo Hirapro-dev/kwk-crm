@@ -55,3 +55,33 @@ export function uniqueDomains(addresses: readonly string[]): string[] {
   }
   return [...set].sort((a, b) => a.localeCompare(b));
 }
+
+/** 「再振り分けを実行」の 1 回分の期間(`reassign_other_mail_threads_range` の引数) */
+export interface ReassignRange {
+  /** 含む(ISO 8601、UTC) */
+  from: string;
+  /** 含まない */
+  to: string;
+  /** 画面の進捗表示 */
+  label: string;
+}
+
+/**
+ * 「その他」の再振り分けを DB の statement_timeout(8 秒)に収まる期間に分ける。
+ * 全件(約 6 万スレッド)を 1 回で走査すると約 18 秒かかり止まるため、migration 83 と同じ区切り
+ * (2016 年より前 / 2016〜2017 年 / 以降は 1 年ずつ、来年まで)で順に呼ぶ(§5.15。2026-09-18)。
+ */
+export function reassignRanges(currentYear: number): ReassignRange[] {
+  const ranges: ReassignRange[] = [
+    { from: '2000-01-01T00:00:00Z', to: '2016-01-01T00:00:00Z', label: '2016 年より前' },
+    { from: '2016-01-01T00:00:00Z', to: '2018-01-01T00:00:00Z', label: '2016〜2017 年' },
+  ];
+  for (let y = 2018; y <= currentYear; y++) {
+    ranges.push({
+      from: `${y}-01-01T00:00:00Z`,
+      to: `${y + 1}-01-01T00:00:00Z`,
+      label: `${y} 年`,
+    });
+  }
+  return ranges;
+}
