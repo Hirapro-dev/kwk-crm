@@ -863,6 +863,9 @@ Webhook(`app/api/mail/inbound/route.ts`)・過去データ取込のどちらも�
 (失敗時もその旨を出す)。(2) 「再振り分けを実行」は `reassign_other_mail_threads_range` を**期間ごと**(2016 年より前 / 2016〜17 / 以降 1 年ずつ。
 純粋関数 `reassignRanges`)に Server Action `reassignOtherMailThreadsRange`(admin 確認のうえサービスロール)で順に呼び、進捗と合計を出す。
 全件 1 回の RPC `reassign_other_mail_threads()` は残すが画面からは使わない。
+2026-09-18 (migration 111): メールディーラーエクスポート B(2016〜2026/9/18。export A に無かった受信ボックス分を含む 43.5 万通)を取り込んだ際、
+未登録の自社アドレス宛が約 21 万通「その他」に入ったため、migration 83 と同じ方式で CSV の宛先に 3 通以上現れた自社アドレス 254 件
+(個人名のアドレスを含む。ユーザー承認)を受信箱に登録し、月ごとの範囲で再振り分けした(本番へはサービスロールのスクリプトで適用済み。migration は記録用)。
 
 **取込候補** (2026-09-14 追加, migration 82): 旧 Salesforce の「メール to リード」用アドレス
 (`MAIL_IMPORT_CANDIDATE_ADDRESSES`、`lib/domain/mail_types.ts`)を宛先(To/Cc)に含むメール(フォーム通知など)は、
