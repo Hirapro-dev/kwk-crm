@@ -363,12 +363,14 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                         <span
                           className={`inline-block h-2.5 w-2.5 rounded-full ${t.completed_at ? 'bg-emerald-500' : 'bg-slate-300'}`}
                         />
-                        <Link
+                        <a
                           href={`/task/${t.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className={`min-w-0 flex-1 truncate text-primary hover:underline ${t.completed_at ? 'line-through opacity-70' : ''}`}
                         >
                           {t.name}
-                        </Link>
+                        </a>
                         <span className="shrink-0 text-xs text-muted-foreground">
                           {t.project?.name ?? ''}
                         </span>

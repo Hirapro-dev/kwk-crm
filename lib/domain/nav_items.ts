@@ -73,14 +73,6 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
     is_visible: true,
   },
   {
-    id: 'task',
-    label: 'タスク',
-    href: '/task',
-    match_prefix: true,
-    sort_order: 49,
-    is_visible: true,
-  },
-  {
     id: 'withdrawals',
     label: '出金管理',
     href: '/withdrawal-parents',

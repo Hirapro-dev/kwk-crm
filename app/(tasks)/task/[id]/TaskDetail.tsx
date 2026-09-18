@@ -179,10 +179,15 @@ export function TaskDetail({ task, sections, users, currentUserId, canEdit, isAd
             <Label className="text-xs text-muted-foreground">会員</Label>
             {task.member ? (
               <div className="flex items-center gap-2">
-                <Link href={`/members/${task.member.id}`} className="sf-link">
+                <a
+                  href={`/members/${task.member.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="sf-link"
+                >
                   {task.member.name ?? task.member.id}{' '}
                   <span className="font-mono text-xs text-muted-foreground">{task.member.id}</span>
-                </Link>
+                </a>
                 {canEdit && (
                   <Button
                     size="sm"

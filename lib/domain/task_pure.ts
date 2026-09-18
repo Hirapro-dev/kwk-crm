@@ -82,3 +82,42 @@ export function nextSortOrder(tasks: readonly { sort_order: number }[]): number 
 export function todayJst(now = new Date()): string {
   return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
+
+export interface DueGroup<T extends TaskLike> {
+  key: 'overdue' | 'today' | 'week' | 'later' | 'none';
+  label: string;
+  tasks: T[];
+}
+
+/** マイタスクを Asana のように期日でグループ分けする(各グループ内は sortMyTasks の順)。空のグループは出さない */
+export function groupMyTasksByDue<T extends TaskLike>(
+  tasks: readonly T[],
+  today: string,
+): DueGroup<T>[] {
+  const sorted = sortMyTasks(tasks);
+  const buckets: Record<DueGroup<T>['key'], T[]> = {
+    overdue: [],
+    today: [],
+    week: [],
+    later: [],
+    none: [],
+  };
+  for (const t of sorted) {
+    const tone = dueTone(t.due_date, null, today);
+    if (tone === 'overdue') buckets.overdue.push(t);
+    else if (tone === 'today') buckets.today.push(t);
+    else if (tone === 'soon') buckets.week.push(t);
+    else if (tone === 'normal') buckets.later.push(t);
+    else buckets.none.push(t);
+  }
+  const defs: Array<[DueGroup<T>['key'], string]> = [
+    ['overdue', '期限切れ'],
+    ['today', '今日'],
+    ['week', '今後 7 日'],
+    ['later', 'それ以降'],
+    ['none', '期日なし'],
+  ];
+  return defs
+    .filter(([k]) => buckets[k].length > 0)
+    .map(([key, label]) => ({ key, label, tasks: buckets[key] }));
+}

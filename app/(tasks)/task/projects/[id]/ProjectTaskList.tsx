@@ -174,13 +174,14 @@ export function ProjectTaskList({
                     </span>
                   )}
                   {t.member && (
-                    <Link
+                    <a
                       href={`/members/${t.member.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="sf-link shrink-0 text-xs"
-                      onClick={(e) => e.stopPropagation()}
                     >
                       {t.member.name ?? t.member.id}
-                    </Link>
+                    </a>
                   )}
                   {canEdit ? (
                     <>
