@@ -4,7 +4,8 @@
  * 受信箱(mail_boxes)と送信ドメインの管理者向け Server Actions。CLAUDE.md §5.15 M2。
  * `/mail/settings`(admin のみ)から呼ぶ。RLS(migration 76: mail_boxes の書込は admin のみ)と二重に確認する。
  *
- * - 受信箱の追加・編集(表示名・署名・有効/無効)。削除はしない(スレッドが参照するため無効化で代替)
+ * - 受信箱の追加・編集(表示名・既定の署名・有効/無効)。削除はしない(スレッドが参照するため無効化で代替)
+ *   署名の本文は署名マスタ(mail_signature_actions.ts / migration 105)で管理し、受信箱は「どれを既定にするか」だけ持つ
  * - 送信ドメインの SES 登録(Easy DKIM)。DNS への CNAME 追加は画面の案内に従って手作業
  */
 
@@ -36,25 +37,15 @@ async function reassignOtherMailThreadsBestEffort(
   }
 }
 
-/** 署名の上限(誤って巨大なテキストを保存しないための安全弁) */
-const MAX_SIGNATURE_CHARS = 2_000;
-
 async function requireAdmin(): Promise<string | null> {
   const me = await getCurrentUser();
   return me.role === 'admin' ? null : '管理者のみ変更できます';
-}
-
-function normalizeSignature(input: string | null | undefined): string | null {
-  const s = (input ?? '').replace(/\r\n/g, '\n').trim();
-  if (!s) return null;
-  return s.slice(0, MAX_SIGNATURE_CHARS);
 }
 
 /** 受信箱を追加する。アドレスは小文字化して保存(受信時の宛先判定キー) */
 export async function createMailBox(input: {
   address: string;
   displayName?: string | null;
-  signature?: string | null;
 }): Promise<MailBoxActionResult> {
   const denied = await requireAdmin();
   if (denied) return { error: denied };
@@ -66,7 +57,6 @@ export async function createMailBox(input: {
   const { error } = await supabase.from('mail_boxes').insert({
     address: addr.address,
     display_name: sanitizeDisplayName(input.displayName),
-    signature: normalizeSignature(input.signature),
     is_active: true,
   });
   if (error) {
@@ -82,11 +72,12 @@ export async function createMailBox(input: {
   return {};
 }
 
-/** 受信箱の表示名・署名・有効/無効を更新する(アドレスは変更しない) */
+/** 受信箱の表示名・既定の署名・有効/無効を更新する(アドレスは変更しない) */
 export async function updateMailBox(input: {
   id: number;
   displayName?: string | null;
-  signature?: string | null;
+  /** 既定の署名(mail_signatures.id)。null で「署名なし」 */
+  defaultSignatureId?: number | null;
   isActive?: boolean;
 }): Promise<MailBoxActionResult> {
   const denied = await requireAdmin();
@@ -95,7 +86,12 @@ export async function updateMailBox(input: {
 
   const patch: Record<string, unknown> = {};
   if (input.displayName !== undefined) patch.display_name = sanitizeDisplayName(input.displayName);
-  if (input.signature !== undefined) patch.signature = normalizeSignature(input.signature);
+  if (input.defaultSignatureId !== undefined) {
+    const sid = input.defaultSignatureId;
+    if (sid !== null && (!Number.isInteger(sid) || sid <= 0))
+      return { error: '署名の指定が不正です' };
+    patch.default_signature_id = sid;
+  }
   if (input.isActive !== undefined) patch.is_active = input.isActive;
   if (Object.keys(patch).length === 0) return {};
 

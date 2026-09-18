@@ -13,6 +13,7 @@ import { type MailImportRule, findMatchingRule } from './mail_import_rules';
 import type {
   MailBox,
   MailMessage,
+  MailSignature,
   MailThreadDetail,
   MailThreadListItem,
   MailThreadListParams,
@@ -34,13 +35,27 @@ export async function listMailBoxes(): Promise<MailBox[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('mail_boxes')
-    .select('id, address, display_name, signature, is_active')
+    .select('id, address, display_name, default_signature_id, is_active')
     .order('id', { ascending: true });
   if (error) {
     // migration 76 未適用でも画面を壊さない(既存テーブルと同じフォールバック方針)
     return [];
   }
   return (data ?? []) as unknown as MailBox[];
+}
+
+/**
+ * 署名マスタ(migration 105)。無効化済みも含めて id 順に返す(設定画面用)。
+ * フォームで選べるのは有効なものだけ(呼び出し側で絞る)。テーブル未適用なら空配列。
+ */
+export async function listMailSignatures(): Promise<MailSignature[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('mail_signatures')
+    .select('id, name, body, is_active, created_at, updated_at')
+    .order('id', { ascending: true });
+  if (error) return [];
+  return (data ?? []) as unknown as MailSignature[];
 }
 
 /**
@@ -241,7 +256,7 @@ export async function getMailThread(id: string): Promise<MailThreadDetail | null
     .from('mail_threads')
     .select(
       `${THREAD_SELECT},
-       mail_box:mail_boxes!mail_threads_mail_box_id_fkey(id, address, display_name, signature, is_active)`,
+       mail_box:mail_boxes!mail_threads_mail_box_id_fkey(id, address, display_name, default_signature_id, is_active)`,
     )
     .eq('id', id)
     .is('deleted_at', null)

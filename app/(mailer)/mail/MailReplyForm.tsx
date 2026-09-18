@@ -6,6 +6,11 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { groupAddressesByDomain } from '@/lib/domain/mail_folders';
 import { replyToMailThread } from '@/lib/domain/mail_send_actions';
+import {
+  type SignatureOption,
+  defaultSignatureValue,
+  signatureBodyOf,
+} from '@/lib/domain/mail_signatures';
 import { composeOutgoingBody } from '@/lib/domain/mail_text';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
@@ -14,7 +19,8 @@ export interface ReplyBoxOption {
   id: number;
   address: string;
   display_name: string | null;
-  signature: string | null;
+  /** 既定の署名(mail_signatures.id) */
+  default_signature_id: number | null;
   /** SES でドメイン検証済み = 送信可 */
   sendable: boolean;
 }
@@ -23,7 +29,7 @@ export interface ReplyBoxOption {
  * スレッドへの返信フォーム(M2)。
  * - 送信元: 既定はスレッドの受信箱。送信可能な受信箱をプルダウンで選べる
  * - 差出人表示名: 既定は送信元の設定値。その場で書き換え可
- * - 署名: 各受信箱に設定した署名から選ぶ(既定は送信元の署名)。「署名なし」も可
+ * - 署名: 署名マスタ(有効なもの)から名前で選ぶ(既定は送信元の受信箱の既定署名)。「署名なし」も可
  * - 引用: 直近の受信メールを最初から入れる(編集可)
  * 送る本文は 本文 → 署名 → 引用 の順に合成し、画面のとおりに送る(サーバーは付け足さない)。
  */
@@ -34,6 +40,7 @@ export function MailReplyForm({
   disabledReason,
   defaultBoxId,
   boxes,
+  signatures,
   initialQuote,
 }: {
   threadId: string;
@@ -45,6 +52,8 @@ export function MailReplyForm({
   /** スレッドの受信箱(送信元の既定) */
   defaultBoxId: number;
   boxes: ReplyBoxOption[];
+  /** 選べる署名(署名マスタの有効なもの) */
+  signatures: SignatureOption[];
   /** 返信本文に最初から入れる引用 */
   initialQuote: string;
 }) {
@@ -58,9 +67,9 @@ export function MailReplyForm({
   const [boxId, setBoxId] = useState<string>(initialBox ? String(initialBox.id) : '');
   const [fromName, setFromName] = useState(initialBox?.display_name ?? '');
   const [fromNameTouched, setFromNameTouched] = useState(false);
-  // 署名は「どの受信箱の署名か」で持つ('' = 署名なし)
-  const [signatureBoxId, setSignatureBoxId] = useState<string>(
-    initialBox?.signature ? String(initialBox.id) : '',
+  // 署名は署名マスタの id で持つ('' = 署名なし)。初期値は送信元の受信箱の既定署名
+  const [signatureId, setSignatureId] = useState<string>(
+    defaultSignatureValue(initialBox?.default_signature_id, signatures),
   );
   const [signatureTouched, setSignatureTouched] = useState(false);
   const [text, setText] = useState('');
@@ -77,14 +86,14 @@ export function MailReplyForm({
     );
   }
 
-  const signatureText = boxes.find((b) => String(b.id) === signatureBoxId)?.signature ?? '';
-  const signatureOptions = boxes.filter((b) => !!b.signature?.trim());
+  const signatureText = signatureBodyOf(signatureId, signatures);
 
   const handleBoxChange = (id: string) => {
     setBoxId(id);
     const box = boxes.find((b) => String(b.id) === id);
     if (!fromNameTouched) setFromName(box?.display_name ?? '');
-    if (!signatureTouched) setSignatureBoxId(box?.signature ? id : '');
+    if (!signatureTouched)
+      setSignatureId(defaultSignatureValue(box?.default_signature_id, signatures));
   };
 
   const submit = () => {
@@ -196,22 +205,18 @@ export function MailReplyForm({
         <Select
           aria-label="署名"
           className="mt-1 w-full max-w-md"
-          value={signatureBoxId}
+          value={signatureId}
           disabled={pending}
           onChange={(e) => {
-            setSignatureBoxId(e.target.value);
+            setSignatureId(e.target.value);
             setSignatureTouched(true);
           }}
         >
           <option value="">署名なし</option>
-          {groupAddressesByDomain(signatureOptions).map((g) => (
-            <optgroup key={g.domain} label={g.domain || '(ドメインなし)'}>
-              {g.items.map((b) => (
-                <option key={b.id} value={String(b.id)}>
-                  {b.display_name ? `${b.display_name} <${b.address}>` : b.address} の署名
-                </option>
-              ))}
-            </optgroup>
+          {signatures.map((s) => (
+            <option key={s.id} value={String(s.id)}>
+              {s.name}
+            </option>
           ))}
         </Select>
         {signatureText && (
@@ -219,9 +224,9 @@ export function MailReplyForm({
             {`-- \n${signatureText}`}
           </pre>
         )}
-        {signatureOptions.length === 0 && (
+        {signatures.length === 0 && (
           <p className="mt-1 text-[11px] text-muted-foreground">
-            署名は設定(受信箱の編集)で登録すると選べるようになります。
+            署名はメール設定の「署名」で登録すると選べるようになります。
           </p>
         )}
       </div>

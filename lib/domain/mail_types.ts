@@ -49,8 +49,19 @@ export interface MailBox {
   /** 公開アドレス。受信時の宛先判定キーであり、送信時の From */
   address: string;
   display_name: string | null;
-  signature: string | null;
+  /** 既定の署名(mail_signatures.id)。返信・新規作成フォームの初期値。migration 105 */
+  default_signature_id: number | null;
   is_active: boolean;
+}
+
+/** 署名マスタ(migration 105)。名前を付けた署名を受信箱をまたいで使い回す */
+export interface MailSignature {
+  id: number;
+  name: string;
+  body: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface MailThreadListItem {

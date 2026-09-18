@@ -89,7 +89,7 @@ export async function replyToMailThread(input: {
     const supabaseForBox = await createClient();
     const { data: other } = await supabaseForBox
       .from('mail_boxes')
-      .select('id, address, display_name, signature, is_active')
+      .select('id, address, display_name, default_signature_id, is_active')
       .eq('id', input.mailBoxId)
       .maybeSingle();
     box = (other as typeof box) ?? null;
@@ -205,14 +205,14 @@ export async function createMailThreadAndSend(input: {
   const supabase = await createClient();
   const { data: boxRow } = await supabase
     .from('mail_boxes')
-    .select('id, address, display_name, signature, is_active')
+    .select('id, address, display_name, default_signature_id, is_active')
     .eq('id', input.mailBoxId)
     .maybeSingle();
   const box = boxRow as {
     id: number;
     address: string;
     display_name: string | null;
-    signature: string | null;
+    default_signature_id: number | null;
     is_active: boolean;
   } | null;
   if (!box || !box.is_active) return { error: '受信箱が見つからないか無効です' };

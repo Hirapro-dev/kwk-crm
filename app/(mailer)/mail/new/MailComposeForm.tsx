@@ -6,6 +6,11 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { groupAddressesByDomain } from '@/lib/domain/mail_folders';
 import { createMailThreadAndSend } from '@/lib/domain/mail_send_actions';
+import {
+  type SignatureOption,
+  defaultSignatureValue,
+  signatureBodyOf,
+} from '@/lib/domain/mail_signatures';
 import { composeOutgoingBody } from '@/lib/domain/mail_text';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
@@ -14,20 +19,24 @@ export interface ComposeBoxOption {
   id: number;
   address: string;
   display_name: string | null;
-  signature: string | null;
+  /** 既定の署名(mail_signatures.id) */
+  default_signature_id: number | null;
   /** SES でドメイン検証済み = 送信可 */
   sendable: boolean;
 }
 
 /**
  * 新規メール作成フォーム(M2)。送信後は作成されたスレッドへ遷移する。
- * 署名は返信フォームと同じくプルダウンで選び、本文の下に見える形で付けて送る。
+ * 署名は返信フォームと同じく署名マスタからプルダウンで選び(既定は送信元の受信箱の既定署名)、本文の下に見える形で付けて送る。
  */
 export function MailComposeForm({
   boxes,
+  signatures,
   initialTo,
 }: {
   boxes: ComposeBoxOption[];
+  /** 選べる署名(署名マスタの有効なもの) */
+  signatures: SignatureOption[];
   initialTo?: string;
 }) {
   const router = useRouter();
@@ -41,20 +50,20 @@ export function MailComposeForm({
   const [fromName, setFromName] = useState(firstSendable?.display_name ?? '');
   // 差出人表示名・署名を手で変えたら、以降は差出人(受信箱)を変えても上書きしない
   const [fromNameTouched, setFromNameTouched] = useState(false);
-  const [signatureBoxId, setSignatureBoxId] = useState<string>(
-    firstSendable?.signature ? String(firstSendable.id) : '',
+  const [signatureId, setSignatureId] = useState<string>(
+    defaultSignatureValue(firstSendable?.default_signature_id, signatures),
   );
   const [signatureTouched, setSignatureTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const signatureText = boxes.find((b) => String(b.id) === signatureBoxId)?.signature ?? '';
-  const signatureOptions = boxes.filter((b) => !!b.signature?.trim());
+  const signatureText = signatureBodyOf(signatureId, signatures);
 
   const handleBoxChange = (id: string) => {
     setBoxId(id);
     const box = boxes.find((b) => String(b.id) === id);
     if (!fromNameTouched) setFromName(box?.display_name ?? '');
-    if (!signatureTouched) setSignatureBoxId(box?.signature ? id : '');
+    if (!signatureTouched)
+      setSignatureId(defaultSignatureValue(box?.default_signature_id, signatures));
   };
 
   const submit = () => {
@@ -177,22 +186,18 @@ export function MailComposeForm({
         <Select
           aria-label="署名"
           className="mt-1 w-full max-w-md"
-          value={signatureBoxId}
+          value={signatureId}
           disabled={pending}
           onChange={(e) => {
-            setSignatureBoxId(e.target.value);
+            setSignatureId(e.target.value);
             setSignatureTouched(true);
           }}
         >
           <option value="">署名なし</option>
-          {groupAddressesByDomain(signatureOptions).map((g) => (
-            <optgroup key={g.domain} label={g.domain || '(ドメインなし)'}>
-              {g.items.map((b) => (
-                <option key={b.id} value={String(b.id)}>
-                  {b.display_name ? `${b.display_name} <${b.address}>` : b.address} の署名
-                </option>
-              ))}
-            </optgroup>
+          {signatures.map((s) => (
+            <option key={s.id} value={String(s.id)}>
+              {s.name}
+            </option>
           ))}
         </Select>
         {signatureText && (
