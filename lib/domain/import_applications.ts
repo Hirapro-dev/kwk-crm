@@ -15,6 +15,7 @@ import {
   type AppResolveMaps,
   applicationsExtraHeaderKeys,
   convertApplicationRow,
+  keepResolvedUsersIfNameUnchanged,
   mergeApplicationExtra,
 } from '@/lib/import/applications_map';
 import { type Classification, classifyRecords, loadExistingRows } from '@/lib/import/diff';
@@ -102,7 +103,8 @@ async function buildResolveMaps(
 }
 
 /**
- * 既存行を読み、extra を併合(CSV に無い列のキーは残す)してから 新規/更新/スキップ に分類する。
+ * 既存行を読み、extra を併合(CSV に無い列のキーは残す)し、名前が変わっていない担当は既存のまま保ってから
+ * 新規/更新/スキップ に分類する。
  * classifyAgainstDb と同じだが、併合のために既存行が必要なので分けて呼ぶ。
  */
 async function classifyWithExtraMerge(
@@ -125,6 +127,7 @@ async function classifyWithExtraMerge(
       r.extra as Record<string, string>,
       headers,
     );
+    keepResolvedUsersIfNameUnchanged(r, ex);
   }
   return classifyRecords(records, (r) => r.id, existing, { updateOnly });
 }

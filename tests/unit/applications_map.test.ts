@@ -1,6 +1,7 @@
 import {
   type AppResolveMaps,
   convertApplicationRow,
+  keepResolvedUsersIfNameUnchanged,
   mergeApplicationExtra,
 } from '@/lib/import/applications_map';
 import { describe, expect, it } from 'vitest';
@@ -32,11 +33,21 @@ describe('convertApplicationRow: 列の有無', () => {
     const out = convertApplicationRow({ ...base, 案件: 'ASECコイン' }, 1, maps);
     expect(out.record?.project_id).toBe('7');
   });
-  it('ステータス / 入金/移動 の列が無ければレコードに含めない(既存値を保つ)', () => {
+  it('ステータス / 入金/移動 / 問合せ管理ID の列が無ければレコードに含めない(既存値を保つ)', () => {
     const out = convertApplicationRow({ ...base, 投資案件: 'ASECコイン' }, 1, maps);
     expect(out.record).toBeDefined();
     expect('status' in (out.record ?? {})).toBe(false);
     expect('flow_type' in (out.record ?? {})).toBe(false);
+    expect('inquiry_id' in (out.record ?? {})).toBe(false);
+  });
+  it('申込日が空ならエラーにせず application_date を含めない(既存値を保つ。新規は NULL)', () => {
+    const out = convertApplicationRow(
+      { ...base, 申込日: '', 案件: 'ASECコイン', 入金日: '2026/09/01' },
+      1,
+      maps,
+    );
+    expect(out.error).toBeUndefined();
+    expect('application_date' in (out.record ?? {})).toBe(false);
   });
   it('ステータス「失効」は許可し、未知の値は行エラーにする(黙って NULL にしない)', () => {
     const ok = convertApplicationRow({ ...base, 案件: 'ASECコイン', ｽﾃｰﾀｽ: '失効' }, 1, maps);
@@ -90,5 +101,35 @@ describe('mergeApplicationExtra', () => {
     expect(mergeApplicationExtra(null, { 会員情報DB反映: '済' }, headers)).toEqual({
       会員情報DB反映: '済',
     });
+  });
+});
+
+describe('keepResolvedUsersIfNameUnchanged', () => {
+  it('CSV の担当名が既存と同じなら既存の担当IDを保つ(同姓同名ユーザーへの付け替え防止)', () => {
+    const rec = {
+      id: 'M-1',
+      member_id: 'K-1',
+      owner_id: 'u-new',
+      owner_name_raw: '山田 太郎',
+      acquirer_id: 'a-new',
+      acquirer_name_raw: '鈴木 花子',
+    };
+    const ex = {
+      owner_id: 'u-old',
+      owner_name_raw: '山田 太郎',
+      acquirer_id: 'a-old',
+      acquirer_name_raw: '佐藤 一郎',
+    };
+    const out = keepResolvedUsersIfNameUnchanged({ ...rec }, ex);
+    expect(out.owner_id).toBe('u-old'); // 名前が同じ → 既存を保つ
+    expect(out.acquirer_id).toBe('a-new'); // 名前が変わった → 付け替える
+  });
+  it('既存行が無い / 既存の担当が空なら CSV の解決結果をそのまま使う', () => {
+    const rec = { id: 'M-1', member_id: 'K-1', owner_id: 'u-new', owner_name_raw: '山田 太郎' };
+    expect(keepResolvedUsersIfNameUnchanged({ ...rec }, null).owner_id).toBe('u-new');
+    expect(
+      keepResolvedUsersIfNameUnchanged({ ...rec }, { owner_id: null, owner_name_raw: '山田 太郎' })
+        .owner_id,
+    ).toBe('u-new');
   });
 });

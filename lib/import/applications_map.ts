@@ -5,7 +5,8 @@
  *   - 申込情報ID→id(必須)、投資案件(または 案件)→project_id(案件名解決)、会員ID→member_id(必須/既存のみ)
  *   - 問合せ管理ID→inquiry_id(任意/既存のみ)、永久担当/申込獲得者→owner/acquirer 名前解決
  *   - ステータス/入金区分はホワイトリスト、案件固有列は extra(JSONB)
- *   - application_date は 申込日 ?? 入金日(NOT NULL のため両方空はエラー)
+ *   - application_date は 申込日(空なら触らない。2026-09-18 まで「申込日 ?? 入金日、両方空はエラー」だったが、
+ *     migration 39 で NULL 可になっており、申込日が空の行(2026-09-18 形式で約 1.4 万行)が全件エラーになるため変更)
  *   - **CSV に無い列は触らない**(2026-09-18): Salesforce の申込一覧 CSV は書き出す列の組が時期で違う
  *     (2026-09-18 形式は 26 列で「入金/移動」が無い)。ヘッダーが無い列(ステータス / 入金/移動 / 直接マッピング列)は
  *     レコードに含めず既存値を保つ。extra も CSV にある列だけを差し替え、無い列のキーは残す(mergeApplicationExtra)
@@ -129,7 +130,7 @@ export interface AppResolveMaps {
 export interface AppRecord {
   id: string;
   member_id: string;
-  application_date: string;
+  application_date?: string;
   [key: string]: unknown;
 }
 
@@ -161,14 +162,12 @@ export function convertApplicationRow(
     return { error: `${rowNum}行目: 会員ID「${memRaw}」が未登録です` };
   }
 
-  // 申込日(NOT NULL): 申込日 ?? 入金日
-  const appDate =
-    (lenient('date', raw['申込日']) as string | null) ??
-    (lenient('date', raw['入金日']) as string | null);
-  if (!appDate) return { error: `${rowNum}行目: 申込日(または入金日) が必要です` };
-
   const headers = new Set(Object.keys(raw));
-  const data: AppRecord = { id, member_id: memRaw, application_date: appDate };
+  const data: AppRecord = { id, member_id: memRaw };
+
+  // 申込日: 値があるときだけ書く(空なら既存値を保つ。新規行は NULL)
+  const appDate = lenient('date', raw['申込日']) as string | null;
+  if (appDate) data.application_date = appDate;
 
   // 案件名 → project_id(NOT NULL のため未解決はエラーで除外)。列名は「投資案件」または「案件」(2026-09-18 形式)
   const projName = nz(raw['投資案件']) ?? nz(raw['案件']);
@@ -178,9 +177,11 @@ export function convertApplicationRow(
   }
   data.project_id = projectId;
 
-  // 問合せ管理ID(任意・既存のみ)
-  const inqRaw = nz(raw['問合せ管理ID']);
-  data.inquiry_id = inqRaw && maps.validInquiryIds.has(inqRaw) ? inqRaw : null;
+  // 問合せ管理ID(任意・既存のみ)。列が無ければ触らない
+  if (headers.has('問合せ管理ID')) {
+    const inqRaw = nz(raw['問合せ管理ID']);
+    data.inquiry_id = inqRaw && maps.validInquiryIds.has(inqRaw) ? inqRaw : null;
+  }
 
   // ステータス / 入出金区分(ホワイトリスト)。列が無ければ触らない(既存値を保つ)
   if (headers.has('ステータス') || headers.has('ｽﾃｰﾀｽ')) {
@@ -239,4 +240,27 @@ export function mergeApplicationExtra(
     else delete out[h];
   }
   return out;
+}
+
+/**
+ * 担当 / 申込獲得者の付け替え防止(2026-09-18)。
+ * users に同姓同名が複数いると、名前解決(resolveOwner)がどちらを返すかは users の並びで決まり、
+ * 取り込むたびに別人へ付け替わってしまう。CSV の名前が既存行の名前(owner_name_raw / acquirer_name_raw)と
+ * 同じなら既存の担当を保つ(名前が変わったときだけ付け替える)。
+ */
+export function keepResolvedUsersIfNameUnchanged(
+  record: AppRecord,
+  existing: Record<string, unknown> | null | undefined,
+): AppRecord {
+  if (!existing) return record;
+  const pairs: Array<[string, string]> = [
+    ['owner_id', 'owner_name_raw'],
+    ['acquirer_id', 'acquirer_name_raw'],
+  ];
+  for (const [idCol, nameCol] of pairs) {
+    if (!(idCol in record)) continue;
+    const exId = existing[idCol];
+    if (exId && (existing[nameCol] ?? null) === (record[nameCol] ?? null)) record[idCol] = exId;
+  }
+  return record;
 }
