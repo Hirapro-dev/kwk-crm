@@ -275,6 +275,32 @@ function looksStillWriting(filepath: string): boolean {
   return before !== after;
 }
 
+/**
+ * メッセージの upsert。statement timeout(8 秒)で失敗したら、塊を半分に割って再試行する(最小 25 件)。
+ * mail_messages の INSERT には対応歴を記録するトリガー(migration 93)が付いており、会員に紐付いたスレッドが
+ * 多い塊や DB が混み合っているときに 500 件で 8 秒を超えることがある(2026-09-18 に発生)。
+ */
+async function upsertMessagesWithRetry(
+  supabase: ReturnType<typeof createMigrateClient>,
+  rows: Record<string, unknown>[],
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('mail_messages')
+    .upsert(rows, { onConflict: 'message_id', ignoreDuplicates: true })
+    .select('id');
+  if (!error) return (data ?? []).length;
+  const isTimeout = /statement timeout/i.test(error.message);
+  if (!isTimeout || rows.length <= 25) {
+    throw new Error(`mail_messages の挿入に失敗: ${error.message}`);
+  }
+  const half = Math.ceil(rows.length / 2);
+  logger.warn(`挿入がタイムアウトしたため ${rows.length} 件を ${half} 件ずつに分けて再試行します`);
+  return (
+    (await upsertMessagesWithRetry(supabase, rows.slice(0, half))) +
+    (await upsertMessagesWithRetry(supabase, rows.slice(half)))
+  );
+}
+
 async function processFile(filepath: string, ctx: Ctx, dryRun: boolean): Promise<FileStats> {
   logger.info(`--- ファイル: ${filepath} ---`);
   if (looksStillWriting(filepath)) {
@@ -620,12 +646,7 @@ async function processFile(filepath: string, ctx: Ctx, dryRun: boolean): Promise
   logger.info(`メッセージを書込み中(${messageInserts.length}件)...`);
   let actuallyInserted = 0;
   for (const c of chunk(messageInserts, CHUNK_SIZE)) {
-    const { data, error } = await supabase
-      .from('mail_messages')
-      .upsert(c, { onConflict: 'message_id', ignoreDuplicates: true })
-      .select('id');
-    if (error) throw new Error(`mail_messages の挿入に失敗: ${error.message}`);
-    actuallyInserted += (data ?? []).length;
+    actuallyInserted += await upsertMessagesWithRetry(supabase, c);
   }
   logger.info(`ファイル完了。実際に書き込んだメッセージ: ${actuallyInserted} 件`);
 
