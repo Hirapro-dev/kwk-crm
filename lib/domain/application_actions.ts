@@ -68,16 +68,12 @@ export async function updateApplicationStatus(input: {
  * viewer は不可(RLS でも書込は viewer 以外)。
  * 担当(owner_id)はフォームに出さず登録者を入れる(2026-09-18。詳細画面で変更できる)。
  * 入金予定日・入金予定額もフォームから外した(必要なら詳細画面で入力)。
+ * 契約期間は 起算日時(start_datetime。日本時間で解釈)〜契約期日(contract_end_date。migration 107)と
+ * 「●ヶ月」(contract_period)を別に持つ。利息(interest)は既存の円金利(yen_interest)とは別の列で、円金利はフォームに出さない。
  */
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日付は YYYY-MM-DD 形式で指定してください');
 const optionalDate = z.union([dateStr, z.literal(''), z.null(), z.undefined()]);
 const optionalAmount = z.union([z.number().finite().nonnegative(), z.null(), z.undefined()]);
-// 金利(numeric(8,4))。負値は想定しない
-const optionalRate = z.union([
-  z.number().finite().nonnegative().max(9999.9999),
-  z.null(),
-  z.undefined(),
-]);
 
 const CreateApplicationSchema = z.object({
   memberId: z.string().regex(/^K-\d{9}$/, '会員を選択してください'),
@@ -92,7 +88,16 @@ const CreateApplicationSchema = z.object({
   ]),
   acquirerId: z.union([z.string().uuid(), z.literal(''), z.null(), z.undefined()]),
   contractSentDate: optionalDate,
-  yenInterest: optionalRate,
+  /** 利息(円)。既存の円金利 yen_interest とは別の列 interest(migration 107) */
+  interest: optionalAmount,
+  /** 起算日時。datetime-local の値(YYYY-MM-DDTHH:MM。日本時間) */
+  startDatetime: z.union([
+    z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, '起算日時の形式が不正です'),
+    z.literal(''),
+    z.null(),
+    z.undefined(),
+  ]),
+  contractEndDate: optionalDate,
   paymentDate: optionalDate,
   paymentAmount: optionalAmount,
   contractPeriod: z.union([z.string().max(50), z.null(), z.undefined()]),
@@ -145,7 +150,10 @@ export async function createApplication(
     owner_id: me.id,
     acquirer_id: d.acquirerId || null,
     contract_sent_date: d.contractSentDate || null,
-    yen_interest: d.yenInterest ?? null,
+    interest: d.interest ?? null,
+    // 画面の datetime-local は日本時間。サーバー(UTC)で解釈がずれないよう +09:00 を明示する
+    start_datetime: d.startDatetime ? new Date(`${d.startDatetime}:00+09:00`).toISOString() : null,
+    contract_end_date: d.contractEndDate || null,
     payment_date: d.paymentDate || null,
     payment_amount: d.paymentAmount ?? null,
     contract_period: d.contractPeriod?.trim() || null,

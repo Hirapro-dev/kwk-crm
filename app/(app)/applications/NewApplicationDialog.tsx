@@ -21,8 +21,8 @@ import { useEffect, useState, useTransition } from 'react';
 /**
  * 申込一覧の「新規登録」ダイアログ(CLAUDE.md §5.6 / §8.1)。
  * 会員は検索して選ぶ(必須)。案件・申込日・ステータスは必須、それ以外は任意。
- * 項目は 案件 / 申込日 / ステータス / 区分 / 申込獲得者 / 契約書送付日 / 金利 / 入金日 / 入金額 / 契約期間
- * (2026-09-18: 担当・入金予定日・入金予定額を外し、金利・契約書送付日を追加。担当は登録者を既定にする)。
+ * 項目は 案件 / 申込日 / ステータス / 区分 / 申込獲得者 / 契約書送付日 / 利息 / 起算日時 / 契約期日 / 契約期間(●ヶ月) / 入金日 / 入金額
+ * (2026-09-18: 担当・入金予定日・入金予定額を外し、契約書送付日・利息(interest。既存の円金利 yen_interest とは別)・起算日時・契約期日を追加。担当は登録者を既定にする)。
  * 登録後は作成した申込の詳細へ移動する。
  */
 interface Props {
@@ -55,7 +55,9 @@ export function NewApplicationDialog({ projects, users }: Props) {
   const [flowType, setFlowType] = useState('');
   const [acquirerId, setAcquirerId] = useState('');
   const [contractSentDate, setContractSentDate] = useState('');
-  const [yenInterest, setYenInterest] = useState('');
+  const [interest, setInterest] = useState('');
+  const [startDatetime, setStartDatetime] = useState('');
+  const [contractEndDate, setContractEndDate] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [contractPeriod, setContractPeriod] = useState('');
@@ -88,7 +90,9 @@ export function NewApplicationDialog({ projects, users }: Props) {
     setFlowType('');
     setAcquirerId('');
     setContractSentDate('');
-    setYenInterest('');
+    setInterest('');
+    setStartDatetime('');
+    setContractEndDate('');
     setPaymentDate('');
     setPaymentAmount('');
     setContractPeriod('');
@@ -116,9 +120,9 @@ export function NewApplicationDialog({ projects, users }: Props) {
       setError('金額は数字で入力してください');
       return;
     }
-    const yi = toAmount(yenInterest);
-    if (Number.isNaN(yi)) {
-      setError('金利は数字で入力してください');
+    const it = toAmount(interest);
+    if (Number.isNaN(it)) {
+      setError('利息は数字で入力してください');
       return;
     }
     startTransition(async () => {
@@ -130,7 +134,9 @@ export function NewApplicationDialog({ projects, users }: Props) {
         flowType: flowType || null,
         acquirerId: acquirerId || null,
         contractSentDate: contractSentDate || null,
-        yenInterest: yi,
+        interest: it,
+        startDatetime: startDatetime || null,
+        contractEndDate: contractEndDate || null,
         paymentDate: paymentDate || null,
         paymentAmount: pa,
         contractPeriod: contractPeriod || null,
@@ -281,12 +287,37 @@ export function NewApplicationDialog({ projects, users }: Props) {
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">金利(円金利)</Label>
+                <Label className="text-xs text-muted-foreground">利息(円)</Label>
                 <Input
-                  inputMode="decimal"
-                  value={yenInterest}
-                  onChange={(e) => setYenInterest(e.target.value)}
-                  placeholder="例: 5.0"
+                  inputMode="numeric"
+                  value={interest}
+                  onChange={(e) => setInterest(e.target.value)}
+                  placeholder="例: 100000"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">起算日時(契約期間の開始)</Label>
+                <Input
+                  type="datetime-local"
+                  value={startDatetime}
+                  onChange={(e) => setStartDatetime(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">契約期日(契約期間の終了)</Label>
+                <Input
+                  type="date"
+                  value={contractEndDate}
+                  onChange={(e) => setContractEndDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">契約期間(●ヶ月)</Label>
+                <Input
+                  value={contractPeriod}
+                  onChange={(e) => setContractPeriod(e.target.value)}
+                  placeholder="例: 12ヶ月"
+                  maxLength={50}
                 />
               </div>
               <div className="space-y-1">
@@ -304,15 +335,6 @@ export function NewApplicationDialog({ projects, users }: Props) {
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
                   placeholder="例: 1000000"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">契約期間</Label>
-                <Input
-                  value={contractPeriod}
-                  onChange={(e) => setContractPeriod(e.target.value)}
-                  placeholder="例: 12ヶ月"
-                  maxLength={50}
                 />
               </div>
             </div>

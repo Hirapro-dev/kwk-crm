@@ -24,7 +24,9 @@ export interface ApplicationListItem {
   transfer_to: string | null;
   crypto_excluded_amount: number | null;
   yen_interest: number | null;
+  interest: number | null;
   contract_period: string | null;
+  contract_end_date: string | null;
   contract_sent_date: string | null;
   start_month: string | null;
   owner_id: string | null;
@@ -58,6 +60,10 @@ export interface Application extends ApplicationListItem {
   transfer_amount: number | null;
   transfer_to: string | null;
   contract_period: string | null;
+  /** 契約期日(契約期間の終了日。migration 107) */
+  contract_end_date: string | null;
+  /** 利息(円)。円金利 yen_interest とは別(migration 107) */
+  interest: number | null;
   extra: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -117,7 +123,7 @@ export async function listApplications(
         id, member_id, project_id, application_date, status, flow_type,
         payment_amount, payment_date, scheduled_payment_date, scheduled_amount,
         withdrawal_amount, withdrawal_date, transfer_amount, transfer_date, transfer_to,
-        crypto_excluded_amount, yen_interest, contract_period, contract_sent_date,
+        crypto_excluded_amount, yen_interest, interest, contract_period, contract_end_date, contract_sent_date,
         start_month, owner_id, acquirer_id, owner_name_raw, acquirer_name_raw, inquiry_id, extra,
         member:members!applications_member_id_fkey(id, name),
         project:projects!applications_project_id_fkey(id, name),
@@ -165,10 +171,10 @@ export async function getApplication(id: string): Promise<Application | null> {
         owner_id, owner_name_raw, acquirer_id, acquirer_name_raw,
         contract_sent_date, start_month, start_datetime,
         scheduled_payment_date, scheduled_amount,
-        payment_date, payment_amount, crypto_excluded_amount, yen_interest,
+        payment_date, payment_amount, crypto_excluded_amount, yen_interest, interest,
         withdrawal_amount, withdrawal_date,
         transfer_date, transfer_amount, transfer_to,
-        contract_period, extra, created_at, updated_at,
+        contract_period, contract_end_date, extra, created_at, updated_at,
         member:members!applications_member_id_fkey(id, name),
         project:projects!applications_project_id_fkey(id, name),
         owner:users!applications_owner_id_fkey(id, full_name),
