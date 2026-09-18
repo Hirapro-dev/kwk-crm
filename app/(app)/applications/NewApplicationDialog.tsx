@@ -287,12 +287,12 @@ export function NewApplicationDialog({ projects, users }: Props) {
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">利息(円)</Label>
+                <Label className="text-xs text-muted-foreground">利息(%)</Label>
                 <Input
-                  inputMode="numeric"
+                  inputMode="decimal"
                   value={interest}
                   onChange={(e) => setInterest(e.target.value)}
-                  placeholder="例: 100000"
+                  placeholder="例: 5"
                 />
               </div>
               <div className="space-y-1">

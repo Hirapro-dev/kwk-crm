@@ -88,7 +88,7 @@ const CreateApplicationSchema = z.object({
   ]),
   acquirerId: z.union([z.string().uuid(), z.literal(''), z.null(), z.undefined()]),
   contractSentDate: optionalDate,
-  /** 利息(円)。既存の円金利 yen_interest とは別の列 interest(migration 107) */
+  /** 利息(%)。既存の円金利 yen_interest とは別の列 interest(migration 107) */
   interest: optionalAmount,
   /** 起算日時。datetime-local の値(YYYY-MM-DDTHH:MM。日本時間) */
   startDatetime: z.union([
