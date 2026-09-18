@@ -354,7 +354,9 @@ erDiagram
 - `created_at`, `updated_at`, `deleted_at` timestamptz
 
 ### 5.5 projects (案件マスタ)
-- `id` serial PK
+- `id` text PK — 案件ID(`T-XXXXXXXXX`。migration 09 で serial から変更。Salesforce の案件ID を温存)。画面からの新規追加は
+  `gen_project_id()`(migration 109。連番 `projects_id_seq`、**T-001000000 から**。Salesforce 併用中の衝突を避けて離れた番号帯。
+  K- / TA- / M- と同じ考え方)で採番する。2026-09-18 まで DEFAULT が無く、画面からの追加が `null value in column "id"` で失敗していた
 - `name` text unique not null
 - `description` text
 - `is_active` boolean default true
