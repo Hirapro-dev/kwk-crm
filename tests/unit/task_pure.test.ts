@@ -5,6 +5,7 @@ import {
   groupTasksBySection,
   nextSortOrder,
   sortMyTasks,
+  splitLinks,
   storageSafeName,
 } from '../../lib/domain/task_pure';
 
@@ -106,6 +107,34 @@ describe('groupMyTasksByDue', () => {
     expect(groupMyTasksByDue([t({ id: 9, due_date: null })], today).map((x) => x.label)).toEqual([
       '期日なし',
     ]);
+  });
+});
+
+describe('splitLinks', () => {
+  it('URL だけをリンク断片にし、前後の本文は残す', () => {
+    expect(
+      splitLinks('＊LP原稿\nhttps://docs.google.com/document/d/abc/edit?usp=sharing\n===='),
+    ).toEqual([
+      { kind: 'text', value: '＊LP原稿\n' },
+      { kind: 'link', value: 'https://docs.google.com/document/d/abc/edit?usp=sharing' },
+      { kind: 'text', value: '\n====' },
+    ]);
+  });
+  it('末尾の句読点・閉じ括弧・全角括弧は URL に含めない', () => {
+    expect(splitLinks('参照(https://example.com/a)。次')).toEqual([
+      { kind: 'text', value: '参照(' },
+      { kind: 'link', value: 'https://example.com/a' },
+      { kind: 'text', value: ')。次' },
+    ]);
+    expect(splitLinks('（https://example.com/b）')).toEqual([
+      { kind: 'text', value: '（' },
+      { kind: 'link', value: 'https://example.com/b' },
+      { kind: 'text', value: '）' },
+    ]);
+  });
+  it('URL が無ければ本文 1 断片。空文字は空配列', () => {
+    expect(splitLinks('リンクなし')).toEqual([{ kind: 'text', value: 'リンクなし' }]);
+    expect(splitLinks('')).toEqual([]);
   });
 });
 

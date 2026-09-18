@@ -15,7 +15,7 @@ import { groupTasksBySection } from '@/lib/domain/task_pure';
 import type { TaskRow, TaskSection } from '@/lib/domain/tasks';
 import { MessageSquare, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
 import { AssigneeCell, CompleteCheck, DueDateCell, type UserOption } from '../../TaskBits';
 
@@ -43,6 +43,15 @@ export function ProjectTaskList({
   isAdmin,
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // 行のクリックで右側に詳細を出す(分割ビュー)。URL の task パラメータで選択中のタスクを表す
+  const selectedTask = searchParams.get('task');
+  const taskHref = (id: number) => {
+    const q = new URLSearchParams(searchParams.toString());
+    q.set('task', String(id));
+    return `${pathname}?${q.toString()}`;
+  };
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const groups = useMemo(() => groupTasksBySection(sections, tasks), [sections, tasks]);
@@ -155,10 +164,14 @@ export function ProjectTaskList({
             </div>
             <ul className="divide-y">
               {g.tasks.map((t) => (
-                <li key={t.id} className="flex items-center gap-3 px-4 py-1.5 hover:bg-accent/30">
+                <li
+                  key={t.id}
+                  className={`flex items-center gap-3 px-4 py-1.5 hover:bg-accent/30 ${selectedTask === String(t.id) ? 'bg-accent/50' : ''}`}
+                >
                   <CompleteCheck taskId={t.id} completed={!!t.completed_at} />
                   <Link
-                    href={`/task/${t.id}`}
+                    href={taskHref(t.id)}
+                    scroll={false}
                     className={`min-w-0 flex-1 truncate text-sm ${t.completed_at ? 'text-muted-foreground line-through' : 'text-foreground hover:underline'}`}
                   >
                     {t.name}

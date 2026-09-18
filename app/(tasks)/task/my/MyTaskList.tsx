@@ -3,12 +3,22 @@
 import type { TaskRow } from '@/lib/domain/tasks';
 import { MessageSquare } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { CompleteCheck, DueDateCell } from '../TaskBits';
 
 /** マイタスクの一覧(§5.20)。期日ごとのグループ見出し + 行(完了・名前・プロジェクト・会員・期日) */
 export function MyTaskList({
   groups,
 }: { groups: Array<{ key: string; label: string; tasks: TaskRow[] }> }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // 行のクリックで右側に詳細を出す(分割ビュー)。URL の task パラメータで選択中のタスクを表す
+  const selectedTask = searchParams.get('task');
+  const taskHref = (id: number) => {
+    const q = new URLSearchParams(searchParams.toString());
+    q.set('task', String(id));
+    return `${pathname}?${q.toString()}`;
+  };
   if (groups.length === 0) {
     return (
       <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
@@ -26,10 +36,14 @@ export function MyTaskList({
           </h2>
           <ul className="divide-y">
             {g.tasks.map((t) => (
-              <li key={t.id} className="flex items-center gap-3 px-4 py-1.5 hover:bg-accent/30">
+              <li
+                key={t.id}
+                className={`flex items-center gap-3 px-4 py-1.5 hover:bg-accent/30 ${selectedTask === String(t.id) ? 'bg-accent/50' : ''}`}
+              >
                 <CompleteCheck taskId={t.id} completed={!!t.completed_at} />
                 <Link
-                  href={`/task/${t.id}`}
+                  href={taskHref(t.id)}
+                  scroll={false}
                   className={`min-w-0 flex-1 truncate text-sm ${t.completed_at ? 'text-muted-foreground line-through' : 'hover:underline'}`}
                 >
                   {t.name}
