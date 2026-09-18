@@ -32,6 +32,7 @@ const STATUS_VARIANT: Record<AppStatus, 'default' | 'secondary' | 'outline' | 's
   完了: 'success',
   出金: 'secondary',
   資金移動: 'secondary',
+  失効: 'outline',
 };
 
 /** 金額表示する DBカラム(¥ + 右寄せ) */

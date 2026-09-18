@@ -371,7 +371,7 @@ erDiagram
 - `member_id` text FK → members (not null)
 - `project_id` int FK → projects (not null)
 - `application_date` date nullable — ※2026-06 に NOT NULL を解除(migration 39)。申込日が空のCSV行も取込可能にするため
-- `status` text check in (`対応中`, `未購入`, `完了`, `出金`, `資金移動`)
+- `status` text check in (`対応中`, `未購入`, `完了`, `出金`, `資金移動`, `失効`)(`失効` は 2026-09-18 に追加, migration 108。Salesforce の CSV にある値)
 - `flow_type` text check in (`入金`, `出金`, `資金移動`, `W`, null許容)
 - `owner_id` uuid FK → users
 - `acquirer_id` uuid FK → users — 申込獲得者
@@ -385,14 +385,16 @@ erDiagram
 - `payment_amount` numeric(18,2)
 - `crypto_excluded_amount` numeric(18,2)
 - `yen_interest` numeric(8,4) — 円金利(CSV 取込)。下の「利息」とは別の項目でそのまま残す
-- `interest` numeric(18,2) nullable — **利息(円)**(2026-09-18 追加, migration 107。申込の新規登録で入力。CSV 取込の対象外。field_definitions に登録済み(初期値は詳細のみ表示)。【要確認】金額(円)として扱っている。率であれば型を見直す)
+- `interest` numeric(18,2) nullable — **利息**(2026-09-18 追加, migration 107。申込の新規登録で入力。CSV「利息」列からも取り込む(migration 108 でマッピング追加)。数値で、単位は Salesforce の列のまま(0.01〜600 の値がある)。field_definitions に登録済み(初期値は詳細のみ表示))
 - `withdrawal_amount` numeric(18,2)
 - `withdrawal_date` date
 - `transfer_date` date
 - `transfer_amount` numeric(18,2)
 - `transfer_to` text — 資金移動先
+- `transfer_from` text nullable — 資金移動元(2026-09-18 追加, migration 108。CSV「資金移動元」。資金移動先とは別の値)
+- `campaign_target_amount` numeric(18,2) nullable — ｷｬﾝﾍﾟｰﾝ対象金額(2026-09-18 追加, migration 108。CSV「ｷｬﾝﾍﾟｰﾝ対象金額」)
 - `contract_period` text — 例: "12ヶ月"(契約期間の長さ「●ヶ月」。期間そのものは `start_datetime`(起算日時)〜`contract_end_date`)
-- `contract_end_date` date nullable — 契約期日(契約期間の終了日。2026-09-18 追加, migration 107。CSV 取込の対象外。field_definitions に登録済みで、オブジェクト管理から一覧/詳細の表示を切り替えられる。初期値は詳細のみ表示)
+- `contract_end_date` date nullable — 契約期日(契約期間の終了日。2026-09-18 追加, migration 107。CSV「契約期日」列からも取り込む。field_definitions に登録済みで、オブジェクト管理から一覧/詳細の表示を切り替えられる。初期値は詳細のみ表示)
 - `extra` jsonb default `'{}'::jsonb` — 案件固有(コイン数、レート、ボーナス、配当比率等)
 - `created_at`, `updated_at`, `deleted_at` timestamptz
 
@@ -1026,6 +1028,15 @@ Salesforce も 2 万台の K- を振り続けるため、離れた番号帯に�
 3. **問合せ移行**: inquiries (2ファイル統合、JSONB に可変項目を格納)
 4. **申込移行**: applications (project_id, member_id を解決、JSONB に案件固有項目)
 5. **活動移行**: activities (チャンク投入、5万件ずつ COPY)
+
+### 6.1b 申込 CSV の取込(2026-09-18 の注意)
+Salesforce の「申込情報：申込一覧」CSV は**書き出す列の組が時期で違う**(2026-09-18 形式は 26 列: 申込情報ID / 申込日 / ｽﾃｰﾀｽ /
+会員情報DB反映 / 会員ID / 会員氏名 / 会員かな / 永久担当 / **案件** / 申込獲得者 / 紹介者名 / 入金日 / 入金額 / 利息 / 起算日時 / 契約期日 /
+契約期間 / 契約書送付日 / 資金移動日 / 資金移動額 / 資金移動元 / ｷｬﾝﾍﾟｰﾝ対象金額 / 入金予定日 / 入金予定額 / 出金日 / 出金額。「入金/移動」や
+コイン数などの列が無い)。取込(`lib/import/applications_map.ts` / `lib/domain/import_applications.ts`)は **CSV に無い列を触らない**:
+ヘッダーの無い列(ステータス / 入金/移動 / 直接マッピング列)はレコードに含めず既存値を保ち、extra も CSV にある列だけを差し替える
+(純粋関数 `mergeApplicationExtra`。CSV に無い列のキーは残す)。案件の列名は「投資案件」「案件」のどちらでもよい。ステータスが
+ホワイトリスト外なら行エラー(黙って NULL にしない)。会員情報DB反映(値は「済」のみ)は extra に入る(取込時に項目管理へ自動登録)。
 
 ### 6.2 移行スクリプト要件(`scripts/migrate/` 配下)
 - 各CSVに対応するTypeScript or Python スクリプトを1つずつ作成

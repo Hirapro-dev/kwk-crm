@@ -15,8 +15,9 @@ import {
   type AppResolveMaps,
   applicationsExtraHeaderKeys,
   convertApplicationRow,
+  mergeApplicationExtra,
 } from '@/lib/import/applications_map';
-import { classifyAgainstDb } from '@/lib/import/diff';
+import { type Classification, classifyRecords, loadExistingRows } from '@/lib/import/diff';
 import { type RowError, parseCsv } from '@/lib/import/parse';
 // 取込はサービスロールで実行(auth.uid()=null → 監査ログに取込を記録しない)。
 import { createServiceRoleClient } from '@/lib/supabase/server';
@@ -100,6 +101,34 @@ async function buildResolveMaps(
   return { projectNameToId, validMemberIds, validInquiryIds, ownerByFullName, ownerByLastName };
 }
 
+/**
+ * 既存行を読み、extra を併合(CSV に無い列のキーは残す)してから 新規/更新/スキップ に分類する。
+ * classifyAgainstDb と同じだが、併合のために既存行が必要なので分けて呼ぶ。
+ */
+async function classifyWithExtraMerge(
+  supabase: Db,
+  rawRows: Array<Record<string, string>>,
+  records: AppRecord[],
+  updateOnly: boolean,
+): Promise<Classification<AppRecord>> {
+  const headers = new Set<string>(rawRows[0] ? Object.keys(rawRows[0]) : []);
+  const existing = await loadExistingRows(
+    supabase,
+    'applications',
+    'id',
+    records.map((r) => r.id),
+  );
+  for (const r of records) {
+    const ex = existing.get(r.id);
+    r.extra = mergeApplicationExtra(
+      (ex?.extra as Record<string, unknown> | null) ?? null,
+      r.extra as Record<string, string>,
+      headers,
+    );
+  }
+  return classifyRecords(records, (r) => r.id, existing, { updateOnly });
+}
+
 function convertAll(
   rawRows: Array<Record<string, string>>,
   maps: AppResolveMaps,
@@ -138,15 +167,9 @@ export async function previewApplicationsCsv(
   const supabase = createServiceRoleClient();
   const maps = await buildResolveMaps(supabase, rawRows);
   const { records, errors } = convertAll(rawRows, maps);
-  // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定
-  const { toUpsert, newCount, updateCount, skippedCount, existingIds } = await classifyAgainstDb(
-    supabase,
-    'applications',
-    'id',
-    records,
-    (r) => r.id,
-    { updateOnly },
-  );
+  // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定(extra は既存と併合)
+  const { toUpsert, newCount, updateCount, skippedCount, existingIds } =
+    await classifyWithExtraMerge(supabase, rawRows, records, updateOnly);
   const upsertIds = new Set(toUpsert.map((r) => r.id));
   const sample: PreviewResult['sample'] = [];
   for (const r of records) {
@@ -169,7 +192,16 @@ export async function previewApplicationsCsv(
     errorCount: errors.length,
     errors: errors.slice(0, 50),
     targetLabels: headers.filter((h) =>
-      ['申込情報ID', '投資案件', '会員ID', 'ステータス', '入金額', '永久担当'].includes(h),
+      [
+        '申込情報ID',
+        '投資案件',
+        '案件',
+        '会員ID',
+        'ステータス',
+        'ｽﾃｰﾀｽ',
+        '入金額',
+        '永久担当',
+      ].includes(h),
     ),
     ignoredHeaders: [],
     sample,
@@ -206,14 +238,12 @@ export async function commitApplicationsCsv(
     };
   }
 
-  // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定。変更なしは upsert しない。
-  const { toUpsert, newCount, updateCount, skippedCount } = await classifyAgainstDb(
+  // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定(extra は既存と併合)。変更なしは upsert しない。
+  const { toUpsert, newCount, updateCount, skippedCount } = await classifyWithExtraMerge(
     supabase,
-    'applications',
-    'id',
+    rawRows,
     records,
-    (r) => r.id,
-    { updateOnly },
+    updateOnly,
   );
 
   let upserted = 0;

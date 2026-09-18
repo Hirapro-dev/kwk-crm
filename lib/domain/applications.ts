@@ -1,9 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
 
-export type AppStatus = '対応中' | '未購入' | '完了' | '出金' | '資金移動';
+export type AppStatus = '対応中' | '未購入' | '完了' | '出金' | '資金移動' | '失効';
 export type FlowType = '入金' | '出金' | '資金移動' | 'W';
 
-export const APP_STATUSES: AppStatus[] = ['対応中', '未購入', '完了', '出金', '資金移動'];
+export const APP_STATUSES: AppStatus[] = ['対応中', '未購入', '完了', '出金', '資金移動', '失効'];
 export const FLOW_TYPES: FlowType[] = ['入金', '出金', '資金移動', 'W'];
 
 export interface ApplicationListItem {
@@ -25,6 +25,8 @@ export interface ApplicationListItem {
   crypto_excluded_amount: number | null;
   yen_interest: number | null;
   interest: number | null;
+  transfer_from: string | null;
+  campaign_target_amount: number | null;
   contract_period: string | null;
   contract_end_date: string | null;
   contract_sent_date: string | null;
@@ -62,8 +64,12 @@ export interface Application extends ApplicationListItem {
   contract_period: string | null;
   /** 契約期日(契約期間の終了日。migration 107) */
   contract_end_date: string | null;
-  /** 利息(円)。円金利 yen_interest とは別(migration 107) */
+  /** 利息。円金利 yen_interest とは別(migration 107) */
   interest: number | null;
+  /** 資金移動元(migration 108) */
+  transfer_from: string | null;
+  /** ｷｬﾝﾍﾟｰﾝ対象金額(migration 108) */
+  campaign_target_amount: number | null;
   extra: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -123,7 +129,8 @@ export async function listApplications(
         id, member_id, project_id, application_date, status, flow_type,
         payment_amount, payment_date, scheduled_payment_date, scheduled_amount,
         withdrawal_amount, withdrawal_date, transfer_amount, transfer_date, transfer_to,
-        crypto_excluded_amount, yen_interest, interest, contract_period, contract_end_date, contract_sent_date,
+        crypto_excluded_amount, yen_interest, interest, transfer_from, campaign_target_amount,
+        contract_period, contract_end_date, contract_sent_date,
         start_month, owner_id, acquirer_id, owner_name_raw, acquirer_name_raw, inquiry_id, extra,
         member:members!applications_member_id_fkey(id, name),
         project:projects!applications_project_id_fkey(id, name),
@@ -173,7 +180,7 @@ export async function getApplication(id: string): Promise<Application | null> {
         scheduled_payment_date, scheduled_amount,
         payment_date, payment_amount, crypto_excluded_amount, yen_interest, interest,
         withdrawal_amount, withdrawal_date,
-        transfer_date, transfer_amount, transfer_to,
+        transfer_date, transfer_amount, transfer_to, transfer_from, campaign_target_amount,
         contract_period, contract_end_date, extra, created_at, updated_at,
         member:members!applications_member_id_fkey(id, name),
         project:projects!applications_project_id_fkey(id, name),
