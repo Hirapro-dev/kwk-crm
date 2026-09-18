@@ -709,7 +709,9 @@ Asana の基本構成(プロジェクト > セクション > タスク > サブ�
    コメント = stories の comment・添付)を取る。添付は Asana の一時ダウンロード URL から取得して Storage `task-attachments` に保存する。
    非公開プロジェクトの判定は Asana の `privacy_setting`(private なら `visibility=private` にし、Asana のメンバーのうち CRM ユーザーと
    メールが一致する人を `task_project_members` に入れる)。CSV で先に入れた分は `asana_gid` が同じなので API 取込で上書き(名前・説明・担当・
-   期日・完了)され、コメント・添付が追加される。
+   期日・完了)され、コメント・添付が追加される。純粋関数は `lib/domain/asana_api_import.ts`(色名 → 16 進、タスク JSON → 行、
+   stories → コメント)。実体を持たない添付(外部リンク)は `storage_path` を `external:<URL>` として記録する。出力先 `asana_export/` は
+   git 管理外。2026-09-18 時点のワークスペース「GPP PROJECT」はプロジェクト 56 件 + アーカイブ 2 件。
 
 ### 5.14 一覧画面からのレコード削除 ★2026-08 追加 (migration 73)
 一覧画面の各行の**左端**に、選択チェックボックスと削除ボタンを表示し、
