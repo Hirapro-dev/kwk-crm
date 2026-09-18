@@ -152,6 +152,8 @@ export function splitLinks(text: string): TextSegment[] {
   }
   if (last < text.length) out.push({ kind: 'text', value: text.slice(last) });
   return out;
+}
+
 /**
  * 添付ファイル名を Supabase Storage のオブジェクトキーに使える形にする(2026-09-18)。
  * Storage のキーは ASCII の英数字と一部の記号しか受け付けず(日本語・全角記号・特殊な空白は「Invalid key」)、

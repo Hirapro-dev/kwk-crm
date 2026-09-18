@@ -135,6 +135,9 @@ describe('splitLinks', () => {
   it('URL が無ければ本文 1 断片。空文字は空配列', () => {
     expect(splitLinks('リンクなし')).toEqual([{ kind: 'text', value: 'リンクなし' }]);
     expect(splitLinks('')).toEqual([]);
+  });
+});
+
 describe('storageSafeName', () => {
   it('日本語・全角記号・特殊な空白を "_" にし、拡張子は残す(Storage は ASCII のキーしか受け付けない)', () => {
     expect(storageSafeName('スクリーンショット 2026-03-18 14.29.32.png')).toBe(
