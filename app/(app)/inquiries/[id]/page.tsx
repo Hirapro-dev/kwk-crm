@@ -5,6 +5,7 @@
  * - 会員化アクション
  */
 
+import { InquiryEditDialog } from '@/components/inquiries/InquiryEditDialog';
 import { renderInquiryHighlightFieldValue } from '@/components/inquiries/InquiryHighlightFieldValue';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
 import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
@@ -13,7 +14,8 @@ import { RemarksEditor } from '@/components/objects/RemarksEditor';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { adLabel } from '@/lib/domain/ad_label';
-import { getInquiry } from '@/lib/domain/inquiries';
+import { getCurrentUser } from '@/lib/domain/auth';
+import { getInquiry, listForms } from '@/lib/domain/inquiries';
 import { getAdNameMap } from '@/lib/domain/masters';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { formatDateTime } from '@/lib/utils/date';
@@ -27,7 +29,9 @@ interface PageProps {
 
 export default async function InquiryDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const [inquiry, detailFields, highlightFields, adNames] = await Promise.all([
+  const [me, forms, inquiry, detailFields, highlightFields, adNames] = await Promise.all([
+    getCurrentUser(),
+    listForms(),
     getInquiry(id),
     // オブジェクト管理 (/settings/objects/inquiries) で「詳細」表示ONのフィールドのみ
     getVisibleFields('inquiries', 'detail'),
@@ -93,6 +97,9 @@ export default async function InquiryDetailPage({ params }: PageProps) {
         actions={
           <>
             <ShareLinkButton />
+            {me.role !== 'viewer' && (
+              <InquiryEditDialog inquiry={inquiry} detailFields={detailFields} forms={forms} />
+            )}
             <LeadActions inquiry={inquiry} />
           </>
         }
