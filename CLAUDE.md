@@ -840,6 +840,13 @@ Webhook(`app/api/mail/inbound/route.ts`)・過去データ取込のどちらも�
 `reassign_other_mail_threads_range(p_from, p_to)`(権限チェック無し。authenticated からは呼べない。SQL Editor /
 サービスロール専用)に切り出し、宛先を一度展開して受信箱とハッシュ結合する形にした(受信箱が数百件でも速い)。
 既存 RPC `reassign_other_mail_threads()` は権限チェックだけ残して内部関数へ委譲する(呼び出し側の変更なし)。
+2026-09-18 (migration 106): 「その他」が約 6.1 万スレッドになり、全件走査(約 18 秒)が PostgREST の statement_timeout(8 秒)で止まって
+**受信箱の追加時の自動再振り分けが失敗していた**(best-effort のため気づけず、登録前に届いたメールが「その他」に残った。support@ / ueda@ で発覚。
+滞留 33 スレッドは期間分割で移動済み)。対処: (1) `mail_messages` の宛先(To/Cc)に GIN インデックス(小文字化配列 `lower_text_array`)を張り、
+**受信箱 1 件分**の RPC `reassign_other_mail_threads_for_box(p_box_id)`(admin)を追加。受信箱の追加時はこれを呼び、移動件数を画面に出す
+(失敗時もその旨を出す)。(2) 「再振り分けを実行」は `reassign_other_mail_threads_range` を**期間ごと**(2016 年より前 / 2016〜17 / 以降 1 年ずつ。
+純粋関数 `reassignRanges`)に Server Action `reassignOtherMailThreadsRange`(admin 確認のうえサービスロール)で順に呼び、進捗と合計を出す。
+全件 1 回の RPC `reassign_other_mail_threads()` は残すが画面からは使わない。
 
 **取込候補** (2026-09-14 追加, migration 82): 旧 Salesforce の「メール to リード」用アドレス
 (`MAIL_IMPORT_CANDIDATE_ADDRESSES`、`lib/domain/mail_types.ts`)を宛先(To/Cc)に含むメール(フォーム通知など)は、

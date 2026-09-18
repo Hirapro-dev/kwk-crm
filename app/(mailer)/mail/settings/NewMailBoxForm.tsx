@@ -25,7 +25,13 @@ export function NewMailBoxForm() {
         setError(r.error);
         return;
       }
-      setDone(`${address.trim().toLowerCase()} を追加しました`);
+      const movedNote =
+        r.moved == null
+          ? '(「その他」からの自動振り分けに失敗しました。「再振り分けを実行」で再試行できます)'
+          : r.moved > 0
+            ? `(「その他」から ${r.moved} 件のスレッドを移動しました)`
+            : '';
+      setDone(`${address.trim().toLowerCase()} を追加しました${movedNote}`);
       setAddress('');
       setDisplayName('');
       router.refresh();
