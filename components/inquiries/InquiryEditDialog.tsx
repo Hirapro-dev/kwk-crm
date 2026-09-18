@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { Inquiry } from '@/lib/domain/inquiries';
 import { updateInquiry } from '@/lib/domain/inquiry_actions';
 import { EDITABLE_INQUIRY_COLUMNS } from '@/lib/domain/inquiry_extra_edit';
+import { type MemberBrief, searchMembersForInquiry } from '@/lib/domain/inquiry_lead_actions';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
@@ -48,6 +49,10 @@ export function InquiryEditDialog({ inquiry, detailFields, forms }: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [adPickerOpen, setAdPickerOpen] = useState(false);
+  // 会員ID: 会員検索から選ぶ(直接入力も可。保存時に実在確認)
+  const [memberQuery, setMemberQuery] = useState('');
+  const [memberResults, setMemberResults] = useState<MemberBrief[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   const editable = detailFields.filter(
     (f) =>
@@ -136,6 +141,98 @@ export function InquiryEditDialog({ inquiry, detailFields, forms }: Props) {
                             </option>
                           ))}
                         </Select>
+                      </div>
+                    );
+                  }
+                  if (f.field_name === 'member_id') {
+                    return (
+                      <div key={f.field_name} className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">{label}</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={v}
+                            onChange={(e) => setField('member_id', e.target.value)}
+                            placeholder="K-000000000(空で解除)"
+                            className="font-mono"
+                          />
+                          {v && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() => setField('member_id', '')}
+                            >
+                              解除
+                            </Button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={memberQuery}
+                            onChange={(e) => setMemberQuery(e.target.value)}
+                            placeholder="会員を検索(氏名・メール・電話・会員ID)"
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter') return;
+                              e.preventDefault();
+                              setSearching(true);
+                              searchMembersForInquiry(memberQuery).then((r) => {
+                                setMemberResults(r.members ?? []);
+                                setSearching(false);
+                              });
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            disabled={searching || !memberQuery.trim()}
+                            onClick={() => {
+                              setSearching(true);
+                              searchMembersForInquiry(memberQuery).then((r) => {
+                                setMemberResults(r.members ?? []);
+                                setSearching(false);
+                              });
+                            }}
+                          >
+                            {searching ? '検索中…' : '検索'}
+                          </Button>
+                        </div>
+                        {memberResults && (
+                          <ul className="max-h-40 overflow-y-auto rounded border text-xs">
+                            {memberResults.length === 0 && (
+                              <li className="p-2 text-muted-foreground">
+                                該当する会員がありません
+                              </li>
+                            )}
+                            {memberResults.map((m) => (
+                              <li
+                                key={m.id}
+                                className="flex items-center gap-2 border-t p-2 first:border-t-0"
+                              >
+                                <span className="min-w-0 flex-1 truncate">
+                                  {m.name ?? '(氏名なし)'}{' '}
+                                  <span className="font-mono text-muted-foreground">{m.id}</span>
+                                  <span className="ml-2 text-muted-foreground">
+                                    {[m.phone1, m.email1].filter(Boolean).join(' / ')}
+                                  </span>
+                                </span>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setField('member_id', m.id);
+                                    setMemberResults(null);
+                                  }}
+                                >
+                                  選択
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     );
                   }

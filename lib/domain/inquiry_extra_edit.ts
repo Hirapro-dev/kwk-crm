@@ -3,9 +3,10 @@
  * DB 列のホワイトリストと、可変項目(extra)の差し替え規則。サーバー依存なし。
  */
 
-/** 編集できる DB 列。id / member_id(会員化の操作で扱う)/ source_mail_message_id / member_match は含めない */
+/** 編集できる DB 列。id / source_mail_message_id / member_match は含めない。会員ID は 2026-09-18 に追加(実在する会員のみ) */
 export const EDITABLE_INQUIRY_COLUMNS: ReadonlySet<string> = new Set([
   'form_id',
+  'member_id',
   'name',
   'name_kana',
   'email',
