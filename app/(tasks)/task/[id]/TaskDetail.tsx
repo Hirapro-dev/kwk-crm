@@ -19,10 +19,11 @@ import {
 } from '@/lib/domain/task_actions';
 import type { TaskDetail as TaskDetailData, TaskSection } from '@/lib/domain/tasks';
 import { formatDateTime } from '@/lib/utils/date';
-import { Paperclip, Trash2 } from 'lucide-react';
+import { Maximize2, Paperclip, Pencil, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, useTransition } from 'react';
+import { LinkifiedText } from '../LinkifiedText';
 import { AssigneeCell, CompleteCheck, DueDateCell, type UserOption } from '../TaskBits';
 
 interface Props {
@@ -32,15 +33,27 @@ interface Props {
   currentUserId: string;
   canEdit: boolean;
   isAdmin: boolean;
+  /** 一覧の右側に埋め込むとき(分割ビュー)。閉じる先と全画面(/task/[id])の URL */
+  embedded?: { closeHref: string; fullHref: string };
 }
 
-export function TaskDetail({ task, sections, users, currentUserId, canEdit, isAdmin }: Props) {
+export function TaskDetail({
+  task,
+  sections,
+  users,
+  currentUserId,
+  canEdit,
+  isAdmin,
+  embedded,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState(task.name);
   const [notes, setNotes] = useState(task.notes ?? '');
   const [notesDirty, setNotesDirty] = useState(false);
+  // 説明は普段はリンク化した表示にし、「編集」でテキストエリアに切り替える(URL をクリックできるように)
+  const [notesEditing, setNotesEditing] = useState(false);
   const [startDate, setStartDate] = useState(task.start_date ?? '');
   const [comment, setComment] = useState('');
   const [subName, setSubName] = useState('');
@@ -63,13 +76,43 @@ export function TaskDetail({ task, sections, users, currentUserId, canEdit, isAd
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3 text-xs">
-        <Link href={`/task/projects/${task.project_id}`} className="sf-back-link">
-          ← {task.project?.name ?? 'プロジェクト'}
-        </Link>
+        {embedded ? (
+          <span className="truncate text-muted-foreground">
+            {task.project?.name ?? 'プロジェクト'}
+          </span>
+        ) : (
+          <Link href={`/task/projects/${task.project_id}`} className="sf-back-link">
+            ← {task.project?.name ?? 'プロジェクト'}
+          </Link>
+        )}
         {task.parent && (
-          <Link href={`/task/${task.parent.id}`} className="sf-link">
+          <Link
+            href={
+              embedded ? parentHref(embedded.closeHref, task.parent.id) : `/task/${task.parent.id}`
+            }
+            className="sf-link truncate"
+          >
             親タスク: {task.parent.name}
           </Link>
+        )}
+        {embedded && (
+          <span className="ml-auto flex shrink-0 items-center gap-1">
+            <Link
+              href={embedded.fullHref}
+              className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              title="全画面で開く"
+            >
+              <Maximize2 className="h-3.5 w-3.5" /> 全画面
+            </Link>
+            <Link
+              href={embedded.closeHref}
+              className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              title="閉じる"
+              aria-label="閉じる"
+            >
+              <X className="h-4 w-4" />
+            </Link>
+          </span>
         )}
       </div>
 
@@ -100,7 +143,10 @@ export function TaskDetail({ task, sections, users, currentUserId, canEdit, isAd
                 if (!confirm(`「${task.name}」を削除しますか?(サブタスクも削除されます)`)) return;
                 run(
                   () => deleteTask(task.id),
-                  () => router.push(`/task/projects/${task.project_id}`),
+                  () =>
+                    router.push(
+                      embedded ? embedded.closeHref : `/task/projects/${task.project_id}`,
+                    ),
                 );
               }}
             >
@@ -269,8 +315,19 @@ export function TaskDetail({ task, sections, users, currentUserId, canEdit, isAd
         </dl>
 
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">説明</Label>
-          {canEdit ? (
+          <div className="flex items-center gap-2">
+            <Label className="text-xs text-muted-foreground">説明</Label>
+            {canEdit && !notesEditing && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setNotesEditing(true)}
+              >
+                <Pencil className="h-3 w-3" /> 編集
+              </button>
+            )}
+          </div>
+          {canEdit && notesEditing ? (
             <>
               <Textarea
                 value={notes}
@@ -280,36 +337,42 @@ export function TaskDetail({ task, sections, users, currentUserId, canEdit, isAd
                 }}
                 rows={Math.min(24, Math.max(6, notes.split('\n').length + 1))}
                 className="text-sm"
+                autoFocus
               />
-              {notesDirty && (
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    disabled={pending}
-                    onClick={() =>
-                      run(
-                        () => updateTask(task.id, { notes }),
-                        () => setNotesDirty(false),
-                      )
-                    }
-                  >
-                    説明を保存
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setNotes(task.notes ?? '');
-                      setNotesDirty(false);
-                    }}
-                  >
-                    取消
-                  </Button>
-                </div>
-              )}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={pending || !notesDirty}
+                  onClick={() =>
+                    run(
+                      () => updateTask(task.id, { notes }),
+                      () => {
+                        setNotesDirty(false);
+                        setNotesEditing(false);
+                      },
+                    )
+                  }
+                >
+                  説明を保存
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setNotes(task.notes ?? '');
+                    setNotesDirty(false);
+                    setNotesEditing(false);
+                  }}
+                >
+                  取消
+                </Button>
+              </div>
             </>
+          ) : task.notes ? (
+            // URL はクリックで別タブに開く(splitLinks)
+            <LinkifiedText text={task.notes} />
           ) : (
-            <p className="whitespace-pre-wrap text-sm">{task.notes || '-'}</p>
+            <p className="text-sm text-muted-foreground">-</p>
           )}
         </div>
       </Card>
@@ -460,7 +523,7 @@ export function TaskDetail({ task, sections, users, currentUserId, canEdit, isAd
                   </button>
                 )}
               </div>
-              <p className="whitespace-pre-wrap">{c.body}</p>
+              <LinkifiedText text={c.body} className="whitespace-pre-wrap" />
             </li>
           ))}
         </ul>
@@ -491,4 +554,9 @@ export function TaskDetail({ task, sections, users, currentUserId, canEdit, isAd
       </Card>
     </div>
   );
+}
+
+/** 分割ビューで親タスクを開く URL(一覧の URL の task パラメータを差し替える) */
+function parentHref(closeHref: string, parentId: number): string {
+  return `${closeHref}${closeHref.includes('?') ? '&' : '?'}task=${parentId}`;
 }

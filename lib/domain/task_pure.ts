@@ -121,3 +121,35 @@ export function groupMyTasksByDue<T extends TaskLike>(
     .filter(([k]) => buckets[k].length > 0)
     .map(([key, label]) => ({ key, label, tasks: buckets[key] }));
 }
+
+/** 本文中の URL とそれ以外に分けた断片(表示側でリンク化する) */
+export type TextSegment = { kind: 'text' | 'link'; value: string };
+
+/**
+ * 説明・コメントの本文を URL とそれ以外に分ける(2026-09-18)。表示側で URL だけを <a> にする。
+ * http(s):// から URL に使える ASCII 文字が続く範囲を URL とみなし(日本語・全角括弧で切れる)、末尾の句読点や閉じ括弧は URL に含めない
+ * (「…/edit?usp=sharing。」「(https://…)」のような書き方に対応)。
+ */
+export function splitLinks(text: string): TextSegment[] {
+  const out: TextSegment[] = [];
+  // URL に使える ASCII 文字(RFC 3986)だけを URL とみなす。日本語や全角括弧・句読点で自然に切れる
+  const re = /https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&()*+,;=%]+/g;
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    const start = m.index ?? 0;
+    let url = m[0];
+    // 末尾の句読点・閉じ括弧は本文側に戻す
+    const trimmed = url.replace(/[)\].,;:!?]+$/, '');
+    // "(" が URL 内で開いていれば ")" は URL の一部(Wikipedia などのため)
+    url =
+      trimmed.length < url.length &&
+      (url.match(/\(/g)?.length ?? 0) >= (url.match(/\)/g)?.length ?? 0)
+        ? url
+        : trimmed;
+    if (start > last) out.push({ kind: 'text', value: text.slice(last, start) });
+    out.push({ kind: 'link', value: url });
+    last = start + url.length;
+  }
+  if (last < text.length) out.push({ kind: 'text', value: text.slice(last) });
+  return out;
+}
