@@ -12,7 +12,7 @@ import { NewTaskProjectDialog } from './NewTaskProjectDialog';
 
 export default async function TaskProjectsPage({
   searchParams,
-}: { searchParams: Promise<{ archived?: string }> }) {
+}: { searchParams: Promise<{ archived?: string; new?: string }> }) {
   const sp = await searchParams;
   const showArchived = sp.archived === '1';
   const [me, projects, users] = await Promise.all([
@@ -33,13 +33,11 @@ export default async function TaskProjectsPage({
           totalCount={rows.length}
           actions={
             <div className="flex items-center gap-2">
-              <Link href="/task" className="sf-link text-sm">
-                マイタスク
-              </Link>
               {me.role !== 'viewer' && (
                 <NewTaskProjectDialog
                   users={users.map((u) => ({ id: u.id, full_name: u.full_name }))}
                   currentUserId={me.id}
+                  defaultOpen={sp.new === '1'}
                 />
               )}
             </div>

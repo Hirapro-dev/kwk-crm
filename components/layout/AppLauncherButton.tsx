@@ -1,5 +1,6 @@
 'use client';
 
+import { cn } from '@/lib/utils/cn';
 import {
   Activity,
   BarChart3,
@@ -16,30 +17,30 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
-import { cn } from '@/lib/utils/cn';
+import { type ReactNode, useState } from 'react';
 import type { TabItem } from './TabsNav';
 
 const ICON_MAP: Record<string, ReactNode> = {
-  '/':             <Home         className="h-6 w-6" />,
-  '/members':      <Users        className="h-6 w-6" />,
-  '/inquiries':    <MessageSquare className="h-6 w-6" />,
+  '/': <Home className="h-6 w-6" />,
+  '/members': <Users className="h-6 w-6" />,
+  '/inquiries': <MessageSquare className="h-6 w-6" />,
   '/applications': <ClipboardList className="h-6 w-6" />,
-  '/activities':   <Activity     className="h-6 w-6" />,
-  '/summary':      <BarChart3    className="h-6 w-6" />,
-  '/reports':      <FileBarChart  className="h-6 w-6" />,
-  '/settings':     <Settings     className="h-6 w-6" />,
-  '/ai':           <Sparkles     className="h-6 w-6" />,
-  '/mail':         <Mail         className="h-6 w-6" />,
+  '/activities': <Activity className="h-6 w-6" />,
+  '/summary': <BarChart3 className="h-6 w-6" />,
+  '/reports': <FileBarChart className="h-6 w-6" />,
+  '/settings': <Settings className="h-6 w-6" />,
+  '/ai': <Sparkles className="h-6 w-6" />,
+  '/mail': <Mail className="h-6 w-6" />,
 };
 
 /** ランチャー固定項目。newTab=true は別タブで開く(メーラーは独立画面のため) */
 type LauncherItem = TabItem & { newTab?: boolean };
 
 const ALL_EXTRA_ITEMS: LauncherItem[] = [
-  { href: '/mail',     label: 'メーラー', matchPrefix: true, newTab: true },
+  { href: '/mail', label: 'メーラー', matchPrefix: true, newTab: true },
+  { href: '/task', label: 'タスク', matchPrefix: true, newTab: true },
   { href: '/settings', label: '設定', matchPrefix: true },
-  { href: '/ai',       label: 'AI',  matchPrefix: false },
+  { href: '/ai', label: 'AI', matchPrefix: false },
 ];
 
 interface Props {
@@ -115,9 +116,7 @@ export function AppLauncherButton({ tabs }: Props) {
                     onClick={() => setOpen(false)}
                     className={cn(
                       'flex items-center gap-3 px-5 py-3 text-sm font-medium transition-colors',
-                      active
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-foreground hover:bg-accent',
+                      active ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent',
                     )}
                   >
                     <span className={cn('opacity-70', active && 'opacity-100 text-primary')}>
@@ -149,14 +148,14 @@ export function AppLauncherButton({ tabs }: Props) {
 function AppLauncherIcon() {
   return (
     <svg viewBox="0 0 16 16" className="h-4 w-4 fill-current" aria-hidden="true">
-      <circle cx="3"  cy="3"  r="1.3" />
-      <circle cx="8"  cy="3"  r="1.3" />
-      <circle cx="13" cy="3"  r="1.3" />
-      <circle cx="3"  cy="8"  r="1.3" />
-      <circle cx="8"  cy="8"  r="1.3" />
-      <circle cx="13" cy="8"  r="1.3" />
-      <circle cx="3"  cy="13" r="1.3" />
-      <circle cx="8"  cy="13" r="1.3" />
+      <circle cx="3" cy="3" r="1.3" />
+      <circle cx="8" cy="3" r="1.3" />
+      <circle cx="13" cy="3" r="1.3" />
+      <circle cx="3" cy="8" r="1.3" />
+      <circle cx="8" cy="8" r="1.3" />
+      <circle cx="13" cy="8" r="1.3" />
+      <circle cx="3" cy="13" r="1.3" />
+      <circle cx="8" cy="13" r="1.3" />
       <circle cx="13" cy="13" r="1.3" />
     </svg>
   );

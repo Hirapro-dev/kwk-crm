@@ -83,17 +83,19 @@ export async function Topbar({ tabs }: { tabs: TabItem[] }) {
   );
 }
 
-/** タスク管理(/task。§5.20)へのアイコン。CRM 内の画面なので同じタブで開く(2026-09-18) */
+/** タスク管理(/task。§5.20)を別タブで開くアイコン。メーラーと同じく独立画面(2026-09-18) */
 function TaskLink() {
   return (
-    <Link
+    <a
       href="/task"
-      aria-label="タスク管理を開く"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="タスク管理を開く(別タブ)"
       title="タスク"
       className="grid h-8 w-8 place-items-center rounded text-white/90 hover:bg-white/10 hover:text-white"
     >
       <ListChecks className="h-4 w-4" />
-    </Link>
+    </a>
   );
 }
 

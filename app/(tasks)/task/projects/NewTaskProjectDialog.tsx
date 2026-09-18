@@ -48,15 +48,18 @@ export function NewTaskProjectDialog({
   currentUserId,
   project,
   triggerLabel,
+  defaultOpen = false,
 }: {
   users: Array<{ id: string; full_name: string | null }>;
   currentUserId: string;
   project?: TaskProjectFormValue;
   /** 開くボタンの文言(既定は「プロジェクトを作成」。設定モードでは「設定」など) */
   triggerLabel?: string;
+  /** 最初から開いた状態にする(左メニューの「＋」から /task/projects?new=1 で来たとき) */
+  defaultOpen?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState(project?.name ?? '');

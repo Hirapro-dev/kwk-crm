@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   dueTone,
+  groupMyTasksByDue,
   groupTasksBySection,
   nextSortOrder,
   sortMyTasks,
@@ -79,5 +80,30 @@ describe('nextSortOrder', () => {
   it('末尾に足すときは最大値 + 100、空なら 100', () => {
     expect(nextSortOrder([])).toBe(100);
     expect(nextSortOrder([t({ sort_order: 100 }), t({ sort_order: 250 })])).toBe(350);
+  });
+});
+
+describe('groupMyTasksByDue', () => {
+  it('Asana のマイタスクのように 期限切れ / 今日 / 今後 7 日 / それ以降 / 期日なし に分け、空のグループは出さない', () => {
+    const today = '2026-09-18';
+    const list = [
+      t({ id: 1, due_date: '2026-09-10' }),
+      t({ id: 2, due_date: '2026-09-18' }),
+      t({ id: 3, due_date: '2026-09-25' }),
+      t({ id: 4, due_date: '2026-10-30' }),
+      t({ id: 5, due_date: null }),
+      t({ id: 6, due_date: '2026-09-01' }),
+    ];
+    const g = groupMyTasksByDue(list, today);
+    expect(g.map((x) => [x.label, x.tasks.map((y) => y.id)])).toEqual([
+      ['期限切れ', [6, 1]],
+      ['今日', [2]],
+      ['今後 7 日', [3]],
+      ['それ以降', [4]],
+      ['期日なし', [5]],
+    ]);
+    expect(groupMyTasksByDue([t({ id: 9, due_date: null })], today).map((x) => x.label)).toEqual([
+      '期日なし',
+    ]);
   });
 });
