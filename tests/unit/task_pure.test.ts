@@ -114,9 +114,7 @@ describe('storageSafeName', () => {
     expect(storageSafeName('スクリーンショット 2026-03-18 14.29.32.png')).toBe(
       '2026-03-18_14.29.32.png',
     );
-    expect(storageSafeName('見積書（脱炭素マーケティング様）2023年32名様.pdf')).toBe(
-      '_2023_32_.pdf',
-    );
+    expect(storageSafeName('見積書（脱炭素マーケティング様）2023年32名様.pdf')).toBe('2023_32.pdf');
     expect(storageSafeName('MainVisual２.png')).toBe('MainVisual.png');
   });
   it('英数字だけの名前はそのまま。空になったら file、長すぎれば 120 文字に収める', () => {
