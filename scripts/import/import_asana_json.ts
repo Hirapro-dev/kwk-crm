@@ -247,15 +247,20 @@ async function main() {
         .upsert(upserts.slice(i, i + BATCH), { onConflict: 'asana_gid' });
       if (error) throw new Error(`tasks の upsert に失敗: ${error.message}`);
     }
-    const { data: idRows } = await supabase
-      .from('tasks')
-      .select('id, asana_gid')
-      .eq('project_id', projectId)
-      .not('asana_gid', 'is', null)
-      .limit(10000);
-    const idByGid = new Map(
-      ((idRows ?? []) as Array<{ id: number; asana_gid: string }>).map((r) => [r.asana_gid, r.id]),
-    );
+    // asana_gid → tasks.id。PostgREST は 1 回 1,000 行までしか返さないため(db-max-rows)、
+    // gid を 500 件ずつ IN で引く(2026-09-18 修正。以前は project_id で 1 回に引いていたため、1,000 件を超える
+    // プロジェクトや複数プロジェクトに属するタスクのコメント・添付・親子が落ちていた)
+    const idByGid = new Map<string, number>();
+    const gids = rows.map((r) => r.asana_gid);
+    for (let i = 0; i < gids.length; i += 500) {
+      const { data: idRows, error: idErr } = await supabase
+        .from('tasks')
+        .select('id, asana_gid')
+        .in('asana_gid', gids.slice(i, i + 500));
+      if (idErr) throw new Error(`tasks の ID 取得に失敗: ${idErr.message}`);
+      for (const r of (idRows ?? []) as Array<{ id: number; asana_gid: string }>)
+        idByGid.set(r.asana_gid, r.id);
+    }
     let linked = 0;
     for (const r of rows) {
       if (!r.parent_gid) continue;
