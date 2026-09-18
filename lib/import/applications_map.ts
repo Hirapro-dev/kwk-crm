@@ -2,10 +2,15 @@
  * 申込(applications)専用の取込変換ロジック (CLAUDE.md §5.6 / §6)
  *
  * 既存の移行スクリプト scripts/import/04_applications.ts と同じマッピングを再現:
- *   - 申込情報ID→id(必須)、投資案件→project_id(案件名解決)、会員ID→member_id(必須/既存のみ)
+ *   - 申込情報ID→id(必須)、投資案件(または 案件)→project_id(案件名解決)、会員ID→member_id(必須/既存のみ)
  *   - 問合せ管理ID→inquiry_id(任意/既存のみ)、永久担当/申込獲得者→owner/acquirer 名前解決
  *   - ステータス/入金区分はホワイトリスト、案件固有列は extra(JSONB)
- *   - application_date は 申込日 ?? 入金日(NOT NULL のため両方空はエラー)
+ *   - application_date は 申込日(空なら触らない。2026-09-18 まで「申込日 ?? 入金日、両方空はエラー」だったが、
+ *     migration 39 で NULL 可になっており、申込日が空の行(2026-09-18 形式で約 1.4 万行)が全件エラーになるため変更)
+ *   - **CSV に無い列は触らない**(2026-09-18): Salesforce の申込一覧 CSV は書き出す列の組が時期で違う
+ *     (2026-09-18 形式は 26 列で「入金/移動」が無い)。ヘッダーが無い列(ステータス / 入金/移動 / 直接マッピング列)は
+ *     レコードに含めず既存値を保つ。extra も CSV にある列だけを差し替え、無い列のキーは残す(mergeApplicationExtra)
+ *   - ステータスがホワイトリスト外の値なら行エラー(黙って NULL にしない)
  *
  * 純粋関数。DB アクセス(案件/会員/問合せ/担当の解決マップ)は action 側で構築して渡す。
  */
@@ -13,7 +18,7 @@
 import { coerceValue, isCoerceErr } from './coerce';
 import type { ImportFieldType } from './schema';
 
-const ALLOWED_STATUS = new Set(['対応中', '未購入', '完了', '出金', '資金移動']);
+const ALLOWED_STATUS = new Set(['対応中', '未購入', '完了', '出金', '資金移動', '失効']);
 const ALLOWED_FLOW = new Set(['入金', '出金', '資金移動', 'W']);
 
 const DIRECT_FIELDS: Array<{ header: string; field: string; type: ImportFieldType }> = [
@@ -26,6 +31,10 @@ const DIRECT_FIELDS: Array<{ header: string; field: string; type: ImportFieldTyp
   { header: '入金額', field: 'payment_amount', type: 'number' },
   { header: '仮想通貨除外分', field: 'crypto_excluded_amount', type: 'number' },
   { header: '円金利', field: 'yen_interest', type: 'number' },
+  { header: '利息', field: 'interest', type: 'number' },
+  { header: '契約期日', field: 'contract_end_date', type: 'date' },
+  { header: '資金移動元', field: 'transfer_from', type: 'text' },
+  { header: 'ｷｬﾝﾍﾟｰﾝ対象金額', field: 'campaign_target_amount', type: 'number' },
   { header: '出金額', field: 'withdrawal_amount', type: 'number' },
   { header: '出金日', field: 'withdrawal_date', type: 'date' },
   { header: '資金移動日', field: 'transfer_date', type: 'date' },
@@ -36,9 +45,23 @@ const DIRECT_FIELDS: Array<{ header: string; field: string; type: ImportFieldTyp
 
 /** 標準カラムとして消費(これら以外は extra)。会員氏名等の参照表示列も extra から除外。 */
 const CONSUMED_HEADERS = new Set<string>([
-  '申込情報ID', '投資案件', '会員ID', '会員氏名', '会員かな', '問合せ管理ID',
-  'ステータス', 'ｽﾃｰﾀｽ', '入金/移動', '永久担当', '申込獲得者', 'メールアドレス',
-  '紹介者名', '郵便番号', '住所', '申込日',
+  '申込情報ID',
+  '投資案件',
+  '案件',
+  '会員ID',
+  '会員氏名',
+  '会員かな',
+  '問合せ管理ID',
+  'ステータス',
+  'ｽﾃｰﾀｽ',
+  '入金/移動',
+  '永久担当',
+  '申込獲得者',
+  'メールアドレス',
+  '紹介者名',
+  '郵便番号',
+  '住所',
+  '申込日',
   ...DIRECT_FIELDS.map((f) => f.header),
 ]);
 
@@ -57,9 +80,27 @@ export function applicationsExtraHeaderKeys(rawRows: Array<Record<string, string
 }
 
 export const APPLICATION_TEMPLATE_HEADERS = [
-  '申込情報ID', '投資案件', '会員ID', '問合せ管理ID', '申込日', 'ステータス',
-  '入金/移動', '永久担当', '申込獲得者', '入金日', '入金額', '入金予定日', '入金予定額',
-  '出金額', '出金日', '資金移動日', '資金移動額', '資金移動先', '起算月', '起算日時', '契約期間',
+  '申込情報ID',
+  '投資案件',
+  '会員ID',
+  '問合せ管理ID',
+  '申込日',
+  'ステータス',
+  '入金/移動',
+  '永久担当',
+  '申込獲得者',
+  '入金日',
+  '入金額',
+  '入金予定日',
+  '入金予定額',
+  '出金額',
+  '出金日',
+  '資金移動日',
+  '資金移動額',
+  '資金移動先',
+  '起算月',
+  '起算日時',
+  '契約期間',
 ];
 
 function nz(v: unknown): string | null {
@@ -89,7 +130,7 @@ export interface AppResolveMaps {
 export interface AppRecord {
   id: string;
   member_id: string;
-  application_date: string;
+  application_date?: string;
   [key: string]: unknown;
 }
 
@@ -121,32 +162,39 @@ export function convertApplicationRow(
     return { error: `${rowNum}行目: 会員ID「${memRaw}」が未登録です` };
   }
 
-  // 申込日(NOT NULL): 申込日 ?? 入金日
-  const appDate =
-    (lenient('date', raw['申込日']) as string | null) ??
-    (lenient('date', raw['入金日']) as string | null);
-  if (!appDate) return { error: `${rowNum}行目: 申込日(または入金日) が必要です` };
-
   const headers = new Set(Object.keys(raw));
-  const data: AppRecord = { id, member_id: memRaw, application_date: appDate };
+  const data: AppRecord = { id, member_id: memRaw };
 
-  // 案件名 → project_id(NOT NULL のため未解決はエラーで除外)
-  const projName = nz(raw['投資案件']);
+  // 申込日: 値があるときだけ書く(空なら既存値を保つ。新規行は NULL)
+  const appDate = lenient('date', raw['申込日']) as string | null;
+  if (appDate) data.application_date = appDate;
+
+  // 案件名 → project_id(NOT NULL のため未解決はエラーで除外)。列名は「投資案件」または「案件」(2026-09-18 形式)
+  const projName = nz(raw['投資案件']) ?? nz(raw['案件']);
   const projectId = projName ? (maps.projectNameToId.get(projName) ?? null) : null;
   if (!projectId) {
     return { error: `${rowNum}行目: 投資案件「${projName ?? '(空)'}」が案件マスタに未登録です` };
   }
   data.project_id = projectId;
 
-  // 問合せ管理ID(任意・既存のみ)
-  const inqRaw = nz(raw['問合せ管理ID']);
-  data.inquiry_id = inqRaw && maps.validInquiryIds.has(inqRaw) ? inqRaw : null;
+  // 問合せ管理ID(任意・既存のみ)。列が無ければ触らない
+  if (headers.has('問合せ管理ID')) {
+    const inqRaw = nz(raw['問合せ管理ID']);
+    data.inquiry_id = inqRaw && maps.validInquiryIds.has(inqRaw) ? inqRaw : null;
+  }
 
-  // ステータス / 入出金区分(ホワイトリスト)
-  const statusRaw = nz(raw['ステータス']) ?? nz(raw['ｽﾃｰﾀｽ']);
-  data.status = statusRaw && ALLOWED_STATUS.has(statusRaw) ? statusRaw : null;
-  const flow = nz(raw['入金/移動']);
-  data.flow_type = flow && ALLOWED_FLOW.has(flow) ? flow : null;
+  // ステータス / 入出金区分(ホワイトリスト)。列が無ければ触らない(既存値を保つ)
+  if (headers.has('ステータス') || headers.has('ｽﾃｰﾀｽ')) {
+    const statusRaw = nz(raw['ステータス']) ?? nz(raw['ｽﾃｰﾀｽ']);
+    if (statusRaw && !ALLOWED_STATUS.has(statusRaw)) {
+      return { error: `${rowNum}行目: ステータス「${statusRaw}」は未対応の値です` };
+    }
+    data.status = statusRaw;
+  }
+  if (headers.has('入金/移動')) {
+    const flow = nz(raw['入金/移動']);
+    data.flow_type = flow && ALLOWED_FLOW.has(flow) ? flow : null;
+  }
 
   // 担当 / 申込獲得者
   const ownerRaw = nz(raw['永久担当']);
@@ -161,7 +209,7 @@ export function convertApplicationRow(
     if (headers.has(m.header)) data[m.field] = lenient(m.type, raw[m.header]);
   }
 
-  // 案件固有列など未マッピングは extra へ
+  // 案件固有列など未マッピングは extra へ(CSV にある列だけ。既存キーとの併合は mergeApplicationExtra)
   const extra: Record<string, string> = {};
   for (const [k, v] of Object.entries(raw)) {
     if (CONSUMED_HEADERS.has(k)) continue;
@@ -172,4 +220,47 @@ export function convertApplicationRow(
   data.extra = extra;
 
   return { record: data };
+}
+
+/**
+ * extra の併合(2026-09-18)。CSV に**ある列**だけを差し替え、CSV に無い列のキーは既存の値を残す。
+ * CSV にある列で値が空なら、そのキーは消す(Salesforce 側で空になった)。
+ * 列の組が少ない CSV(2026-09-18 形式)で取り込んでも、コイン数などの既存の可変項目や
+ * 移行時の証跡(_inquiry_management_id)が消えないようにするため。
+ */
+export function mergeApplicationExtra(
+  existing: Record<string, unknown> | null | undefined,
+  incoming: Record<string, string>,
+  csvHeaders: ReadonlySet<string>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...(existing ?? {}) };
+  for (const h of csvHeaders) {
+    if (CONSUMED_HEADERS.has(h) || !h.trim()) continue;
+    if (h in incoming) out[h] = incoming[h];
+    else delete out[h];
+  }
+  return out;
+}
+
+/**
+ * 担当 / 申込獲得者の付け替え防止(2026-09-18)。
+ * users に同姓同名が複数いると、名前解決(resolveOwner)がどちらを返すかは users の並びで決まり、
+ * 取り込むたびに別人へ付け替わってしまう。CSV の名前が既存行の名前(owner_name_raw / acquirer_name_raw)と
+ * 同じなら既存の担当を保つ(名前が変わったときだけ付け替える)。
+ */
+export function keepResolvedUsersIfNameUnchanged(
+  record: AppRecord,
+  existing: Record<string, unknown> | null | undefined,
+): AppRecord {
+  if (!existing) return record;
+  const pairs: Array<[string, string]> = [
+    ['owner_id', 'owner_name_raw'],
+    ['acquirer_id', 'acquirer_name_raw'],
+  ];
+  for (const [idCol, nameCol] of pairs) {
+    if (!(idCol in record)) continue;
+    const exId = existing[idCol];
+    if (exId && (existing[nameCol] ?? null) === (record[nameCol] ?? null)) record[idCol] = exId;
+  }
+  return record;
 }
