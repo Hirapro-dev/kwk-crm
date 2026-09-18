@@ -142,3 +142,29 @@ export function commentsFromStories(
   }
   return out;
 }
+
+/**
+ * Asana のメールアドレス → CRM ユーザーのメールアドレスの対応表(2026-09-18)。
+ * Asana では別のアドレスで登録している人を CRM のユーザーに紐付けるため。
+ * 左が Asana 側(小文字)、右が CRM の users.email(小文字)。
+ */
+export const ASANA_EMAIL_ALIASES: Readonly<Record<string, string>> = {
+  // 宮本 修佑(Asana は hirapro.jp、CRM は sc-project-partners.co.jp)。ユーザー指示 2026-09-18
+  'miyamoto@hirapro.jp': 'miyamoto@sc-project-partners.co.jp',
+};
+
+/**
+ * usersByEmail(CRM のメール → ユーザー ID)に、対応表の Asana 側アドレスを同じユーザー ID で追加する。
+ * CRM 側のアドレスが無ければ何もしない(存在しないユーザーには紐付けない)。元の Map は変えない。
+ */
+export function withAsanaEmailAliases(
+  usersByEmail: ReadonlyMap<string, string>,
+  aliases: Readonly<Record<string, string>> = ASANA_EMAIL_ALIASES,
+): Map<string, string> {
+  const out = new Map(usersByEmail);
+  for (const [asanaEmail, crmEmail] of Object.entries(aliases)) {
+    const id = usersByEmail.get(crmEmail.toLowerCase());
+    if (id && !out.has(asanaEmail.toLowerCase())) out.set(asanaEmail.toLowerCase(), id);
+  }
+  return out;
+}
