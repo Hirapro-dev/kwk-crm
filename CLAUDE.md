@@ -646,6 +646,71 @@ Salesforce の「広告IDマスタ」(広告一覧 CSV 4 ファイル: KAWARA版
 **設定画面の「マスター管理」**(2026-09-16): 設定の左メニューに「マスター管理」区画を設け、案件マスタ / 広告マスタ /
 顧客情報取得ポイントマスタ をまとめる(`SettingsSidebar`)。参照は `lib/domain/masters.ts`、変更は `lib/domain/master_actions.ts`。
 
+### 5.20 タスク管理 (task_projects / task_sections / tasks / task_comments / task_attachments) ★2026-09-18 追加(設計承認待ち → 承認後に migration)
+**目的**: 現在 Asana で行っているタスク管理を CRM の `/task` に移し、Asana のデータ(全プロジェクト・コメント・添付)を取り込む。
+Asana の基本構成(プロジェクト > セクション > タスク > サブタスク、担当・期日・説明・コメント・添付、マイタスク)をそのまま持つ。
+2026-09-18 ユーザー決定: **閲覧範囲はプロジェクト単位で「全員」か「特定メンバーのみ」を選べる** / 初回の画面は**リスト表示とマイタスク**
+(ボード表示は後回し) / **タスクと会員(K-)を紐付けられる** / Asana の**全プロジェクトと添付ファイルも移す**。
+
+**テーブル**(共通規約: `created_at` / `updated_at`、論理削除は `task_projects` と `tasks` に `deleted_at`):
+- `task_projects` — プロジェクト。`id` serial PK / `name` text NOT NULL / `color` text nullable / `description` text /
+  `visibility` text NOT NULL DEFAULT `public` check in (`public`=全員が閲覧, `private`=メンバーのみ) / `is_archived` boolean DEFAULT false /
+  `sort_order` int / `created_by` uuid FK → users / `asana_gid` text unique nullable(Asana の元 ID。再取込の冪等キー) / `deleted_at`。
+- `task_project_members` — 非公開プロジェクトの閲覧・編集メンバー。`project_id` FK → task_projects / `user_id` FK → users / `added_by` uuid /
+  `created_at`。主キー (project_id, user_id)。公開プロジェクトでは使わない(付けても意味は変わらない)。
+- `task_sections` — プロジェクト内のセクション(Asana の Section/Column)。`id` serial PK / `project_id` FK / `name` text / `sort_order` int /
+  `asana_gid` text unique nullable。
+- `tasks` — タスクとサブタスク(1 テーブル。`parent_task_id` で親子)。`id` bigserial PK / `project_id` FK → task_projects NOT NULL /
+  `section_id` FK → task_sections nullable / `parent_task_id` bigint FK → tasks nullable / `name` text NOT NULL / `notes` text(説明。複数行、
+  最大 8,000 字超の実データがあるため長さ制限は設けない) / `assignee_id` uuid FK → users nullable / `assignee_name_raw` text(Asana の担当者名。
+  CRM にいない人の保持用) / `member_id` text FK → members nullable(**会員との紐付け**。会員詳細の関連に「タスク」を出す) /
+  `start_date` date / `due_date` date / `completed_at` timestamptz nullable(NULL = 未完了) / `completed_by` uuid nullable /
+  `created_by` uuid FK → users nullable / `sort_order` numeric(セクション内の並び。間に差し込めるよう小数可) /
+  `asana_gid` text unique nullable / `asana_created_at` timestamptz(Asana での作成日。CRM の created_at とは別に保持) /
+  `extra` jsonb DEFAULT `'{}'`(Asana のカスタム項目・タグなど、CRM の列に無い値) / `deleted_at`。
+- `task_comments` — コメント(Asana の stories のうち comment)。`id` bigserial PK / `task_id` FK → tasks / `user_id` uuid FK → users nullable /
+  `author_name_raw` text / `body` text NOT NULL / `asana_gid` text unique nullable / `created_at`。
+- `task_attachments` — 添付。`id` bigserial PK / `task_id` FK → tasks / `filename` / `content_type` text / `size_bytes` bigint /
+  `storage_path` text(Supabase Storage 非公開バケット `task-attachments`。閲覧は短期署名 URL。メール添付 §5.15 と同方式) /
+  `uploaded_by` uuid nullable / `asana_gid` text unique nullable / `created_at`。
+- ID: タスクは連番(`bigserial`)で `/task/[id]`。K-/TA- のような接頭辞は付けない(Salesforce 併用の衝突が無いため)。
+- インデックス: `tasks(project_id, section_id, sort_order) WHERE deleted_at IS NULL` / `tasks(assignee_id, due_date) WHERE deleted_at IS NULL AND completed_at IS NULL`(マイタスク) /
+  `tasks(member_id) WHERE deleted_at IS NULL` / `tasks(parent_task_id)` / `task_comments(task_id)` / `task_attachments(task_id)`。
+
+**権限(RLS)**:
+- 閲覧: 関数 `can_view_task_project(p_project_id)`(SECURITY DEFINER, STABLE)= `is_admin()` OR プロジェクトが `public` OR 自分が `task_project_members` にいる。
+  `task_projects` / `task_sections` / `tasks` / `task_comments` / `task_attachments` の SELECT はすべてこれで判定(削除済みは除く)。
+  非公開プロジェクトのタスクは、マイタスク・会員詳細の関連・全体検索でも見えない(すべて RLS で自然に絞られる)。
+- 書込: viewer 不可。閲覧できるプロジェクトなら INSERT / UPDATE 可(担当者以外も編集できる。Asana と同じ)。
+  プロジェクトの作成は viewer 以外、プロジェクトの編集・メンバー管理・アーカイブ・削除は **作成者または admin**。
+  タスク・コメントの論理削除は admin(§5.14 と同じ方針。書込みはサービスロールか SECURITY DEFINER RPC。理由は §8.1 `/mail` の注記)。
+- 添付の実体: Storage バケットは非公開。アップロード・署名 URL の発行はサーバー側(Server Action)で、タスクの閲覧可否を確認してから行う。
+
+**画面**(`/task` 配下。CRM のメニューバーに「タスク」を追加。§8.1):
+- `/task` — **マイタスク**: 自分が担当の未完了タスクを 期日あり(期日順)→ 期日なし の順に一覧。行内で完了チェック・期日変更。完了済みは切替で表示。
+- `/task/projects` — プロジェクト一覧(閲覧できるものだけ)。新規作成(名前・色・公開/非公開・メンバー)。アーカイブ済みは切替で表示。
+- `/task/projects/[id]` — **リスト表示**: セクションごとに見出しを付けてタスクを並べる(Asana のリスト表示)。行: 完了チェック / 名前 / 担当 / 期日 /
+  会員 / サブタスク数 / コメント数。行内で 完了・担当・期日 を変更。セクションの追加・名前変更・並び替え、タスクの追加(セクション末尾)、
+  セクション間の移動(セレクト。ドラッグは後回し)。完了済みの表示切替。プロジェクトの設定(名前・色・公開範囲・メンバー・アーカイブ)は作成者と admin。
+- `/task/[id]` — タスク詳細: 名前・説明(複数行の編集)・担当・開始日/期日・セクション・会員の紐付け(会員検索)・サブタスク(一覧と追加)・
+  コメント(投稿・自分のコメントの削除)・添付(アップロード・ダウンロード・削除)・完了/未完了。親タスクへのリンク。
+- 会員詳細(`/members/[id]`)の関連に「タスク」(未完了を先に。閲覧できるものだけ)。全体検索(`/search`)にタスク名の部分一致を追加(後回し可)。
+- ボード(カンバン)表示・依存関係・繰り返しタスク・通知は初回の対象外(必要になったら追加)。
+
+**Asana からの取込**(冪等。`asana_gid` で突合し、再実行しても増えない):
+1. **CSV**(`scripts/import/import_asana_csv.ts --file <csv> | --dir <dir> [--dry-run]`): Asana の「エクスポート → CSV」。列は
+   Task ID / Created At / Completed At / Last Modified / Name / Section/Column / Assignee / Assignee Email / Start Date / Due Date / Tags / Notes /
+   Projects / Parent task / Blocked By / Blocking。プロジェクトは「Projects」列の名前で作成(無ければ追加、公開)。セクションは「Section/Column」
+   (「無題のセクション」も 1 セクションとして作る)。担当者は「Assignee Email」を `users.email` と完全一致で紐付け、一致しない人は
+   `assignee_name_raw` に名前を残す。サブタスクは「Parent task」の名前で親を探す(同名が複数なら紐付けず `extra.parent_task_name` に残す)。
+   タグ・依存関係は `extra` に保持。コメント・添付は CSV に無い。2026-09-18 に「サポートデスク」(388 件)「弁護士案件＆要対応顧客」(94 件)で確認。
+2. **API**(`scripts/import/asana_export.ts` で JSON に保存 → `scripts/import/import_asana_json.ts` で取込): 個人アクセストークン(環境変数
+   `ASANA_ACCESS_TOKEN`。サーバー・スクリプト専用。§13)でワークスペースの全プロジェクト → セクション → タスク(サブタスク・カスタム項目・
+   コメント = stories の comment・添付)を取る。添付は Asana の一時ダウンロード URL から取得して Storage `task-attachments` に保存する。
+   非公開プロジェクトの判定は Asana の `privacy_setting`(private なら `visibility=private` にし、Asana のメンバーのうち CRM ユーザーと
+   メールが一致する人を `task_project_members` に入れる)。CSV で先に入れた分は `asana_gid` が同じなので API 取込で上書き(名前・説明・担当・
+   期日・完了)され、コメント・添付が追加される。
+
 ### 5.14 一覧画面からのレコード削除 ★2026-08 追加 (migration 73)
 一覧画面の各行の**左端**に、選択チェックボックスと削除ボタンを表示し、
 複数選択してまとめて削除できるようにする(§8.1)。
@@ -1010,6 +1075,9 @@ Supabase RLSで以下を実装:
 | `/applications/[id]` | 申込詳細 | 全項目編集、ステータス遷移 |
 | `/activities` | 活動一覧(ログ中心) | **本システムの主役画面**。新規入力フォーム上部固定。CSV出力ボタンあり(`/activities/export`。画面の絞り込み条件をそのまま引き継ぎ、UTF-8 BOM付き。上限50,000件を超える場合は出力せず絞り込みを促す) |
 | `/projects` | 案件マスタ | admin のみ編集可 |
+| `/task` | マイタスク | タスク管理(§5.20。2026-09-18 設計)。自分が担当の未完了タスクを期日順に。行内で完了・期日変更。メニューバー「タスク」 |
+| `/task/projects` `/task/projects/[id]` | タスクのプロジェクト一覧 / リスト表示 | 閲覧できるプロジェクトだけ(公開 or メンバー)。リスト表示はセクションごとにタスクを並べ、行内で完了・担当・期日を変更、セクション間の移動、セクション・タスクの追加。設定(名前・色・公開範囲・メンバー・アーカイブ)は作成者と admin |
+| `/task/[id]` | タスク詳細 | 名前・説明(複数行)・担当・開始日/期日・セクション・会員の紐付け・サブタスク・コメント・添付(Storage `task-attachments`)・完了 |
 | `/settings/ads` `/settings/acquisition-points` | 広告マスタ / 顧客情報取得ポイントマスタ | 設定の「マスター管理」(§5.18 / §5.19)。admin のみ |
 | `/mail` | メーラー(一覧) | **CRM 本体とは別画面**(`app/(mailer)` ルートグループ、独自ヘッダー)。ヘッダーの**メールアイコン**(歯車の左)とアプリランチャー(9点アイコン)の「メーラー」から**別タブ**で開く。メニューバー(nav_items)には出さない。メールディーラー風に**左: 受信箱フォルダ**(ドメイン > アドレス、未対応件数付き。migration 77 `mail_box_counts()`。受信箱が数百件あるため既定では全ドメインを閉じた状態にし、選択中の受信箱のドメインだけ開く。`expandedDomainForBox`。ユーザーごとに受信箱をピン留めして上部の「ピン留め」区画にまとめられる。§5.15 `mail_box_pins`。さらに**マイフォルダ**(§5.15 migration 92)を作り、受信箱をドラッグ&ドロップで入れて対応ごとに整理できる)**/ 右: 一覧**。一覧上部に状態タブ(新着=未対応 / 対応中 / 対応完了 / すべて / メルマガ / 自動応答 / 迷惑メール、件数付き。`?tab=`、既定は新着)、担当・未読・件名で絞り込み (§5.15)。一覧の列は **日付 / 状態 / 件名 / From / 受信箱(すべての受信箱のときのみ)/ 担当 /(取込候補では 取込ルール / 処理結果)**。行の左端のチェックで複数選び、選択中バーから **状態・分類・担当・既読/未読をまとめて変更**できる(viewer 以外。Server Action `bulkUpdateMailThreads`、1回 500 件まで。`InfiniteTable` の `selection.actions`。2026-09-16)。**admin は行のゴミ箱と「選択したメールを削除」で論理削除**できる(`deleteMailThreads`。§5.14 と同じく 1 回 500 件まで、`deleted_at` をセットするだけ。書込みはサービスロール: PostgREST は UPDATE を常に RETURNING 付きで実行するため、削除日時を付けて閲覧ポリシーから外れた行は RLS に拒否される。他オブジェクトの論理削除が SECURITY DEFINER の RPC なのも同じ理由。会員に紐付いたスレッドは migration 93 のトリガーで対応歴も論理削除。2026-09-17。それまでは削除処理が無いのに行のゴミ箱だけが描かれて押しても何も起きなかった → 共通部品側で `onDelete` の無い一覧にはゴミ箱を出さないよう修正)。ヘッダー右の歯車メニューは全ロールに出し、**ログアウト**はその中(メール設定の項目は admin のみ) |
 | `/mail/[id]` | メールスレッド | 左フォルダはそのまま右にスレッド。上部に「← 前のメール / 次のメール →」(一覧と同じ並び・絞り込みを URL クエリで引き継ぐ。`getAdjacentMailThreads`)。メッセージ時系列表示(**HTML 本文があれば HTML 版を既定表示**、テキスト版に切替可。画像は「画像を表示」を押したときだけ読み込む)。返信フォーム: **送信元**(既定はスレッドの受信箱。送信可能な受信箱をプルダウンで選択。受信箱が数百件あるため**ドメインごとのセクション(optgroup)**に分ける。署名の選択も同じ。`groupAddressesByDomain`。2026-09-16。スレッドの受信箱は変えない)/ 差出人表示名 / **署名**(各受信箱に設定した署名から選択。既定は送信元の署名。「署名なし」も可)/ 本文 / **引用**(直近の受信メールを最初から入れる。編集可)。送る本文は 本文 → 署名 → 引用 の順に合成し、画面で見えるものをそのまま送る(サーバーは署名を付け足さない。`lib/domain/mail_text.ts`)。担当・ステータス変更、会員紐付け。**取込候補から開いたとき(`?folder=candidates`)は返信フォームを出さない**(取込ルールの設定のみ。§5.16。2026-09-15 決定) |
@@ -1479,6 +1547,9 @@ MAIL_INBOUND_BUCKET=              # SES 受信ルールが生 MIME を置く S3 
 MAIL_SNS_TOPIC_ARN=               # 受信・配信状態の SNS トピック (Webhook で TopicArn を検証)
 MAIL_INBOUND_ADDRESS=             # 全共有アドレス共通の受信用アドレス(各サーバーの転送先に登録)
 MAIL_SES_CONFIGURATION_SET=       # 送信の配信状態を SNS に流す SES 設定セット名(任意。setup_aws.ts が作る)
+
+# タスク管理の Asana 取込 (§5.20) — スクリプト専用。画面からは使わない
+ASANA_ACCESS_TOKEN=               # Asana の個人アクセストークン(マイ設定 → アプリ → 個人アクセストークン)
 ```
 
 ---
