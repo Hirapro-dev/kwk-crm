@@ -20,6 +20,7 @@ import {
   asanaTaskToRow,
   commentsFromStories,
 } from '../../lib/domain/asana_api_import';
+import { storageSafeName } from '../../lib/domain/task_pure';
 import { parseArgs } from '../migrate/lib/args';
 import { createMigrateClient } from '../migrate/lib/db';
 import { logger } from '../migrate/lib/logger';
@@ -55,6 +56,30 @@ interface ExportFile {
       created_by?: { email?: string | null } | null;
     }>
   >;
+}
+
+/**
+ * 添付の実体を Storage にアップロードして保存キーを返す。失敗したら警告して null。
+ * キーは ASCII 化した名前(storageSafeName)。Storage は日本語などのキーを「Invalid key」で拒否するため
+ * (2026-09-18 に判明。元のファイル名は task_attachments.filename に持つ)。
+ */
+async function uploadAttachment(
+  supabase: ReturnType<typeof createMigrateClient>,
+  taskId: number,
+  a: { gid: string; name: string; local_file?: string | null },
+  dir: string,
+): Promise<string | null> {
+  if (!a.local_file) return null;
+  const storagePath = `${taskId}/asana_${a.gid}_${storageSafeName(a.name)}`;
+  const buf = readFileSync(join(dir, a.local_file));
+  const up = await supabase.storage
+    .from('task-attachments')
+    .upload(storagePath, buf, { upsert: true });
+  if (up.error) {
+    logger.warn(`添付のアップロードに失敗(${a.name}): ${up.error.message}`);
+    return null;
+  }
+  return storagePath;
 }
 
 async function main() {
@@ -264,23 +289,26 @@ async function main() {
       for (const a of atts) {
         const { data: ex } = await supabase
           .from('task_attachments')
-          .select('id')
+          .select('id, storage_path')
           .eq('asana_gid', a.gid)
           .maybeSingle();
-        if (ex) continue;
-        let storagePath: string | null = null;
-        if (withAttachments && a.local_file && existsSync(join(dir, a.local_file))) {
-          const safe = a.name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 150);
-          storagePath = `${taskId}/asana_${a.gid}_${safe}`;
-          const buf = readFileSync(join(dir, a.local_file));
-          const up = await supabase.storage
-            .from('task-attachments')
-            .upload(storagePath, buf, { upsert: true });
-          if (up.error) {
-            logger.warn(`添付のアップロードに失敗(${a.name}): ${up.error.message}`);
-            storagePath = null;
-          }
+        const hasLocal = withAttachments && !!a.local_file && existsSync(join(dir, a.local_file));
+        // 既に登録済み。ただし以前のアップロード失敗で外部リンク扱いになっているものは、実体があれば上げ直す
+        if (ex) {
+          const exRow = ex as { id: number; storage_path: string };
+          if (!exRow.storage_path.startsWith('external:') || !hasLocal) continue;
+          const path = await uploadAttachment(supabase, taskId, a, dir);
+          if (!path) continue;
+          const { error } = await supabase
+            .from('task_attachments')
+            .update({ storage_path: path })
+            .eq('id', exRow.id);
+          if (error) throw new Error(`添付の更新に失敗: ${error.message}`);
+          uploaded++;
+          continue;
         }
+        let storagePath: string | null = null;
+        if (hasLocal) storagePath = await uploadAttachment(supabase, taskId, a, dir);
         if (!storagePath) {
           // 実体が無い(外部リンク等)ものは URL を記録しておく
           if (!a.view_url) continue;

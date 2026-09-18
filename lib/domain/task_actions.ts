@@ -7,7 +7,7 @@
  */
 
 import { getCurrentUser } from '@/lib/domain/auth';
-import { nextSortOrder } from '@/lib/domain/task_pure';
+import { nextSortOrder, storageSafeName } from '@/lib/domain/task_pure';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
@@ -392,8 +392,8 @@ export async function uploadTaskAttachment(
   const supabase = await createClient();
   const { data: t } = await supabase.from('tasks').select('id').eq('id', taskId).maybeSingle();
   if (!t) return { error: 'タスクが見つかりません(閲覧できないプロジェクトの可能性)' };
-  const safeName = file.name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 200);
-  const path = `${taskId}/${Date.now()}_${safeName}`;
+  // Storage のキーは ASCII しか使えないため変換する。元のファイル名は filename 列に持つ
+  const path = `${taskId}/${Date.now()}_${storageSafeName(file.name)}`;
   const admin = createServiceRoleClient();
   const buf = Buffer.from(await file.arrayBuffer());
   const up = await admin.storage
@@ -425,14 +425,16 @@ export async function getTaskAttachmentUrl(
   const supabase = await createClient();
   const { data } = await supabase
     .from('task_attachments')
-    .select('storage_path')
+    .select('storage_path, filename')
     .eq('id', attachmentId)
     .maybeSingle();
   if (!data) return { error: '添付が見つかりません' };
+  const row = data as { storage_path: string; filename: string | null };
   const admin = createServiceRoleClient();
+  // キーは ASCII 化した名前なので、ダウンロード時は元のファイル名を付ける
   const signed = await admin.storage
     .from('task-attachments')
-    .createSignedUrl((data as { storage_path: string }).storage_path, 300);
+    .createSignedUrl(row.storage_path, 300, row.filename ? { download: row.filename } : undefined);
   if (signed.error || !signed.data?.signedUrl) return { error: 'URL の発行に失敗しました' };
   return { data: { url: signed.data.signedUrl } };
 }

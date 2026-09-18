@@ -121,3 +121,20 @@ export function groupMyTasksByDue<T extends TaskLike>(
     .filter(([k]) => buckets[k].length > 0)
     .map(([key, label]) => ({ key, label, tasks: buckets[key] }));
 }
+
+/**
+ * 添付ファイル名を Supabase Storage のオブジェクトキーに使える形にする(2026-09-18)。
+ * Storage のキーは ASCII の英数字と一部の記号しか受け付けず(日本語・全角記号・特殊な空白は「Invalid key」)、
+ * Asana からの取込で日本語名の添付がすべて失敗していた。表示用の元のファイル名は task_attachments.filename に
+ * そのまま持ち、ダウンロード時にその名前を付けるので、キー側は失っても困らない。
+ *   - 英数字 . _ - 以外の連続を 1 つの "_" にする / 先頭末尾の "_" と "." を落とす
+ *   - 拡張子(英数字のみ、8 文字以内)は残す / 空になったら "file" / 全体は 120 文字以内
+ */
+export function storageSafeName(name: string): string {
+  const trimmed = (name ?? '').trim();
+  const m = trimmed.match(/^(.*?)(\.[A-Za-z0-9]{1,8})?$/);
+  const base = (m?.[1] ?? '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+|[._]+$/g, '');
+  const ext = (m?.[2] ?? '').toLowerCase();
+  const stem = (base || 'file').slice(0, 120 - ext.length);
+  return `${stem}${ext}`;
+}
