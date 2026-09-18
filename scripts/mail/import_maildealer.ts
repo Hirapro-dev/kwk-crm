@@ -495,14 +495,18 @@ async function processFile(filepath: string, ctx: Ctx, dryRun: boolean): Promise
     }
     seenMessageIds.add(p.messageId);
 
+    // 受信は宛先(To/Cc/転送ヘッダ)で、送信は差出人(自社アドレス)で受信箱を決める
+    // (2026-09-18 修正。以前は送信も宛先で判定していたため、宛先が顧客の送信メールが「その他」に入っていた)
     const box =
-      matchMailBox(realBoxes, [
-        ...p.toAddresses,
-        ...p.ccAddresses,
-        p.headers['delivered-to'],
-        p.headers['x-original-to'],
-        p.headers['xsrv-filter'],
-      ]) ?? otherBox;
+      (p.direction === 'out'
+        ? matchMailBox(realBoxes, [p.fromAddress])
+        : matchMailBox(realBoxes, [
+            ...p.toAddresses,
+            ...p.ccAddresses,
+            p.headers['delivered-to'],
+            p.headers['x-original-to'],
+            p.headers['xsrv-filter'],
+          ])) ?? otherBox;
     if (box.id === otherBox.id) stats.otherBoxed++;
     else addToMap(stats.byBox, box.id);
 
