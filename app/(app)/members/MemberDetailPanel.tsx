@@ -42,6 +42,7 @@ import { getAdNameMap, listAcquisitionPoints } from '@/lib/domain/masters';
 import { GENDER_OPTIONS } from '@/lib/domain/member_gender';
 import { getMember } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
+import { listTasksByMember } from '@/lib/domain/tasks';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import { formatDate, formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
@@ -83,6 +84,7 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     relInqs,
     relReactions,
     relLps,
+    relTasks,
     acquisitionPoints,
     adNames,
   ] = await Promise.all([
@@ -98,6 +100,7 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     listInquiries({ memberId, pageSize: 100, page: 1 }),
     getReactionsByMember(memberId, 100),
     listLpEntriesByMember(memberId, 100),
+    listTasksByMember(memberId, 100),
     // 編集フォームの「個人情報取得ポイント」の選択肢(有効なマスタのみ。§5.19)
     listAcquisitionPoints({ activeOnly: true }),
     getAdNameMap(),
@@ -346,6 +349,38 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                       </TableBody>
                     </Table>
                   </div>
+                )}
+              </CollapsibleSection>
+
+              {/* タスク(§5.20。閲覧できるプロジェクトのものだけ) */}
+              <CollapsibleSection title="タスク" count={relTasks.length} bodyClassName="p-0">
+                {relTasks.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">タスクはありません</p>
+                ) : (
+                  <ul className="divide-y">
+                    {relTasks.map((t) => (
+                      <li key={t.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                        <span
+                          className={`inline-block h-2.5 w-2.5 rounded-full ${t.completed_at ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                        />
+                        <Link
+                          href={`/task/${t.id}`}
+                          className={`min-w-0 flex-1 truncate text-primary hover:underline ${t.completed_at ? 'line-through opacity-70' : ''}`}
+                        >
+                          {t.name}
+                        </Link>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {t.project?.name ?? ''}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {t.assignee?.full_name ?? t.assignee_name_raw ?? ''}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {t.due_date ?? ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </CollapsibleSection>
 
