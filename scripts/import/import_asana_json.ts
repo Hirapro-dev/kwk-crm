@@ -64,6 +64,26 @@ interface ExportFile {
  * キーは ASCII 化した名前(storageSafeName)。Storage は日本語などのキーを「Invalid key」で拒否するため
  * (2026-09-18 に判明。元のファイル名は task_attachments.filename に持つ)。
  */
+/**
+ * 一時的な通信エラー(fetch failed / ECONNRESET / timeout)なら少し待って再試行する(最大 3 回)。
+ * 2026-09-18 の 3 回目の取込がコメントの upsert で "TypeError: fetch failed" により途中で止まったため。
+ */
+async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? `${e.message} ${String(e.cause ?? '')}` : String(e);
+      if (!/fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|timeout/i.test(msg)) throw e;
+      logger.warn(`${label}: 通信エラーのため再試行 (${attempt}/3): ${msg.slice(0, 120)}`);
+      await new Promise((r) => setTimeout(r, 3000 * attempt));
+    }
+  }
+  throw lastErr;
+}
+
 async function uploadAttachment(
   supabase: ReturnType<typeof createMigrateClient>,
   taskId: number,
@@ -242,10 +262,12 @@ async function main() {
       extra: r.extra,
     }));
     for (let i = 0; i < upserts.length; i += BATCH) {
-      const { error } = await supabase
-        .from('tasks')
-        .upsert(upserts.slice(i, i + BATCH), { onConflict: 'asana_gid' });
-      if (error) throw new Error(`tasks の upsert に失敗: ${error.message}`);
+      await withRetry('tasks の upsert', async () => {
+        const { error } = await supabase
+          .from('tasks')
+          .upsert(upserts.slice(i, i + BATCH), { onConflict: 'asana_gid' });
+        if (error) throw new Error(`tasks の upsert に失敗: ${error.message}`);
+      });
     }
     // asana_gid → tasks.id。PostgREST は 1 回 1,000 行までしか返さないため(db-max-rows)、
     // gid を 500 件ずつ IN で引く(2026-09-18 修正。以前は project_id で 1 回に引いていたため、1,000 件を超える
@@ -282,10 +304,12 @@ async function main() {
         task_id: taskId,
       }));
       if (cs.length === 0) continue;
-      const { error } = await supabase
-        .from('task_comments')
-        .upsert(cs, { onConflict: 'asana_gid' });
-      if (error) throw new Error(`コメントの upsert に失敗: ${error.message}`);
+      await withRetry('コメントの upsert', async () => {
+        const { error } = await supabase
+          .from('task_comments')
+          .upsert(cs, { onConflict: 'asana_gid' });
+        if (error) throw new Error(`コメントの upsert に失敗: ${error.message}`);
+      });
       commentsUpserted += cs.length;
     }
 
