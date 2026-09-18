@@ -170,3 +170,32 @@ export function storageSafeName(name: string): string {
   const stem = (base || 'file').slice(0, 120 - ext.length);
   return `${stem}${ext}`;
 }
+
+/** 左メニューのマイフォルダ区画の 1 フォルダ分(migration 110) */
+export interface TaskUserFolderSection<P extends { id: number }> {
+  id: number;
+  name: string;
+  projects: P[];
+}
+
+/**
+ * マイフォルダ(migration 110)の区画を組み立てる。フォルダごとに、登録した順のプロジェクトを返す。
+ * 閲覧できないプロジェクト(一覧に無い ID)は無視し、重複は 1 件にする(メーラーの userFolderSections と同じ規則)。
+ */
+export function taskUserFolderSections<P extends { id: number }>(
+  projects: readonly P[],
+  folders: readonly { id: number; name: string; projectIds: readonly number[] }[],
+): TaskUserFolderSection<P>[] {
+  const byId = new Map(projects.map((p) => [p.id, p]));
+  return folders.map((f) => {
+    const seen = new Set<number>();
+    const list: P[] = [];
+    for (const id of f.projectIds) {
+      const p = byId.get(id);
+      if (!p || seen.has(id)) continue;
+      seen.add(id);
+      list.push(p);
+    }
+    return { id: f.id, name: f.name, projects: list };
+  });
+}
