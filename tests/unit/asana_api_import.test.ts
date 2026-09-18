@@ -3,6 +3,7 @@ import {
   asanaColorToHex,
   asanaTaskToRow,
   commentsFromStories,
+  withAsanaEmailAliases,
 } from '../../lib/domain/asana_api_import';
 
 /** Asana API の JSON(CLAUDE.md §5.20 API 取込)を CRM の形に写す純粋関数 */
@@ -114,5 +115,18 @@ describe('commentsFromStories', () => {
         author_name_raw: '山田',
       },
     ]);
+  });
+});
+
+describe('withAsanaEmailAliases', () => {
+  it('対応表の Asana 側アドレスを CRM ユーザーと同じ ID で引けるようにする(CRM 側が無ければ足さない)', () => {
+    const base = new Map([['miyamoto@sc-project-partners.co.jp', 'u-1']]);
+    const out = withAsanaEmailAliases(base, {
+      'miyamoto@hirapro.jp': 'miyamoto@sc-project-partners.co.jp',
+      'nobody@hirapro.jp': 'nobody@example.com',
+    });
+    expect(out.get('miyamoto@hirapro.jp')).toBe('u-1');
+    expect(out.has('nobody@hirapro.jp')).toBe(false);
+    expect(base.has('miyamoto@hirapro.jp')).toBe(false); // 元の Map は変えない
   });
 });

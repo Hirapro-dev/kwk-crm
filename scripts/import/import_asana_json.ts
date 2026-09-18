@@ -19,6 +19,7 @@ import {
   asanaColorToHex,
   asanaTaskToRow,
   commentsFromStories,
+  withAsanaEmailAliases,
 } from '../../lib/domain/asana_api_import';
 import { storageSafeName } from '../../lib/domain/task_pure';
 import { parseArgs } from '../migrate/lib/args';
@@ -101,9 +102,11 @@ async function main() {
     .select('id, email')
     .is('deleted_at', null);
   if (uErr) throw new Error(uErr.message);
-  const usersByEmail = new Map<string, string>();
+  const crmUsersByEmail = new Map<string, string>();
   for (const u of (users ?? []) as Array<{ id: string; email: string }>)
-    usersByEmail.set(u.email.toLowerCase(), u.id);
+    crmUsersByEmail.set(u.email.toLowerCase(), u.id);
+  // Asana 側で別アドレスの人を CRM ユーザーに紐付ける(ASANA_EMAIL_ALIASES)
+  const usersByEmail = withAsanaEmailAliases(crmUsersByEmail);
 
   const totals = { projects: 0, sections: 0, tasks: 0, comments: 0, attachments: 0, uploaded: 0 };
   for (const f of files) {
