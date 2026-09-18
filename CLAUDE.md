@@ -387,7 +387,7 @@ erDiagram
 - `payment_amount` numeric(18,2)
 - `crypto_excluded_amount` numeric(18,2)
 - `yen_interest` numeric(8,4) — 円金利(CSV 取込)。下の「利息」とは別の項目でそのまま残す
-- `interest` numeric(18,2) nullable — **利息**(2026-09-18 追加, migration 107。申込の新規登録で入力。CSV「利息」列からも取り込む(migration 108 でマッピング追加)。数値で、単位は Salesforce の列のまま(0.01〜600 の値がある)。field_definitions に登録済み(初期値は詳細のみ表示))
+- `interest` numeric(18,2) nullable — **利息(%)**(2026-09-18 追加, migration 107。申込の新規登録で入力(表示は「利息(%)」。ユーザー決定)。CSV「利息」列からも取り込む(migration 108 でマッピング追加)。値は数値のまま保存(CSV には 0.01〜600 の値がある)。field_definitions に登録済み(初期値は詳細のみ表示))
 - `withdrawal_amount` numeric(18,2)
 - `withdrawal_date` date
 - `transfer_date` date
