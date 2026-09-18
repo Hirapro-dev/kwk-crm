@@ -250,6 +250,8 @@ export interface UpdateInquiryInput {
   ad_id?: string | null;
   /** 登録日時(datetime-local の値 "YYYY-MM-DDTHH:mm" または ISO) */
   registered_at?: string | null;
+  /** 会員ID(K-…)。null / 空で解除。実在する(削除されていない)会員だけ受け付ける(2026-09-18) */
+  member_id?: string | null;
   /** 可変項目の編集(ラベル → 値)。空文字はキー削除 */
   extra?: Record<string, string>;
 }
@@ -280,6 +282,21 @@ export async function updateInquiry(input: UpdateInquiryInput): Promise<{ error?
     if (input[k] !== undefined) patch[k] = nz(input[k], k === 'address' ? 500 : 200);
   }
   if (input.email !== undefined) patch.email = nz(input.email, 200)?.toLowerCase() ?? null;
+  if (input.member_id !== undefined) {
+    const mid = nz(input.member_id, 40);
+    if (mid) {
+      const { data: m } = await supabase
+        .from('members')
+        .select('id')
+        .eq('id', mid)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (!m) return { error: `会員 ${mid} が見つかりません(削除済みか、ID の誤り)` };
+      patch.member_id = mid;
+    } else {
+      patch.member_id = null;
+    }
+  }
   if (input.registered_at !== undefined) {
     const v = nz(input.registered_at, 40);
     if (!v) return { error: '登録日時は必須です' };

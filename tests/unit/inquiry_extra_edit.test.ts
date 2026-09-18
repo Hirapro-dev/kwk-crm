@@ -21,13 +21,14 @@ describe('mergeInquiryExtra', () => {
       対象銘柄: 'A',
     });
   });
-  it('編集できる DB 列は問合せの基本項目だけ(id・会員ID・元メール・照合結果は含まない)', () => {
+  it('編集できる DB 列は問合せの基本項目と会員ID(id・元メール・照合結果は含まない)', () => {
     expect([...EDITABLE_INQUIRY_COLUMNS].sort()).toEqual(
       [
         'ad_id',
         'address',
         'email',
         'form_id',
+        'member_id',
         'name',
         'name_kana',
         'phone',
