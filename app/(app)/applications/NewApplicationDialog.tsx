@@ -21,12 +21,13 @@ import { useEffect, useState, useTransition } from 'react';
 /**
  * 申込一覧の「新規登録」ダイアログ(CLAUDE.md §5.6 / §8.1)。
  * 会員は検索して選ぶ(必須)。案件・申込日・ステータスは必須、それ以外は任意。
+ * 項目は 案件 / 申込日 / ステータス / 区分 / 申込獲得者 / 契約書送付日 / 金利 / 入金日 / 入金額 / 契約期間
+ * (2026-09-18: 担当・入金予定日・入金予定額を外し、金利・契約書送付日を追加。担当は登録者を既定にする)。
  * 登録後は作成した申込の詳細へ移動する。
  */
 interface Props {
   projects: Array<{ id: number; name: string }>;
   users: Array<{ id: string; name: string }>;
-  currentUserId: string;
 }
 
 function todayJst(): string {
@@ -35,7 +36,7 @@ function todayJst(): string {
   return now.toISOString().slice(0, 10);
 }
 
-export function NewApplicationDialog({ projects, users, currentUserId }: Props) {
+export function NewApplicationDialog({ projects, users }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -52,10 +53,9 @@ export function NewApplicationDialog({ projects, users, currentUserId }: Props) 
   const [applicationDate, setApplicationDate] = useState(todayJst);
   const [status, setStatus] = useState<string>('対応中');
   const [flowType, setFlowType] = useState('');
-  const [ownerId, setOwnerId] = useState(currentUserId);
   const [acquirerId, setAcquirerId] = useState('');
-  const [scheduledPaymentDate, setScheduledPaymentDate] = useState('');
-  const [scheduledAmount, setScheduledAmount] = useState('');
+  const [contractSentDate, setContractSentDate] = useState('');
+  const [yenInterest, setYenInterest] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [contractPeriod, setContractPeriod] = useState('');
@@ -86,10 +86,9 @@ export function NewApplicationDialog({ projects, users, currentUserId }: Props) 
     setApplicationDate(todayJst());
     setStatus('対応中');
     setFlowType('');
-    setOwnerId(currentUserId);
     setAcquirerId('');
-    setScheduledPaymentDate('');
-    setScheduledAmount('');
+    setContractSentDate('');
+    setYenInterest('');
     setPaymentDate('');
     setPaymentAmount('');
     setContractPeriod('');
@@ -112,10 +111,14 @@ export function NewApplicationDialog({ projects, users, currentUserId }: Props) 
       setError('案件を選択してください');
       return;
     }
-    const sa = toAmount(scheduledAmount);
     const pa = toAmount(paymentAmount);
-    if (Number.isNaN(sa) || Number.isNaN(pa)) {
+    if (Number.isNaN(pa)) {
       setError('金額は数字で入力してください');
+      return;
+    }
+    const yi = toAmount(yenInterest);
+    if (Number.isNaN(yi)) {
+      setError('金利は数字で入力してください');
       return;
     }
     startTransition(async () => {
@@ -125,10 +128,9 @@ export function NewApplicationDialog({ projects, users, currentUserId }: Props) 
         applicationDate,
         status,
         flowType: flowType || null,
-        ownerId: ownerId || null,
         acquirerId: acquirerId || null,
-        scheduledPaymentDate: scheduledPaymentDate || null,
-        scheduledAmount: sa,
+        contractSentDate: contractSentDate || null,
+        yenInterest: yi,
         paymentDate: paymentDate || null,
         paymentAmount: pa,
         contractPeriod: contractPeriod || null,
@@ -260,17 +262,6 @@ export function NewApplicationDialog({ projects, users, currentUserId }: Props) 
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">担当</Label>
-                <Select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-                  <option value="">未設定</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">申込獲得者</Label>
                 <Select value={acquirerId} onChange={(e) => setAcquirerId(e.target.value)}>
                   <option value="">未設定</option>
@@ -282,20 +273,20 @@ export function NewApplicationDialog({ projects, users, currentUserId }: Props) 
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">入金予定日</Label>
+                <Label className="text-xs text-muted-foreground">契約書送付日</Label>
                 <Input
                   type="date"
-                  value={scheduledPaymentDate}
-                  onChange={(e) => setScheduledPaymentDate(e.target.value)}
+                  value={contractSentDate}
+                  onChange={(e) => setContractSentDate(e.target.value)}
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">入金予定額(円)</Label>
+                <Label className="text-xs text-muted-foreground">金利(円金利)</Label>
                 <Input
-                  inputMode="numeric"
-                  value={scheduledAmount}
-                  onChange={(e) => setScheduledAmount(e.target.value)}
-                  placeholder="例: 1000000"
+                  inputMode="decimal"
+                  value={yenInterest}
+                  onChange={(e) => setYenInterest(e.target.value)}
+                  placeholder="例: 5.0"
                 />
               </div>
               <div className="space-y-1">

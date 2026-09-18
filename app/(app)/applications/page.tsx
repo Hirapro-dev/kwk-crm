@@ -64,7 +64,6 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
               <NewApplicationDialog
                 projects={projects.map((p) => ({ id: p.id, name: p.name }))}
                 users={users.map((u) => ({ id: u.id, name: u.full_name ?? u.email }))}
-                currentUserId={me.id}
               />
             ) : undefined
           }

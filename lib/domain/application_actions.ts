@@ -66,10 +66,18 @@ export async function updateApplicationStatus(input: {
  * ID は DB の連番 gen_application_m_id()(migration 94)で採番する。会員・案件は必須。
  * (gen_application_id という名前は本番 DB に uuid を返す別物が存在するため使わない)
  * viewer は不可(RLS でも書込は viewer 以外)。
+ * 担当(owner_id)はフォームに出さず登録者を入れる(2026-09-18。詳細画面で変更できる)。
+ * 入金予定日・入金予定額もフォームから外した(必要なら詳細画面で入力)。
  */
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日付は YYYY-MM-DD 形式で指定してください');
 const optionalDate = z.union([dateStr, z.literal(''), z.null(), z.undefined()]);
 const optionalAmount = z.union([z.number().finite().nonnegative(), z.null(), z.undefined()]);
+// 金利(numeric(8,4))。負値は想定しない
+const optionalRate = z.union([
+  z.number().finite().nonnegative().max(9999.9999),
+  z.null(),
+  z.undefined(),
+]);
 
 const CreateApplicationSchema = z.object({
   memberId: z.string().regex(/^K-\d{9}$/, '会員を選択してください'),
@@ -82,10 +90,9 @@ const CreateApplicationSchema = z.object({
     z.null(),
     z.undefined(),
   ]),
-  ownerId: z.union([z.string().uuid(), z.literal(''), z.null(), z.undefined()]),
   acquirerId: z.union([z.string().uuid(), z.literal(''), z.null(), z.undefined()]),
-  scheduledPaymentDate: optionalDate,
-  scheduledAmount: optionalAmount,
+  contractSentDate: optionalDate,
+  yenInterest: optionalRate,
   paymentDate: optionalDate,
   paymentAmount: optionalAmount,
   contractPeriod: z.union([z.string().max(50), z.null(), z.undefined()]),
@@ -135,10 +142,10 @@ export async function createApplication(
     application_date: d.applicationDate,
     status: d.status,
     flow_type: d.flowType || null,
-    owner_id: d.ownerId || null,
+    owner_id: me.id,
     acquirer_id: d.acquirerId || null,
-    scheduled_payment_date: d.scheduledPaymentDate || null,
-    scheduled_amount: d.scheduledAmount ?? null,
+    contract_sent_date: d.contractSentDate || null,
+    yen_interest: d.yenInterest ?? null,
     payment_date: d.paymentDate || null,
     payment_amount: d.paymentAmount ?? null,
     contract_period: d.contractPeriod?.trim() || null,
