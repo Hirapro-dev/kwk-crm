@@ -12,13 +12,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { createTaskProject, updateTaskProject } from '@/lib/domain/task_actions';
-import { Plus } from 'lucide-react';
+import { createTaskProject, deleteTaskProject, updateTaskProject } from '@/lib/domain/task_actions';
+import { Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
 /**
- * プロジェクトの作成・設定ダイアログ(§5.20)。名前・色・説明・公開範囲・メンバー(非公開のとき)・アーカイブ。
+ * プロジェクトの作成・設定ダイアログ(§5.20)。名前・色・説明・公開範囲・メンバー(非公開のとき)・アーカイブ・削除(作成者と admin。論理削除でタスクも消える)。
  * `project` を渡すと設定モード(作成者と admin だけが開ける。権限はサーバー側でも確認)。
  */
 export interface TaskProjectFormValue {
@@ -194,13 +194,46 @@ export function NewTaskProjectDialog({
             )}
             {error && <p className="text-xs text-destructive">{error}</p>}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
-              キャンセル
-            </Button>
-            <Button onClick={submit} disabled={pending || !name.trim()}>
-              {pending ? '保存中…' : project ? '保存' : '作成'}
-            </Button>
+          <DialogFooter className="sm:justify-between">
+            {project ? (
+              <Button
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                disabled={pending}
+                onClick={() => {
+                  if (
+                    !confirm(
+                      `プロジェクト「${project.name}」を削除しますか?\n中のタスク(サブタスク・コメント・添付を含む)も見えなくなります。`,
+                    )
+                  )
+                    return;
+                  setError(null);
+                  startTransition(async () => {
+                    const r = await deleteTaskProject(project.id);
+                    if (r.error) {
+                      setError(r.error);
+                      return;
+                    }
+                    setOpen(false);
+                    router.push('/task/projects');
+                    router.refresh();
+                  });
+                }}
+              >
+                <Trash2 className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                プロジェクトを削除
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
+                キャンセル
+              </Button>
+              <Button onClick={submit} disabled={pending || !name.trim()}>
+                {pending ? '保存中…' : project ? '保存' : '作成'}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

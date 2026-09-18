@@ -135,6 +135,44 @@ export async function updateTaskProject(input: {
   return {};
 }
 
+/**
+ * プロジェクトを削除する(論理削除。作成者または admin)。中のタスク(サブタスク含む)も論理削除する。
+ * 書込みはサービスロール(deleted_at を付けた行は閲覧ポリシーから外れ、PostgREST の RETURNING で拒否されるため)。
+ * マイフォルダ内の登録は残るが、一覧に出ないプロジェクトはフォルダの表示からも消える(taskUserFolderSections)。
+ */
+export async function deleteTaskProject(id: number): Promise<ActionResult> {
+  const me = await requireWriter();
+  if ('error' in me) return { error: me.error };
+  if (!Number.isInteger(id) || id <= 0) return { error: 'プロジェクトが不正です' };
+  const supabase = await createClient();
+  const { data: cur } = await supabase
+    .from('task_projects')
+    .select('id, created_by')
+    .eq('id', id)
+    .maybeSingle();
+  if (!cur) return { error: 'プロジェクトが見つかりません' };
+  const creator = (cur as { created_by: string | null }).created_by;
+  if (me.role !== 'admin' && creator !== me.id)
+    return { error: 'プロジェクトの削除は作成者と管理者だけができます' };
+  const admin = createServiceRoleClient();
+  const now = new Date().toISOString();
+  const { error: tErr } = await admin
+    .from('tasks')
+    .update({ deleted_at: now })
+    .eq('project_id', id)
+    .is('deleted_at', null);
+  if (tErr) return { error: `タスクの削除に失敗しました: ${tErr.message}` };
+  const { error } = await admin
+    .from('task_projects')
+    .update({ deleted_at: now })
+    .eq('id', id)
+    .is('deleted_at', null);
+  if (error) return { error: `削除に失敗しました: ${error.message}` };
+  revalidateTask(undefined, id);
+  revalidatePath('/task', 'layout');
+  return {};
+}
+
 // ---------------- セクション ----------------
 
 export async function createTaskSection(
