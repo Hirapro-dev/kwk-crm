@@ -861,6 +861,11 @@ Webhook(`app/api/mail/inbound/route.ts`)・過去データ取込のどちらも�
 (失敗時もその旨を出す)。(2) 「再振り分けを実行」は `reassign_other_mail_threads_range` を**期間ごと**(2016 年より前 / 2016〜17 / 以降 1 年ずつ。
 純粋関数 `reassignRanges`)に Server Action `reassignOtherMailThreadsRange`(admin 確認のうえサービスロール)で順に呼び、進捗と合計を出す。
 全件 1 回の RPC `reassign_other_mail_threads()` は残すが画面からは使わない。
+2026-09-18 (migration 112): エクスポート B(2016〜2026/9/18、43.5 万通)の取込後、受信箱を追加して再振り分けしても「その他」に約 19.8 万スレッドが
+残り、その大半は**送信メール**だった。取込と再振り分けが宛先(To/Cc)だけで受信箱を決めるため、宛先が顧客の送信メールは差出人が自社アドレスでも
+「その他」に入る。対処: 取込スクリプトは送信メール(方向 out)を**差出人**で判定するよう修正し、既存分は
+`reassign_other_mail_threads_by_sender_range(p_from, p_to)`(送信メッセージの差出人が一意に一致する受信箱へ移す。範囲指定、authenticated からは
+呼べない)で月ごとに移す。
 
 **取込候補** (2026-09-14 追加, migration 82): 旧 Salesforce の「メール to リード」用アドレス
 (`MAIL_IMPORT_CANDIDATE_ADDRESSES`、`lib/domain/mail_types.ts`)を宛先(To/Cc)に含むメール(フォーム通知など)は、
