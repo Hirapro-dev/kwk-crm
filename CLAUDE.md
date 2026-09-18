@@ -870,7 +870,11 @@ Webhook(`app/api/mail/inbound/route.ts`)・過去データ取込のどちらも�
 残り、その大半は**送信メール**だった。取込と再振り分けが宛先(To/Cc)だけで受信箱を決めるため、宛先が顧客の送信メールは差出人が自社アドレスでも
 「その他」に入る。対処: 取込スクリプトは送信メール(方向 out)を**差出人**で判定するよう修正し、既存分は
 `reassign_other_mail_threads_by_sender_range(p_from, p_to)`(送信メッセージの差出人が一意に一致する受信箱へ移す。範囲指定、authenticated からは
-呼べない)で月ごとに移す。
+呼べない)で月ごとに移す。(15.3 万スレッド移動)
+2026-09-18 (migration 113): それでも残った約 4.6 万スレッドの宛先・差出人は 223 ドメインに散らばり、自社系と取引先・顧客・ISP が混在していたため、
+自社系と判断した 19 ドメイン(peace-project-partners.co.jp / tj-business-support.com / asec-project-partners.com / decarbonization-marketing.llc /
+hira-pro.com / japan-casino-dealer.jp / asec-frontier.com / scpp.co.jp / usi-affiliate.com と既登録ドメインの追加アドレス)の 3 通以上のアドレス
+121 件だけを受信箱に登録した(ユーザー承認。取引先・顧客・ISP のドメインは登録しない。本番はスクリプトで適用済み、migration は記録用)。
 
 **取込候補** (2026-09-14 追加, migration 82): 旧 Salesforce の「メール to リード」用アドレス
 (`MAIL_IMPORT_CANDIDATE_ADDRESSES`、`lib/domain/mail_types.ts`)を宛先(To/Cc)に含むメール(フォーム通知など)は、
