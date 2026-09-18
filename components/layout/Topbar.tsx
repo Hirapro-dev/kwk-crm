@@ -1,5 +1,5 @@
 import { getCurrentUser } from '@/lib/domain/auth';
-import { Bell, HelpCircle, Mail } from 'lucide-react';
+import { Bell, HelpCircle, ListChecks, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { AppLauncherButton } from './AppLauncherButton';
 import { HeaderSearch } from './HeaderSearch';
@@ -13,7 +13,7 @@ import type { TabItem } from './TabsNav';
  * 構成:
  *  - 左: アプリランチャー(9ドット・全メニュー) + アプリ名
  *  - 中央: 全体検索ボックス
- *  - 右: ヘルプ / メーラー(別タブ) / 設定(プルダウン) / 通知 / ユーザーアバター
+ *  - 右: ヘルプ / メーラー(別タブ) / タスク管理 / 設定(プルダウン) / 通知 / ユーザーアバター
  */
 export async function Topbar({ tabs }: { tabs: TabItem[] }) {
   const me = await getCurrentUser();
@@ -51,6 +51,7 @@ export async function Topbar({ tabs }: { tabs: TabItem[] }) {
                 <HelpCircle className="h-4 w-4" />
               </HeaderIconButton>
               <MailerLink />
+              <TaskLink />
               <SettingsMenu isAdmin={isAdmin} />
               <HeaderIconButton aria-label="通知">
                 <Bell className="h-4 w-4" />
@@ -60,6 +61,7 @@ export async function Topbar({ tabs }: { tabs: TabItem[] }) {
             <div className="flex items-center md:hidden">
               <MobileSearchToggleButton />
               <MailerLink />
+              <TaskLink />
               <SettingsMenu isAdmin={isAdmin} />
             </div>
             {/* ユーザーアバター (常時表示) */}
@@ -78,6 +80,20 @@ export async function Topbar({ tabs }: { tabs: TabItem[] }) {
         </div>
       </MobileSearchShell>
     </header>
+  );
+}
+
+/** タスク管理(/task。§5.20)へのアイコン。CRM 内の画面なので同じタブで開く(2026-09-18) */
+function TaskLink() {
+  return (
+    <Link
+      href="/task"
+      aria-label="タスク管理を開く"
+      title="タスク"
+      className="grid h-8 w-8 place-items-center rounded text-white/90 hover:bg-white/10 hover:text-white"
+    >
+      <ListChecks className="h-4 w-4" />
+    </Link>
   );
 }
 
