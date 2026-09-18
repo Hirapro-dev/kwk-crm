@@ -297,3 +297,42 @@ export async function getTask(id: number): Promise<TaskDetail | null> {
     attachments: (attachments.data ?? []) as unknown as TaskAttachment[],
   };
 }
+
+/** マイフォルダ(migration 110)。フォルダと、その中のプロジェクト ID(並び順) */
+export interface TaskUserFolder {
+  id: number;
+  name: string;
+  projectIds: number[];
+}
+
+/**
+ * 自分のマイフォルダ(migration 110)。フォルダは sort_order → id 順、フォルダ内のプロジェクトは sort_order 順。
+ * テーブル未適用なら空配列(画面を壊さない)。メーラーの listMyMailUserFolders と同じ形。
+ */
+export async function listMyTaskUserFolders(): Promise<TaskUserFolder[]> {
+  const supabase = await createClient();
+  const [{ data: folders, error: fErr }, { data: items, error: iErr }] = await Promise.all([
+    supabase
+      .from('task_user_folders')
+      .select('id, name, sort_order')
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true }),
+    supabase
+      .from('task_user_folder_items')
+      .select('folder_id, project_id, sort_order')
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true }),
+  ]);
+  if (fErr || iErr) return [];
+  const byFolder = new Map<number, number[]>();
+  for (const it of (items ?? []) as unknown as Array<{ folder_id: number; project_id: number }>) {
+    const list = byFolder.get(Number(it.folder_id)) ?? [];
+    list.push(Number(it.project_id));
+    byFolder.set(Number(it.folder_id), list);
+  }
+  return ((folders ?? []) as unknown as Array<{ id: number; name: string }>).map((f) => ({
+    id: Number(f.id),
+    name: f.name,
+    projectIds: byFolder.get(Number(f.id)) ?? [],
+  }));
+}

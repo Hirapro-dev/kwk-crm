@@ -679,6 +679,14 @@ Asana の基本構成(プロジェクト > セクション > タスク > サブ�
 - `task_attachments` — 添付。`id` bigserial PK / `task_id` FK → tasks / `filename` / `content_type` text / `size_bytes` bigint /
   `storage_path` text(Supabase Storage 非公開バケット `task-attachments`。閲覧は短期署名 URL。メール添付 §5.15 と同方式) /
   `uploaded_by` uuid nullable / `asana_gid` text unique nullable / `created_at`。
+- `task_user_folders` / `task_user_folder_items` — **マイフォルダ**(2026-09-18 追加, migration 110)。メーラーのマイフォルダ(§5.15 migration 92)と同じ作りで、
+  各ユーザーが名前を付けたフォルダにプロジェクトをドラッグ&ドロップで入れて整理する(プロジェクトが 58 件あるため)。`task_user_folders`(`id` /
+  `user_id` / `name` / `sort_order` / `created_at` / `updated_at`)、`task_user_folder_items`(`folder_id` / `project_id` FK → task_projects / `user_id` /
+  `sort_order` / `created_at`、主キー (folder_id, project_id))。1 つのプロジェクトを複数のフォルダに入れてもよい。RLS は自分の行のみ(管理者も他人の
+  フォルダは触らない)。左メニューの「マイフォルダ」区画で作成(+)・名前変更・削除、参加プロジェクトの行をフォルダにドロップで追加、フォルダ内の行に
+  ドロップで並び替え、別フォルダの行を落とすと移動、「×」で外す(独自 MIME `application/x-task-project`)。並びの計算はメーラーと同じ純粋関数
+  `moveBoxInList`、区画の組み立ては `taskUserFolderSections`(閲覧できないプロジェクトは出さない)。Server Action は `lib/domain/task_folder_actions.ts`。
+  テーブル未適用でも空扱いで画面は壊さない。
 - ID: タスクは連番(`bigserial`)で `/task/[id]`。K-/TA- のような接頭辞は付けない(Salesforce 併用の衝突が無いため)。
 - インデックス: `tasks(project_id, section_id, sort_order) WHERE deleted_at IS NULL` / `tasks(assignee_id, due_date) WHERE deleted_at IS NULL AND completed_at IS NULL`(マイタスク) /
   `tasks(member_id) WHERE deleted_at IS NULL` / `tasks(parent_task_id)` / `task_comments(task_id)` / `task_attachments(task_id)`。
@@ -1107,7 +1115,7 @@ Supabase RLSで以下を実装:
 | `/applications/[id]` | 申込詳細 | 全項目編集、ステータス遷移 |
 | `/activities` | 活動一覧(ログ中心) | **本システムの主役画面**。新規入力フォーム上部固定。CSV出力ボタンあり(`/activities/export`。画面の絞り込み条件をそのまま引き継ぎ、UTF-8 BOM付き。上限50,000件を超える場合は出力せず絞り込みを促す) |
 | `/projects` | 案件マスタ | admin のみ編集可 |
-| `/task` | タスク管理(ホーム) | タスク管理(§5.20)。**メーラーと同じく CRM 本体とは別画面**(`app/(tasks)` ルートグループ、独自ヘッダー。メニューバーには出さない: migration 103 で nav_items の `task` を削除)。ヘッダーのタスクアイコン(メールアイコンの右)とアプリランチャーの「タスク」から**別タブ**で開く。Asana 風に**左: メニュー(ホーム / マイタスク / 参加プロジェクトの一覧、＋で作成)/ 右: 一覧**(`TaskSidebar` / `TaskTopbar`)。ホームは挨拶・未完了/期限切れ/今日の件数・期日が近いマイタスク・参加プロジェクトのカード(2026-09-18) |
+| `/task` | タスク管理(ホーム) | タスク管理(§5.20)。**メーラーと同じく CRM 本体とは別画面**(`app/(tasks)` ルートグループ、独自ヘッダー。メニューバーには出さない: migration 103 で nav_items の `task` を削除)。ヘッダーのタスクアイコン(メールアイコンの右)とアプリランチャーの「タスク」から**別タブ**で開く。Asana 風に**左: メニュー(ホーム / マイタスク / **マイフォルダ**(§5.20 migration 110。プロジェクトをドラッグ&ドロップで整理)/ 参加プロジェクトの一覧、＋で作成)/ 右: 一覧**(`TaskSidebar` / `TaskTopbar`)。ホームは挨拶・未完了/期限切れ/今日の件数・期日が近いマイタスク・参加プロジェクトのカード(2026-09-18) |
 | `/task/my` | マイタスク | 自分が担当の未完了タスクを 期限切れ / 今日 / 今後 7 日 / それ以降 / 期日なし に分けて表示(純粋関数 `groupMyTasksByDue`)。行内で完了・期日変更。完了済みは切替で直近 200 件。**行のタスク名をクリックすると右側に詳細が開く分割ビュー**(`?task=<id>`。Asana と同じ。閉じる / 全画面(`/task/[id]`)。2026-09-18) |
 | `/task/projects` `/task/projects/[id]` | タスクのプロジェクト一覧 / リスト表示 | 閲覧できるプロジェクトだけ(公開 or メンバー)。リスト表示はセクションごとにタスクを並べ、行内で完了・担当・期日を変更、セクション間の移動、セクション・タスクの追加。設定(名前・色・公開範囲・メンバー・アーカイブ)は作成者と admin。**行のタスク名をクリックすると右側に詳細が開く分割ビュー**(`?task=<id>`。共通部品 `TaskDetailPane` が `/task/[id]` と同じ `TaskDetail` を埋め込みモードで描画。閉じる / 全画面。2026-09-18) |
 | `/task/[id]` | タスク詳細 | 名前・説明(複数行。**本文中の URL はリンク化して別タブで開く**(純粋関数 `splitLinks` / `LinkifiedText`)。編集は「編集」で切替。2026-09-18)・担当・開始日/期日・セクション・会員の紐付け・サブタスク・コメント(URL はリンク化)・添付(Storage `task-attachments`。キーは ASCII 化した名前 `storageSafeName`、元のファイル名は `filename` 列でダウンロード時に付ける)・完了 |

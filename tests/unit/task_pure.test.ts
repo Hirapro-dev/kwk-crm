@@ -7,6 +7,7 @@ import {
   sortMyTasks,
   splitLinks,
   storageSafeName,
+  taskUserFolderSections,
 } from '../../lib/domain/task_pure';
 
 /**
@@ -150,5 +151,23 @@ describe('storageSafeName', () => {
     expect(storageSafeName('report_v2-final.PDF')).toBe('report_v2-final.pdf');
     expect(storageSafeName('日本語')).toBe('file');
     expect(storageSafeName(`${'a'.repeat(200)}.png`).length).toBe(120);
+  });
+});
+
+describe('taskUserFolderSections', () => {
+  const projects = [
+    { id: 1, name: 'A' },
+    { id: 2, name: 'B' },
+    { id: 3, name: 'C' },
+  ];
+  it('フォルダごとに登録順のプロジェクトを返し、見えない ID と重複は除く', () => {
+    const out = taskUserFolderSections(projects, [
+      { id: 10, name: '営業', projectIds: [3, 1, 99, 3] },
+      { id: 11, name: '空', projectIds: [] },
+    ]);
+    expect(out).toEqual([
+      { id: 10, name: '営業', projects: [projects[2], projects[0]] },
+      { id: 11, name: '空', projects: [] },
+    ]);
   });
 });
