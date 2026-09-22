@@ -14,6 +14,33 @@ export interface UserOption {
   full_name: string | null;
 }
 
+/** スマホ向けの期日バッジ(Asana 風の色付きピル。編集は詳細で) */
+const BADGE_CLASS: Record<DueTone, string> = {
+  done: 'bg-slate-100 text-muted-foreground line-through',
+  overdue: 'bg-red-50 text-red-700',
+  today: 'bg-amber-50 text-amber-700',
+  soon: 'bg-amber-50 text-amber-700',
+  normal: 'bg-slate-100 text-foreground',
+  none: 'bg-transparent text-muted-foreground',
+};
+
+export function DueBadge({
+  dueDate,
+  completedAt,
+}: { dueDate: string | null; completedAt: string | null }) {
+  const tone = dueTone(dueDate, completedAt, todayJst());
+  if (!dueDate) return null;
+  // 今年なら「M月D日」、それ以外は「YYYY年M月D日」
+  const [y, m, d] = dueDate.split('-').map(Number);
+  const thisYear = Number(todayJst().slice(0, 4));
+  const label = y === thisYear ? `${m}月${d}日` : `${y}年${m}月${d}日`;
+  return (
+    <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${BADGE_CLASS[tone]}`}>
+      {label}
+    </span>
+  );
+}
+
 const TONE_CLASS: Record<DueTone, string> = {
   done: 'text-muted-foreground line-through',
   overdue: 'text-red-700 font-medium',

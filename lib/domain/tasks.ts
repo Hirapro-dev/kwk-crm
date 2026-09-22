@@ -336,3 +336,23 @@ export async function listMyTaskUserFolders(): Promise<TaskUserFolder[]> {
     projectIds: byFolder.get(Number(f.id)) ?? [],
   }));
 }
+
+/**
+ * タスク名の部分一致検索(検索ページ `/task/search`。2026-09-22)。閲覧できるプロジェクトのタスクだけ(RLS)。
+ * 未完了を先に、更新が新しい順。上限 50 件。
+ */
+export async function searchTasks(q: string, limit = 50): Promise<TaskRow[]> {
+  const term = q.trim().replace(/[%_,]/g, ' ').trim();
+  if (!term) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(TASK_COLS)
+    .ilike('name', `%${term}%`)
+    .is('deleted_at', null)
+    .order('completed_at', { ascending: true, nullsFirst: true })
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return attachCounts((data ?? []) as unknown as TaskRow[]);
+}
