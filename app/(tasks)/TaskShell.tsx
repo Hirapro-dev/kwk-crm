@@ -1,6 +1,7 @@
 'use client';
 
 import type { TaskUserFolderSection } from '@/lib/domain/task_pure';
+import { TASK_SW_SCOPE, TASK_SW_URL } from '@/lib/domain/task_push';
 import type { AppUser } from '@/lib/domain/types';
 import { cn } from '@/lib/utils/cn';
 import { usePathname } from 'next/navigation';
@@ -44,9 +45,23 @@ export function TaskShell({
       /* private mode など。既定のまま */
     }
   }, []);
-  // プッシュ通知用の Service Worker(migration 116)。登録だけ行い、購読は「通知の設定」で本人が行う
+  // プッシュ通知用の Service Worker(migration 116)。登録だけ行い、購読は「通知の設定」で本人が行う。
+  // 範囲(scope)はマニフェスト(/manifest-task.json)と同じ /task に揃える。iPhone のホーム画面アプリは
+  // マニフェストの範囲と Service Worker の範囲が食い違うと通知を表示しないことがあるため(2026-09-22)。
+  // 以前のサイト全体(/)の登録が残っていれば外す(その登録に付いていた購読は無効になるので、設定画面で登録し直す)
   useEffect(() => {
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+    if (!('serviceWorker' in navigator)) return;
+    (async () => {
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) {
+          if (new URL(r.scope).pathname === '/') await r.unregister();
+        }
+        await navigator.serviceWorker.register(TASK_SW_URL, { scope: TASK_SW_SCOPE });
+      } catch {
+        /* 非対応ブラウザなど。通知以外の機能には影響しない */
+      }
+    })();
   }, []);
   // 画面遷移したらスマホの重ねメニューは閉じる
   // biome-ignore lint/correctness/useExhaustiveDependencies: pathname の変化だけを見る

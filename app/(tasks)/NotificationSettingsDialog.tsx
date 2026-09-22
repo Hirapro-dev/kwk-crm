@@ -16,6 +16,7 @@ import {
   sendTestNotification,
   updateNotificationSettings,
 } from '@/lib/domain/notification_actions';
+import { TASK_SW_SCOPE, TASK_SW_URL } from '@/lib/domain/task_push';
 import { useEffect, useState, useTransition } from 'react';
 
 /**
@@ -65,7 +66,7 @@ export function NotificationSettingsDialog({
       setThisDevice('denied');
       return;
     }
-    const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+    const reg = await navigator.serviceWorker.getRegistration(TASK_SW_SCOPE);
     const sub = await reg?.pushManager.getSubscription();
     setThisDevice(sub ? 'on' : 'off');
   };
@@ -89,8 +90,8 @@ export function NotificationSettingsDialog({
         const perm = await Notification.requestPermission();
         if (perm !== 'granted') throw new Error('ブラウザで通知が許可されませんでした');
         const reg =
-          (await navigator.serviceWorker.getRegistration('/sw.js')) ??
-          (await navigator.serviceWorker.register('/sw.js'));
+          (await navigator.serviceWorker.getRegistration(TASK_SW_SCOPE)) ??
+          (await navigator.serviceWorker.register(TASK_SW_URL, { scope: TASK_SW_SCOPE }));
         await navigator.serviceWorker.ready;
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
@@ -117,7 +118,7 @@ export function NotificationSettingsDialog({
     setMessage(null);
     startTransition(async () => {
       try {
-        const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+        const reg = await navigator.serviceWorker.getRegistration(TASK_SW_SCOPE);
         const sub = await reg?.pushManager.getSubscription();
         if (sub) {
           await removePushSubscription(sub.endpoint);
