@@ -3,14 +3,14 @@
  *
  * メーラー(app/(mailer))と同じく CRM 本体の Topbar/TabsNav は出さず、Asana 風の
  * 「上: 黒ヘッダー / 左: メニュー(ホーム・マイタスク・マイフォルダ・参加プロジェクト) / 右: 一覧」構成にする。
+ * 左メニューの開閉(PC は畳む、スマホは重ねて開く)は TaskShell(client)が持つ(2026-09-22)。
  * ヘッダーのタスクアイコンとアプリランチャーから別タブで開く。認証は middleware + getCurrentUser で CRM 本体と同じ。
  */
 
 import { getCurrentUser } from '@/lib/domain/auth';
 import { taskUserFolderSections } from '@/lib/domain/task_pure';
 import { listMyTaskUserFolders, listTaskProjects } from '@/lib/domain/tasks';
-import { TaskSidebar } from './TaskSidebar';
-import { TaskTopbar } from './TaskTopbar';
+import { TaskShell } from './TaskShell';
 
 export default async function TasksLayout({ children }: { children: React.ReactNode }) {
   const [me, projects, userFolders] = await Promise.all([
@@ -27,16 +27,13 @@ export default async function TasksLayout({ children }: { children: React.ReactN
   // マイフォルダ(migration 110)。閲覧できるプロジェクトだけを載せる
   const folders = taskUserFolderSections(sidebarProjects, userFolders);
   return (
-    <div className="flex h-dvh flex-col bg-background">
-      <TaskTopbar me={me} />
-      <div className="flex min-h-0 flex-1">
-        <TaskSidebar
-          projects={sidebarProjects}
-          folders={folders}
-          canCreate={me.role !== 'viewer'}
-        />
-        <main className="min-w-0 flex-1 overflow-y-auto bg-[#f7f8fa] p-4">{children}</main>
-      </div>
-    </div>
+    <TaskShell
+      me={me}
+      projects={sidebarProjects}
+      folders={folders}
+      canCreate={me.role !== 'viewer'}
+    >
+      {children}
+    </TaskShell>
   );
 }

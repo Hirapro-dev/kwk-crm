@@ -197,7 +197,7 @@ export function TaskSidebar({ projects, folders, canCreate }: Props) {
   const isActive = (id: number) => pathname === `/task/projects/${id}`;
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r bg-[#eef0f3]">
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r bg-[#eef0f3] shadow-lg md:w-60 md:shadow-none">
       <nav className="space-y-0.5 p-2">
         {item('/task', 'ホーム', <Home className="h-4 w-4" />, true)}
         {item('/task/my', 'マイタスク', <CheckCircle2 className="h-4 w-4" />)}
