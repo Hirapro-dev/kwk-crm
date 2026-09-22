@@ -7,12 +7,14 @@
  */
 
 import { getCurrentUser } from '@/lib/domain/auth';
+import { buildTaskNotification } from '@/lib/domain/task_notifications';
 import {
   type MentionUser,
   extractMentionUserIds,
   nextSortOrder,
   storageSafeName,
 } from '@/lib/domain/task_pure';
+import { notifyUsers } from '@/lib/notify/task_notify';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
@@ -178,6 +180,42 @@ export async function deleteTaskProject(id: number): Promise<ActionResult> {
   return {};
 }
 
+/** 通知(割当 / メンション)を送る。失敗しても呼び出し元は止めない(migration 116) */
+async function notifyTask(
+  kind: 'assigned' | 'mentioned',
+  taskId: number,
+  userIds: readonly string[],
+  actorId: string,
+): Promise<void> {
+  const targets = userIds.filter((u) => u && u !== actorId);
+  if (targets.length === 0) return;
+  try {
+    const admin = createServiceRoleClient();
+    const [{ data: t }, { data: actor }] = await Promise.all([
+      admin
+        .from('tasks')
+        .select('id, name, project:task_projects!tasks_project_id_fkey(name)')
+        .eq('id', taskId)
+        .maybeSingle(),
+      admin.from('users').select('full_name').eq('id', actorId).maybeSingle(),
+    ]);
+    const task = t as { id: number; name: string; project: { name: string } | null } | null;
+    if (!task) return;
+    await notifyUsers(
+      targets,
+      buildTaskNotification(kind, {
+        taskId: task.id,
+        taskName: task.name,
+        actorName: (actor as { full_name: string | null } | null)?.full_name ?? null,
+        projectName: task.project?.name ?? null,
+      }),
+      actorId,
+    );
+  } catch {
+    /* 通知は付随機能 */
+  }
+}
+
 // ---------------- セクション ----------------
 
 export async function createTaskSection(
@@ -317,8 +355,10 @@ export async function createTask(
     .select('id')
     .single();
   if (error) return { error: `タスクの作成に失敗しました: ${error.message}` };
+  const newId = (data as { id: number }).id;
+  if (input.assignee_id) await notifyTask('assigned', newId, [input.assignee_id], me.id);
   revalidateTask(input.parent_task_id ?? undefined, projectId);
-  return { data: { id: (data as { id: number }).id } };
+  return { data: { id: newId } };
 }
 
 export async function updateTask(id: number, input: TaskInput): Promise<ActionResult> {
@@ -328,6 +368,16 @@ export async function updateTask(id: number, input: TaskInput): Promise<ActionRe
   if ('error' in v) return { error: v.error };
   if (Object.keys(v.patch).length === 0) return {};
   const supabase = await createClient();
+  // 担当が変わったら新しい担当に通知する(変更前の担当を先に見る)
+  let prevAssignee: string | null | undefined;
+  if (input.assignee_id !== undefined) {
+    const { data: before } = await supabase
+      .from('tasks')
+      .select('assignee_id')
+      .eq('id', id)
+      .maybeSingle();
+    prevAssignee = (before as { assignee_id: string | null } | null)?.assignee_id ?? null;
+  }
   const { data, error } = await supabase
     .from('tasks')
     .update(v.patch)
@@ -336,6 +386,8 @@ export async function updateTask(id: number, input: TaskInput): Promise<ActionRe
     .maybeSingle();
   if (error) return { error: `更新に失敗しました: ${error.message}` };
   if (!data) return { error: 'タスクが見つかりません(閲覧できないプロジェクトの可能性)' };
+  if (input.assignee_id && input.assignee_id !== prevAssignee)
+    await notifyTask('assigned', id, [input.assignee_id], me.id);
   revalidateTask(id, (data as { project_id: number }).project_id);
   revalidatePath('/members', 'layout');
   return {};
@@ -423,6 +475,7 @@ export async function addTaskComment(
           created_by: me.id,
         })),
       );
+      await notifyTask('mentioned', taskId, mentioned, me.id);
     }
   } catch {
     /* メンションの記録に失敗してもコメントは投稿済み */

@@ -1,9 +1,10 @@
 'use client';
 
 import { LogoutButton } from '@/components/layout/LogoutButton';
-import { ExternalLink, Settings as SettingsIcon, UserCircle2 } from 'lucide-react';
+import { Bell, ExternalLink, Settings as SettingsIcon, UserCircle2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { AvatarDialog } from './AvatarDialog';
+import { NotificationSettingsDialog } from './NotificationSettingsDialog';
 
 /** タスク管理のヘッダーの歯車メニュー(CRM の設定へ(admin)/ ログアウト)。メーラーの MailerSettingsMenu と同じ操作感 */
 export function TaskSettingsMenu({
@@ -16,6 +17,7 @@ export function TaskSettingsMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [notifyOpen, setNotifyOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -63,6 +65,18 @@ export function TaskSettingsMenu({
               プロフィール画像
             </button>
           )}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              setNotifyOpen(true);
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
+          >
+            <Bell className="h-3.5 w-3.5" />
+            通知の設定
+          </button>
           {isAdmin && (
             <>
               <a
@@ -85,6 +99,7 @@ export function TaskSettingsMenu({
           <LogoutButton variant="menu" />
         </div>
       )}
+      <NotificationSettingsDialog open={notifyOpen} onOpenChange={setNotifyOpen} />
       {profile && (
         <AvatarDialog
           open={avatarOpen}

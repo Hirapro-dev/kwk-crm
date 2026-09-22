@@ -10,7 +10,15 @@
 import { getCurrentUser } from '@/lib/domain/auth';
 import { taskUserFolderSections } from '@/lib/domain/task_pure';
 import { countMyUnreadMentions, listMyTaskUserFolders, listTaskProjects } from '@/lib/domain/tasks';
+import type { Metadata } from 'next';
 import { TaskShell } from './TaskShell';
+
+/** タスク管理は別の PWA として「ホーム画面に追加」できる(start_url /task。プッシュ通知は iPhone ではこの状態が必要) */
+export const metadata: Metadata = {
+  title: 'ひらプロタスク',
+  manifest: '/manifest-task.json',
+  appleWebApp: { capable: true, title: 'ひらプロタスク', statusBarStyle: 'black' },
+};
 
 export default async function TasksLayout({ children }: { children: React.ReactNode }) {
   const [me, projects, userFolders, unreadMentions] = await Promise.all([
