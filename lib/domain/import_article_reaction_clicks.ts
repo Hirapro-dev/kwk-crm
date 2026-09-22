@@ -16,7 +16,7 @@ import {
   type DedupedClick,
   dedupeClickRows,
 } from '@/lib/domain/article_reaction_clicks';
-import { parseCsv } from '@/lib/import/parse';
+import { parseCsvRaw } from '@/lib/import/parse';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from './auth';
@@ -65,7 +65,8 @@ function parseAndDedupe(
   const rawRows: Array<Record<string, string>> = [];
   try {
     for (const t of csvTexts) {
-      if (t && t.trim() !== '') rawRows.push(...parseCsv(t));
+      // 日時を整形せずそのまま読む(parseCsv は時刻を落とす)
+      if (t && t.trim() !== '') rawRows.push(...parseCsvRaw(t));
     }
   } catch (e) {
     return { ok: false, error: `CSV解析に失敗: ${e instanceof Error ? e.message : String(e)}` };

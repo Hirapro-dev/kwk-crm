@@ -42,6 +42,24 @@ export function parseCsv(csvText: string): Array<Record<string, string>> {
 }
 
 /**
+ * CSV 文字列を値を加工せずに {ヘッダー: 文字列} の配列にする。
+ * parseCsv(raw: false)は "2026-09-23 08:00:35" のような日時を "9/23/26" に整形して時刻を落とすため、
+ * 日時をそのまま読みたい取込(記事反応のクリック履歴 CSV。§5.13b)はこちらを使う。
+ */
+export function parseCsvRaw(csvText: string): Array<Record<string, string>> {
+  const wb = XLSX.read(csvText, { type: 'string', raw: true });
+  const first = wb.SheetNames[0];
+  if (!first) return [];
+  const ws = wb.Sheets[first];
+  if (!ws) return [];
+  return XLSX.utils
+    .sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: true })
+    .map((row) =>
+      Object.fromEntries(Object.entries(row).map(([k, v]) => [k, v == null ? '' : String(v)])),
+    );
+}
+
+/**
  * 生CSV行をオブジェクト定義に従って検証・マッピングする。
  * - CSV に存在する列のみ取込対象にする(存在しない列は触らない=既存値を保持)
  * - 主キーが空の行はエラー
