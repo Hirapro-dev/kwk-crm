@@ -1,5 +1,5 @@
 import type { AppUser } from '@/lib/domain/types';
-import { ExternalLink, ListChecks, Menu, X } from 'lucide-react';
+import { ExternalLink, ListChecks, Menu } from 'lucide-react';
 import Link from 'next/link';
 import { TaskSettingsMenu } from './TaskSettingsMenu';
 
@@ -10,13 +10,10 @@ import { TaskSettingsMenu } from './TaskSettingsMenu';
 export function TaskTopbar({
   me,
   onMenuClick,
-  menuOpen,
 }: {
   me: AppUser;
-  /** 左メニューの開閉(PC は畳む/出す、スマホは重ねて開く/閉じる) */
+  /** 左メニューを畳む/出す(PC。スマホは下タブの「メニュー」から) */
   onMenuClick?: () => void;
-  /** スマホで重ねメニューが開いているか(アイコンの切替用) */
-  menuOpen?: boolean;
 }) {
   const userInitial = (me.full_name ?? me.email).charAt(0).toUpperCase();
   return (
@@ -26,16 +23,11 @@ export function TaskTopbar({
           <button
             type="button"
             onClick={onMenuClick}
-            aria-label={menuOpen ? 'メニューを閉じる' : 'メニューを開く'}
+            aria-label="左メニューの表示/非表示"
             title="左メニューの表示/非表示"
-            className="grid h-8 w-8 place-items-center rounded text-white/90 hover:bg-white/10"
+            className="hidden h-8 w-8 place-items-center rounded text-white/90 hover:bg-white/10 md:grid"
           >
-            {menuOpen ? (
-              <X className="h-5 w-5 md:hidden" aria-hidden="true" />
-            ) : (
-              <Menu className="h-5 w-5 md:hidden" aria-hidden="true" />
-            )}
-            <Menu className="hidden h-5 w-5 md:block" aria-hidden="true" />
+            <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
         )}
         <div className="flex items-center gap-2">

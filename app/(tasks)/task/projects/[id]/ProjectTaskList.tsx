@@ -17,7 +17,13 @@ import { MessageSquare, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
-import { AssigneeCell, CompleteCheck, DueDateCell, type UserOption } from '../../TaskBits';
+import {
+  AssigneeCell,
+  CompleteCheck,
+  DueBadge,
+  DueDateCell,
+  type UserOption,
+} from '../../TaskBits';
 
 /**
  * プロジェクトのリスト表示(§5.20)。セクション見出しごとにタスク行を並べ、行内で 完了・担当・期日・セクション を変更する。
@@ -166,94 +172,104 @@ export function ProjectTaskList({
               {g.tasks.map((t) => (
                 <li
                   key={t.id}
-                  className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 hover:bg-accent/30 sm:flex-nowrap sm:px-4 ${selectedTask === String(t.id) ? 'bg-accent/50' : ''}`}
+                  className={`flex items-center gap-3 px-3 py-2.5 hover:bg-accent/30 sm:py-1.5 sm:px-4 ${selectedTask === String(t.id) ? 'bg-accent/50' : ''}`}
                 >
                   <CompleteCheck taskId={t.id} completed={!!t.completed_at} />
                   <Link
                     href={taskHref(t.id)}
                     scroll={false}
-                    className={`min-w-0 flex-1 basis-[calc(100%-2.5rem)] truncate text-sm sm:basis-auto ${t.completed_at ? 'text-muted-foreground line-through' : 'text-foreground hover:underline'}`}
+                    className={`min-w-0 flex-1 text-base sm:truncate sm:text-sm ${t.completed_at ? 'text-muted-foreground line-through' : 'text-foreground sm:hover:underline'}`}
                   >
-                    {t.name}
+                    <span className="block truncate">{t.name}</span>
+                    {/* スマホ: 2 行目に担当(と会員)。編集は詳細で */}
+                    <span className="block truncate text-xs text-muted-foreground sm:hidden">
+                      {t.assignee?.full_name ?? t.assignee_name_raw ?? '担当なし'}
+                      {t.member ? ` · ${t.member.name ?? t.member.id}` : ''}
+                    </span>
                   </Link>
-                  {(t.subtask_count ?? 0) > 0 && (
-                    <span className="shrink-0 text-[11px] text-muted-foreground">
-                      サブ {t.subtask_count}
-                    </span>
-                  )}
-                  {(t.comment_count ?? 0) > 0 && (
-                    <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px] text-muted-foreground">
-                      <MessageSquare className="h-3 w-3" /> {t.comment_count}
-                    </span>
-                  )}
-                  {t.member && (
-                    <a
-                      href={`/members/${t.member.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="sf-link shrink-0 text-xs"
-                    >
-                      {t.member.name ?? t.member.id}
-                    </a>
-                  )}
-                  {canEdit ? (
-                    <>
-                      <AssigneeCell
-                        taskId={t.id}
-                        assigneeId={t.assignee_id}
-                        assigneeNameRaw={t.assignee_name_raw}
-                        users={users}
-                      />
-                      <DueDateCell
-                        taskId={t.id}
-                        dueDate={t.due_date}
-                        completedAt={t.completed_at}
-                      />
-                      <Select
-                        value={t.section_id ?? ''}
-                        className="h-9 max-w-[200px] border-input bg-background px-1 text-base sm:h-7 sm:max-w-[140px] sm:border-transparent sm:bg-transparent sm:text-xs sm:hover:border-input"
-                        aria-label="セクション"
-                        disabled={pending}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          run(() => updateTask(t.id, { section_id: v ? Number(v) : null }));
+                  <span className="sm:hidden">
+                    <DueBadge dueDate={t.due_date} completedAt={t.completed_at} />
+                  </span>
+                  <div className="hidden items-center gap-3 sm:contents">
+                    {(t.subtask_count ?? 0) > 0 && (
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        サブ {t.subtask_count}
+                      </span>
+                    )}
+                    {(t.comment_count ?? 0) > 0 && (
+                      <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px] text-muted-foreground">
+                        <MessageSquare className="h-3 w-3" /> {t.comment_count}
+                      </span>
+                    )}
+                    {t.member && (
+                      <a
+                        href={`/members/${t.member.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="sf-link shrink-0 text-xs"
+                      >
+                        {t.member.name ?? t.member.id}
+                      </a>
+                    )}
+                    {canEdit ? (
+                      <>
+                        <AssigneeCell
+                          taskId={t.id}
+                          assigneeId={t.assignee_id}
+                          assigneeNameRaw={t.assignee_name_raw}
+                          users={users}
+                        />
+                        <DueDateCell
+                          taskId={t.id}
+                          dueDate={t.due_date}
+                          completedAt={t.completed_at}
+                        />
+                        <Select
+                          value={t.section_id ?? ''}
+                          className="h-9 max-w-[200px] border-input bg-background px-1 text-base sm:h-7 sm:max-w-[140px] sm:border-transparent sm:bg-transparent sm:text-xs sm:hover:border-input"
+                          aria-label="セクション"
+                          disabled={pending}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            run(() => updateTask(t.id, { section_id: v ? Number(v) : null }));
+                          }}
+                        >
+                          <option value="">(セクションなし)</option>
+                          {sections.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </>
+                    ) : (
+                      <>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {t.assignee?.full_name ?? t.assignee_name_raw ?? '-'}
+                        </span>
+                        <DueDateCell
+                          taskId={t.id}
+                          dueDate={t.due_date}
+                          completedAt={t.completed_at}
+                          editable={false}
+                        />
+                      </>
+                    )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                        title="タスクを削除"
+                        onClick={() => {
+                          if (!confirm(`「${t.name}」を削除しますか?(サブタスクも削除されます)`))
+                            return;
+                          run(() => deleteTask(t.id));
                         }}
                       >
-                        <option value="">(セクションなし)</option>
-                        {sections.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </Select>
-                    </>
-                  ) : (
-                    <>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {t.assignee?.full_name ?? t.assignee_name_raw ?? '-'}
-                      </span>
-                      <DueDateCell
-                        taskId={t.id}
-                        dueDate={t.due_date}
-                        completedAt={t.completed_at}
-                        editable={false}
-                      />
-                    </>
-                  )}
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
-                      title="タスクを削除"
-                      onClick={() => {
-                        if (!confirm(`「${t.name}」を削除しますか?(サブタスクも削除されます)`))
-                          return;
-                        run(() => deleteTask(t.id));
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))}
               {addingIn === (g.section?.id ?? 'none') && (

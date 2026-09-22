@@ -25,7 +25,7 @@ export default async function TaskHomePage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">
+        <h1 className="text-2xl font-semibold md:text-lg">
           {greeting}、{me.full_name ?? me.email} さん
         </h1>
         <p className="text-sm text-muted-foreground">

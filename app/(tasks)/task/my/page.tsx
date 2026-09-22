@@ -27,7 +27,7 @@ export default async function MyTasksPage({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-4">
-        <h1 className="text-lg font-semibold">マイタスク</h1>
+        <h1 className="text-2xl font-semibold md:text-lg">マイタスク</h1>
         <div className="flex items-center gap-3 text-sm">
           <Link
             href={`/task/my${selectedTaskId ? `?task=${selectedTaskId}` : ''}`}
