@@ -166,13 +166,13 @@ export function ProjectTaskList({
               {g.tasks.map((t) => (
                 <li
                   key={t.id}
-                  className={`flex items-center gap-3 px-4 py-1.5 hover:bg-accent/30 ${selectedTask === String(t.id) ? 'bg-accent/50' : ''}`}
+                  className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 hover:bg-accent/30 sm:flex-nowrap sm:px-4 ${selectedTask === String(t.id) ? 'bg-accent/50' : ''}`}
                 >
                   <CompleteCheck taskId={t.id} completed={!!t.completed_at} />
                   <Link
                     href={taskHref(t.id)}
                     scroll={false}
-                    className={`min-w-0 flex-1 truncate text-sm ${t.completed_at ? 'text-muted-foreground line-through' : 'text-foreground hover:underline'}`}
+                    className={`min-w-0 flex-1 basis-[calc(100%-2.5rem)] truncate text-sm sm:basis-auto ${t.completed_at ? 'text-muted-foreground line-through' : 'text-foreground hover:underline'}`}
                   >
                     {t.name}
                   </Link>

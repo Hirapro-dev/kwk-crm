@@ -1,17 +1,43 @@
 import type { AppUser } from '@/lib/domain/types';
-import { ExternalLink, ListChecks } from 'lucide-react';
+import { ExternalLink, ListChecks, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import { TaskSettingsMenu } from './TaskSettingsMenu';
 
 /**
  * タスク管理(/task)専用の黒ヘッダー(仕様書 §8.1)。メーラーの MailerTopbar と同じ構成。
- * 右の歯車からログアウト(全ロール)と CRM の設定(admin)。
+ * 右の歯車からログアウト(全ロール)と CRM の設定(admin)。左端のメニューボタンで左メニューを開閉(TaskShell)。
  */
-export function TaskTopbar({ me }: { me: AppUser }) {
+export function TaskTopbar({
+  me,
+  onMenuClick,
+  menuOpen,
+}: {
+  me: AppUser;
+  /** 左メニューの開閉(PC は畳む/出す、スマホは重ねて開く/閉じる) */
+  onMenuClick?: () => void;
+  /** スマホで重ねメニューが開いているか(アイコンの切替用) */
+  menuOpen?: boolean;
+}) {
   const userInitial = (me.full_name ?? me.email).charAt(0).toUpperCase();
   return (
     <header className="sf-header relative">
-      <div className="flex h-12 items-center gap-3 px-4">
+      <div className="flex h-12 items-center gap-3 px-3 sm:px-4">
+        {onMenuClick && (
+          <button
+            type="button"
+            onClick={onMenuClick}
+            aria-label={menuOpen ? 'メニューを閉じる' : 'メニューを開く'}
+            title="左メニューの表示/非表示"
+            className="grid h-8 w-8 place-items-center rounded text-white/90 hover:bg-white/10"
+          >
+            {menuOpen ? (
+              <X className="h-5 w-5 md:hidden" aria-hidden="true" />
+            ) : (
+              <Menu className="h-5 w-5 md:hidden" aria-hidden="true" />
+            )}
+            <Menu className="hidden h-5 w-5 md:block" aria-hidden="true" />
+          </button>
+        )}
         <div className="flex items-center gap-2">
           <ListChecks className="h-4 w-4 opacity-90" aria-hidden="true" />
           <Link href="/task" className="text-sm font-semibold tracking-tight">
