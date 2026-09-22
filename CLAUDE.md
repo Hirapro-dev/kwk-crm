@@ -704,7 +704,8 @@ Asana の基本構成(プロジェクト > セクション > タスク > サブ�
   endpoint 一意。失効 404/410 で削除)/ `user_notification_settings`(プッシュ / メールの ON/OFF。行が無ければ両方 ON)。RLS は自分の行のみ、
   送信時の参照はサービスロール。文面は純粋関数 `buildTaskNotification`(`lib/domain/task_notifications.ts`)、送信は `lib/notify/task_notify.ts`
   (`web-push` + SES `sendViaSes`。失敗しても本体の処理は止めない)。画面は歯車メニュー「通知の設定」(`NotificationSettingsDialog`: この端末で受け取る/解除、
-  プッシュ・メールの ON/OFF、テスト通知)。Service Worker は `public/sw.js`(`TaskShell` が登録。通知クリックでタスクを開く)。タスク管理は
+  プッシュ・メールの ON/OFF、テスト通知)。Service Worker は `public/sw.js`(`TaskShell` が **scope `/task`** で登録。通知クリックでタスクを開く。範囲はマニフェストの scope と必ず同じにする:
+  サイト全体 `/` で登録していたときは iPhone で購読も送信(Apple 側 201)も成功するのに通知が表示されなかった。定数 `lib/domain/task_push.ts`。2026-09-22)。タスク管理は
   別の PWA(`public/manifest-task.json`、start_url `/task`)として「ホーム画面に追加」でき、**iPhone はその状態でだけプッシュが届く**(Safari の制限)。
   環境変数は §13。
 - ID: タスクは連番(`bigserial`)で `/task/[id]`。K-/TA- のような接頭辞は付けない(Salesforce 併用の衝突が無いため)。
