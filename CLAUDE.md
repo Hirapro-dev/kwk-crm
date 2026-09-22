@@ -1340,7 +1340,7 @@ report_subscriptions:
 1. **ホワイトリスト方式**: レポートタイプごとに `allowed_columns` `allowed_joins` `allowed_filters` を TypeScript の定義で固定
 2. **パラメータ化クエリ**: 値はすべて Supabase クライアントのバインドパラメータで渡す
 3. **クエリタイムアウト**: 30秒。超えたら `statement_timeout` でキャンセル
-4. **結果上限**: デフォルト 10,000 行、Excel 出力時は 50,000 行まで
+4. **結果上限**: 画面表示は 10,000 行、CSV / Excel のダウンロードは 50,000 行まで(`MAX_EXCEL_ROW_LIMIT`。2026-09-22 まで CSV は画面と同じ 10,000 行だった。それ以上が必要なら分割取得 + ストリーミングの作り替えが要る)
 5. **EXPLAIN ANALYZE**: 開発時に必ず実行計画を確認
 
 #### 9.8.1 SQL 生成例(RT02 会員サマリ)

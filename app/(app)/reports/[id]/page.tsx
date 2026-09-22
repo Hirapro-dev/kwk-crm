@@ -7,9 +7,9 @@
  */
 
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
-import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
 import { ResizableSplit } from '@/components/layout/ResizableSplit';
 import { ScrollRestorer } from '@/components/layout/ScrollRestorer';
+import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
 import { ReportResultView } from '@/components/reports/ReportResultView';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -114,7 +114,7 @@ export default async function ReportRunPage({ params, searchParams }: PageProps)
             実行: {formatDateTime(new Date().toISOString())}
             {res.truncated && (
               <Badge variant="destructive" className="ml-2">
-                上限到達(Excel で取得を推奨)
+                上限到達(CSV / Excel なら 50,000 件まで)
               </Badge>
             )}
           </p>
