@@ -1,27 +1,29 @@
 'use client';
 
 import { cn } from '@/lib/utils/cn';
-import { CheckCircle2, Home, ListTodo, Menu, Search } from 'lucide-react';
+import { CheckCircle2, Home, Inbox, Menu, Search } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 /**
  * スマホ(md 未満)の下タブ(Asana のモバイルアプリ風。§8.1。2026-09-22)。
- * ホーム / マイタスク / プロジェクト / 検索 / メニュー(左メニューを重ねて開く: マイフォルダ・参加プロジェクト)。
+ * ホーム / マイタスク / 受信トレイ(未読バッジ) / 検索 / メニュー(左メニューを重ねて開く: マイフォルダ・参加プロジェクト)。
  */
 export function TaskMobileTabBar({
   onMenuClick,
   menuOpen,
+  unreadMentions = 0,
 }: {
   onMenuClick: () => void;
   menuOpen: boolean;
+  unreadMentions?: number;
 }) {
   const pathname = usePathname();
   const tabs = [
-    { href: '/task', label: 'ホーム', icon: Home, exact: true },
-    { href: '/task/my', label: 'マイタスク', icon: CheckCircle2, exact: false },
-    { href: '/task/projects', label: 'プロジェクト', icon: ListTodo, exact: false },
-    { href: '/task/search', label: '検索', icon: Search, exact: false },
+    { href: '/task', label: 'ホーム', icon: Home, exact: true, badge: 0 },
+    { href: '/task/my', label: 'マイタスク', icon: CheckCircle2, exact: false, badge: 0 },
+    { href: '/task/inbox', label: '受信トレイ', icon: Inbox, exact: false, badge: unreadMentions },
+    { href: '/task/search', label: '検索', icon: Search, exact: false, badge: 0 },
   ];
   return (
     <nav
@@ -40,7 +42,15 @@ export function TaskMobileTabBar({
               active ? 'text-foreground' : 'text-muted-foreground',
             )}
           >
-            <Icon className="h-5 w-5" strokeWidth={active ? 2.4 : 1.8} aria-hidden="true" />
+            <span className="relative">
+              <Icon className="h-5 w-5" strokeWidth={active ? 2.4 : 1.8} aria-hidden="true" />
+              {(t.badge ?? 0) > 0 && (
+                <span
+                  className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full bg-red-500"
+                  aria-label="未読あり"
+                />
+              )}
+            </span>
             {t.label}
           </Link>
         );

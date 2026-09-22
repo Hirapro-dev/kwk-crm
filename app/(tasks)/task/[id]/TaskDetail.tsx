@@ -15,6 +15,7 @@ import {
   deleteTaskAttachment,
   deleteTaskComment,
   getTaskAttachmentUrl,
+  markTaskMentionsRead,
   updateTask,
   uploadTaskAttachment,
 } from '@/lib/domain/task_actions';
@@ -23,9 +24,10 @@ import { formatDateTime } from '@/lib/utils/date';
 import { Maximize2, Paperclip, Pencil, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { LinkifiedText } from '../LinkifiedText';
 import { AssigneeCell, CompleteCheck, DueDateCell, type UserOption } from '../TaskBits';
+import { MentionTextarea } from './MentionTextarea';
 
 interface Props {
   task: TaskDetailData;
@@ -61,6 +63,14 @@ export function TaskDetail({
   const [memberQuery, setMemberQuery] = useState('');
   const [memberResults, setMemberResults] = useState<MemberBrief[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // 開いたら、このタスクの自分宛メンションを既読にする(受信トレイのバッジ用。migration 115)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: タスクが変わったときだけ
+  useEffect(() => {
+    markTaskMentionsRead(task.id).then((r) => {
+      if (!r.error) router.refresh();
+    });
+  }, [task.id]);
+  const mentionNames = users.map((u) => (u.full_name ?? '').trim()).filter(Boolean);
 
   const run = (fn: () => Promise<{ error?: string }>, after?: () => void) => {
     setError(null);
@@ -538,7 +548,11 @@ export function TaskDetail({
                   </button>
                 )}
               </div>
-              <LinkifiedText text={c.body} className="whitespace-pre-wrap" />
+              <LinkifiedText
+                text={c.body}
+                className="whitespace-pre-wrap"
+                mentionNames={mentionNames}
+              />
             </li>
           ))}
         </ul>
@@ -554,12 +568,13 @@ export function TaskDetail({
               );
             }}
           >
-            <Textarea
+            <MentionTextarea
               value={comment}
-              onChange={(e) => setComment(e.target.value)}
+              onChange={setComment}
+              users={users}
               rows={3}
-              placeholder="コメントを書く"
-              className="text-sm"
+              placeholder="コメントを書く(@氏名 で呼べます)"
+              disabled={pending}
             />
             <Button type="submit" size="sm" disabled={pending || !comment.trim()}>
               コメントする

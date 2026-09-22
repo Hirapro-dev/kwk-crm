@@ -199,3 +199,74 @@ export function taskUserFolderSections<P extends { id: number }>(
     return { id: f.id, name: f.name, projects: list };
   });
 }
+
+/** メンション候補(CRM ユーザー) */
+export interface MentionUser {
+  id: string;
+  full_name: string | null;
+}
+
+/** 氏名の比較用: 空白(半角・全角)を除く */
+function mentionKey(name: string): string {
+  return name.replace(/[\s　]+/g, '');
+}
+
+/**
+ * コメント本文の「@氏名」から呼ばれたユーザーを求める(2026-09-22)。
+ * 氏名は CRM ユーザーの full_name と、空白を除いて比較する(「@小脇拓哉」「@小脇 拓哉」のどちらでも一致)。
+ * 長い氏名から順に見て、一致した部分は消してから次を見る(「@山田太」が「@山田太郎」の一部として重複一致しないように)。
+ * 同じ人が複数回呼ばれても 1 回。本人(author)は除く。
+ */
+export function extractMentionUserIds(
+  body: string,
+  users: readonly MentionUser[],
+  authorId?: string | null,
+): string[] {
+  let rest = body.replace(/[\s　]+/g, '');
+  const sorted = users
+    .filter((u) => (u.full_name ?? '').trim())
+    .map((u) => ({ id: u.id, key: mentionKey(u.full_name ?? '') }))
+    .sort((a, b) => b.key.length - a.key.length);
+  const out: string[] = [];
+  for (const u of sorted) {
+    const token = `@${u.key}`;
+    if (!rest.includes(token)) continue;
+    rest = rest.split(token).join('');
+    if (u.id !== authorId && !out.includes(u.id)) out.push(u.id);
+  }
+  return out;
+}
+
+/** 本文の断片(URL / メンション / それ以外) */
+export type RichSegment = { kind: 'text' | 'link' | 'mention'; value: string };
+
+/**
+ * 本文を URL と「@氏名」とそれ以外に分ける(表示側でリンク・バッジにする)。
+ * 氏名は与えた一覧(表示名そのまま)に含まれるものだけをメンションとして扱う。長い氏名を優先。
+ */
+export function splitLinksAndMentions(text: string, names: readonly string[]): RichSegment[] {
+  const sorted = [...new Set(names.filter((n) => n.trim()))].sort((a, b) => b.length - a.length);
+  const out: RichSegment[] = [];
+  for (const seg of splitLinks(text)) {
+    if (seg.kind === 'link' || sorted.length === 0) {
+      out.push(seg);
+      continue;
+    }
+    let rest = seg.value;
+    while (rest.length > 0) {
+      let best: { idx: number; name: string } | null = null;
+      for (const n of sorted) {
+        const idx = rest.indexOf(`@${n}`);
+        if (idx >= 0 && (best === null || idx < best.idx)) best = { idx, name: n };
+      }
+      if (!best) {
+        out.push({ kind: 'text', value: rest });
+        break;
+      }
+      if (best.idx > 0) out.push({ kind: 'text', value: rest.slice(0, best.idx) });
+      out.push({ kind: 'mention', value: `@${best.name}` });
+      rest = rest.slice(best.idx + best.name.length + 1);
+    }
+  }
+  return out;
+}

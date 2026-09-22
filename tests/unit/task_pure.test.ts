@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   dueTone,
+  extractMentionUserIds,
   groupMyTasksByDue,
   groupTasksBySection,
   nextSortOrder,
   sortMyTasks,
   splitLinks,
+  splitLinksAndMentions,
   storageSafeName,
   taskUserFolderSections,
 } from '../../lib/domain/task_pure';
@@ -168,6 +170,31 @@ describe('taskUserFolderSections', () => {
     expect(out).toEqual([
       { id: 10, name: '営業', projects: [projects[2], projects[0]] },
       { id: 11, name: '空', projects: [] },
+    ]);
+  });
+});
+
+describe('extractMentionUserIds / splitLinksAndMentions', () => {
+  const users = [
+    { id: 'u1', full_name: '山田 太郎' },
+    { id: 'u2', full_name: '山田 太' },
+    { id: 'u3', full_name: null },
+  ];
+  it('「@氏名」を空白の有無に関わらず一致させ、長い氏名を優先し、本人と重複は除く', () => {
+    expect(extractMentionUserIds('@山田太郎 さん お願いします @山田 太郎', users)).toEqual(['u1']);
+    expect(extractMentionUserIds('@山田 太 さん', users)).toEqual(['u2']);
+    expect(extractMentionUserIds('@山田 太郎 と @山田太', users)).toEqual(['u1', 'u2']);
+    expect(extractMentionUserIds('@山田 太郎', users, 'u1')).toEqual([]);
+    expect(extractMentionUserIds('メンションなし', users)).toEqual([]);
+  });
+  it('本文を URL・メンション・それ以外に分ける', () => {
+    expect(
+      splitLinksAndMentions('@山田 太郎 確認 https://example.com/a を', ['山田 太郎', '山田 太']),
+    ).toEqual([
+      { kind: 'mention', value: '@山田 太郎' },
+      { kind: 'text', value: ' 確認 ' },
+      { kind: 'link', value: 'https://example.com/a' },
+      { kind: 'text', value: ' を' },
     ]);
   });
 });

@@ -7,7 +7,12 @@
  */
 
 import { getCurrentUser } from '@/lib/domain/auth';
-import { nextSortOrder, storageSafeName } from '@/lib/domain/task_pure';
+import {
+  type MentionUser,
+  extractMentionUserIds,
+  nextSortOrder,
+  storageSafeName,
+} from '@/lib/domain/task_pure';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
@@ -398,8 +403,48 @@ export async function addTaskComment(
     .select('id')
     .single();
   if (error) return { error: `コメントの投稿に失敗しました: ${error.message}` };
+  const commentId = (data as { id: number }).id;
+
+  // メンション(@氏名)。呼ばれた人の行はサービスロールで作る(migration 115)。失敗してもコメント自体は残す
+  try {
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, full_name')
+      .is('deleted_at', null)
+      .eq('is_active', true);
+    const mentioned = extractMentionUserIds(b, (users ?? []) as MentionUser[], me.id);
+    if (mentioned.length > 0) {
+      const admin = createServiceRoleClient();
+      await admin.from('task_mentions').insert(
+        mentioned.map((user_id) => ({
+          comment_id: commentId,
+          task_id: taskId,
+          user_id,
+          created_by: me.id,
+        })),
+      );
+    }
+  } catch {
+    /* メンションの記録に失敗してもコメントは投稿済み */
+  }
   revalidatePath(`/task/${taskId}`);
-  return { data: { id: (data as { id: number }).id } };
+  revalidatePath('/task', 'layout');
+  return { data: { id: commentId } };
+}
+
+/** このタスクの自分宛メンションを既読にする(タスク詳細を開いたとき)。RLS で自分の行だけ */
+export async function markTaskMentionsRead(taskId: number): Promise<ActionResult> {
+  await getCurrentUser();
+  if (!Number.isInteger(taskId) || taskId <= 0) return { error: 'タスクが不正です' };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('task_mentions')
+    .update({ read_at: new Date().toISOString() })
+    .eq('task_id', taskId)
+    .is('read_at', null);
+  if (error) return { error: error.message };
+  revalidatePath('/task', 'layout');
+  return {};
 }
 
 export async function deleteTaskComment(id: number, taskId: number): Promise<ActionResult> {

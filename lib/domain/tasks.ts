@@ -356,3 +356,47 @@ export async function searchTasks(q: string, limit = 50): Promise<TaskRow[]> {
   if (error) return [];
   return attachCounts((data ?? []) as unknown as TaskRow[]);
 }
+
+/** 受信トレイの 1 行(自分宛のメンション。migration 115) */
+export interface TaskMentionRow {
+  id: number;
+  task_id: number;
+  comment_id: number;
+  read_at: string | null;
+  created_at: string;
+  task: {
+    id: number;
+    name: string;
+    project: { id: number; name: string; color: string | null } | null;
+  } | null;
+  comment: { id: number; body: string } | null;
+  author: { id: string; full_name: string | null; avatar_path: string | null } | null;
+}
+
+/** 自分宛のメンション(受信トレイ)。新しい順。RLS で自分の行だけ */
+export async function listMyMentions(limit = 200): Promise<TaskMentionRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('task_mentions')
+    .select(
+      `id, task_id, comment_id, read_at, created_at,
+       task:tasks!task_mentions_task_id_fkey(id, name, project:task_projects!tasks_project_id_fkey(id, name, color)),
+       comment:task_comments!task_mentions_comment_id_fkey(id, body),
+       author:users!task_mentions_created_by_fkey(id, full_name, avatar_path)`,
+    )
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return (data ?? []) as unknown as TaskMentionRow[];
+}
+
+/** 自分宛の未読メンション数(左メニュー・下タブのバッジ)。テーブル未適用なら 0 */
+export async function countMyUnreadMentions(): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from('task_mentions')
+    .select('id', { count: 'exact', head: true })
+    .is('read_at', null);
+  if (error) return 0;
+  return count ?? 0;
+}
