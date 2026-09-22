@@ -68,7 +68,8 @@ export const config = {
      * - _next/static (静的ファイル)
      * - _next/image (画像最適化)
      * - favicon.ico, png/jpg/svg などの画像
+     * - PWA のマニフェストと Service Worker(ブラウザが Cookie 無しで取りに来るため、ログインへ転送しない。2026-09-22)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.json|manifest-task\\.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
