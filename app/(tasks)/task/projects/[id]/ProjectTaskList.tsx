@@ -211,7 +211,7 @@ export function ProjectTaskList({
                       />
                       <Select
                         value={t.section_id ?? ''}
-                        className="h-7 max-w-[140px] border-transparent bg-transparent px-1 text-xs hover:border-input"
+                        className="h-9 max-w-[200px] border-input bg-background px-1 text-base sm:h-7 sm:max-w-[140px] sm:border-transparent sm:bg-transparent sm:text-xs sm:hover:border-input"
                         aria-label="セクション"
                         disabled={pending}
                         onChange={(e) => {

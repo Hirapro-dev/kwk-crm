@@ -89,7 +89,7 @@ export function DueDateCell({
           else router.refresh();
         });
       }}
-      className={`h-7 rounded border border-transparent bg-transparent px-1 text-xs hover:border-input focus:border-input focus:outline-none ${TONE_CLASS[tone]}`}
+      className={`h-9 rounded border border-input bg-background px-1 text-base sm:h-7 sm:border-transparent sm:bg-transparent sm:text-xs sm:hover:border-input focus:border-input focus:outline-none ${TONE_CLASS[tone]}`}
       aria-label="期日"
     />
   );
@@ -123,7 +123,7 @@ export function AssigneeCell({
           else router.refresh();
         });
       }}
-      className="h-7 max-w-[160px] border-transparent bg-transparent px-1 text-xs hover:border-input"
+      className="h-9 max-w-[200px] border-input bg-background px-1 text-base sm:h-7 sm:max-w-[160px] sm:border-transparent sm:bg-transparent sm:text-xs sm:hover:border-input"
       aria-label="担当"
     >
       <option value="">{assigneeNameRaw ? `${assigneeNameRaw}(未登録)` : '担当なし'}</option>
