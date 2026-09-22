@@ -5,6 +5,7 @@
  * 他オブジェクト(会員等)と同じ InfiniteTable を使い、下端到達で次ページを追記する。
  * 一覧カラムはオブジェクト管理(field_definitions)の設定に従う。
  * 会員ID / 会員氏名 は会員が紐付く行のみ会員詳細へのリンクにする。
+ * 左端のチェックで選んだ行に「会員を検索(メール一致)」(viewer 以外)と削除(admin)ができる(§5.13b)。
  */
 
 import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTable';
@@ -16,17 +17,27 @@ import { loadMoreArticleReactions } from '@/lib/domain/list_more_actions';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import { formatFieldValue, getFieldValue } from '@/lib/utils/format_field';
 import Link from 'next/link';
+import { ArticleReactionBulkActions } from './ArticleReactionBulkActions';
 
 interface Props {
   initialRows: ArticleReactionRow[];
   fields: FieldDefinition[];
   total: number;
   params: { q?: string; sort?: string; dir?: 'asc' | 'desc' };
-  /** 左端の選択チェックボックス・削除ボタンを出すか (admin のみ) */
+  /** 削除ボタンを出すか (admin のみ) */
   canDelete?: boolean;
+  /** 左端の選択チェックボックスと「会員を検索」を出すか (viewer 以外) */
+  canMatch?: boolean;
 }
 
-export function ArticleReactionsInfinite({ initialRows, fields, total, params, canDelete }: Props) {
+export function ArticleReactionsInfinite({
+  initialRows,
+  fields,
+  total,
+  params,
+  canDelete,
+  canMatch,
+}: Props) {
   if (fields.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -78,12 +89,13 @@ export function ArticleReactionsInfinite({ initialRows, fields, total, params, c
       getKey={(r) => r.id}
       emptyMessage="該当する記事反応がありません"
       selection={
-        canDelete
+        canMatch || canDelete
           ? {
               getId: (r) => r.id,
-              getLabel: (r) => r.member_name ?? r.id,
+              getLabel: (r) => r.member_name ?? r.email ?? r.id,
               objectLabel: '記事反応',
-              onDelete: (ids) => deleteRecords('article_reactions', ids),
+              onDelete: canDelete ? (ids) => deleteRecords('article_reactions', ids) : undefined,
+              actions: canMatch ? (ctx) => <ArticleReactionBulkActions ctx={ctx} /> : undefined,
             }
           : undefined
       }
