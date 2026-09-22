@@ -3,9 +3,9 @@
  */
 'use client';
 
-import * as React from 'react';
-import { X } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
+import { X } from 'lucide-react';
+import * as React from 'react';
 
 interface DialogProps {
   open: boolean;
@@ -49,7 +49,8 @@ export function DialogContent({ className, children, onClose }: DialogContentPro
       role="dialog"
       aria-modal="true"
       className={cn(
-        'relative z-10 w-full max-h-[90vh] overflow-y-auto rounded-lg border bg-background p-6 shadow-xl',
+        // text-foreground: 黒ヘッダー(文字色 白)の中から開いたダイアログが白文字にならないよう、文字色を明示する(2026-09-22)
+        'relative z-10 w-full max-h-[90vh] overflow-y-auto rounded-lg border bg-background p-6 text-foreground shadow-xl',
         className,
       )}
       onClick={(e) => e.stopPropagation()}
@@ -69,14 +70,23 @@ export function DialogContent({ className, children, onClose }: DialogContentPro
   );
 }
 
-export function DialogHeader({ className, children }: { className?: string; children: React.ReactNode }) {
+export function DialogHeader({
+  className,
+  children,
+}: { className?: string; children: React.ReactNode }) {
   return <div className={cn('mb-4', className)}>{children}</div>;
 }
 
-export function DialogTitle({ className, children }: { className?: string; children: React.ReactNode }) {
+export function DialogTitle({
+  className,
+  children,
+}: { className?: string; children: React.ReactNode }) {
   return <h2 className={cn('text-lg font-semibold', className)}>{children}</h2>;
 }
 
-export function DialogFooter({ className, children }: { className?: string; children: React.ReactNode }) {
+export function DialogFooter({
+  className,
+  children,
+}: { className?: string; children: React.ReactNode }) {
   return <div className={cn('mt-6 flex justify-end gap-2', className)}>{children}</div>;
 }
