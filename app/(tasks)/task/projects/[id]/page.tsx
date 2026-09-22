@@ -48,7 +48,10 @@ export default async function TaskProjectPage({
         ← プロジェクト一覧へ
       </Link>
       <div className="flex items-start gap-3">
-        <Card className="min-w-0 flex-1 overflow-hidden p-0 shadow-sm">
+        {/* スマホ(md 未満)ではタスクを選ぶと一覧の代わりに詳細を全幅で出す(「閉じる」で一覧へ戻る) */}
+        <Card
+          className={`min-w-0 flex-1 overflow-hidden p-0 shadow-sm ${selectedTaskId !== null ? 'hidden md:block' : ''}`}
+        >
           <PanelHeader
             iconLabel="TSK"
             iconColor={project.color ?? '#f97316'}
@@ -112,7 +115,7 @@ export default async function TaskProjectPage({
         </Card>
         {selectedTaskId !== null && (
           // 右側の詳細。一覧とは別にスクロールする(main がスクロール領域なので sticky が効く)
-          <aside className="sticky top-0 hidden max-h-[calc(100dvh-5.5rem)] w-[46%] min-w-[420px] shrink-0 overflow-y-auto md:block">
+          <aside className="w-full min-w-0 md:sticky md:top-0 md:max-h-[calc(100dvh-5.5rem)] md:w-[46%] md:min-w-[420px] md:shrink-0 md:overflow-y-auto">
             <TaskDetailPane taskId={selectedTaskId} closeHref={listHref} />
           </aside>
         )}
