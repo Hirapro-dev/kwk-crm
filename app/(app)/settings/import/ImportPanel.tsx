@@ -7,6 +7,9 @@
  * 2. テンプレCSVダウンロード(ヘッダーのみ、クライアント生成)
  * 3. CSV選択 → プレビュー(ドライラン: 新規/更新/エラー件数 + サンプル)
  * 4. 「この内容で取込」で確定(upsert)
+ *
+ * 記事反応リスト(クリック履歴CSV)だけは、取込前に 備考(記事名) と 配信媒体 を画面で指定する(§5.13b)。
+ * CSV は UTF-8 として読めなければ Shift_JIS として読む(配信ツールの書き出しが Shift_JIS のため)。
  */
 
 import { Button } from '@/components/ui/button';
@@ -23,7 +26,26 @@ import { Download, FileUp, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
-export function ImportPanel() {
+interface Props {
+  /** 記事反応(クリック履歴CSV)の配信媒体の候補(既存の値) */
+  mediaOptions?: string[];
+}
+
+/** クリック履歴 CSV の取込(備考・媒体を画面で指定する)か */
+const CLICKS_KEY = 'article_reaction_clicks';
+const MEDIA_OTHER = '__other__';
+
+/** UTF-8 として読めなければ Shift_JIS として読む(BOM は TextDecoder が外す) */
+async function readCsvFile(f: File): Promise<string> {
+  const buf = await f.arrayBuffer();
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    return new TextDecoder('shift_jis').decode(buf);
+  }
+}
+
+export function ImportPanel({ mediaOptions = [] }: Props) {
   const router = useRouter();
   const [objectKey, setObjectKey] = useState(IMPORT_OBJECT_KEYS[0] ?? 'members');
   const [updateOnly, setUpdateOnly] = useState(false);
@@ -33,8 +55,18 @@ export function ImportPanel() {
   const [committed, setCommitted] = useState<CommitResult | null>(null);
   const [busy, startBusy] = useTransition();
   const [stage, setStage] = useState<'idle' | 'previewing' | 'committing'>('idle');
+  // 記事反応(クリック履歴CSV)の取込オプション
+  const [remarks, setRemarks] = useState('');
+  const [mediaChoice, setMediaChoice] = useState<string>(mediaOptions[0] ?? MEDIA_OTHER);
+  const [mediaOther, setMediaOther] = useState('');
 
   const def = IMPORT_OBJECTS[objectKey]!;
+  const isClicks = objectKey === CLICKS_KEY;
+  const mediaValue = mediaChoice === MEDIA_OTHER ? mediaOther.trim() : mediaChoice;
+  const clickOptions = isClicks
+    ? { clicks: { remarks: remarks.trim(), media: mediaValue } }
+    : undefined;
+  const clicksReady = !isClicks || remarks.trim() !== '';
 
   const resetResults = () => {
     setPreview(null);
@@ -68,7 +100,7 @@ export function ImportPanel() {
       setCsvText(null);
       return;
     }
-    setCsvText(await f.text());
+    setCsvText(await readCsvFile(f));
   };
 
   // Server Action のボディ上限(25MB)に対する安全マージン。これを超える大量データは
@@ -92,7 +124,7 @@ export function ImportPanel() {
     setStage('previewing');
     startBusy(async () => {
       try {
-        const res = await previewImport(objectKey, csvText, updateOnly);
+        const res = await previewImport(objectKey, csvText, updateOnly, clickOptions);
         setPreview(
           res ?? {
             ok: false,
@@ -120,7 +152,7 @@ export function ImportPanel() {
     setStage('committing');
     startBusy(async () => {
       try {
-        const res = await commitImport(objectKey, csvText, updateOnly);
+        const res = await commitImport(objectKey, csvText, updateOnly, clickOptions);
         setCommitted(
           res ?? {
             ok: false,
@@ -178,6 +210,72 @@ export function ImportPanel() {
           <CardTitle className="text-sm">2. CSVをアップロードしてプレビュー</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 p-4">
+          {isClicks && (
+            <div className="flex flex-wrap items-end gap-3 rounded border border-input bg-gray-50 p-3">
+              <div className="space-y-1">
+                <label className="text-[11px] text-muted-foreground" htmlFor="imp-remarks">
+                  備考(記事名) <span className="text-destructive">*</span>
+                </label>
+                <input
+                  id="imp-remarks"
+                  type="text"
+                  value={remarks}
+                  onChange={(e) => {
+                    setRemarks(e.target.value);
+                    resetResults();
+                  }}
+                  placeholder="例: ＊再送【超短期決着！】…"
+                  className="h-8 w-96 rounded border border-input bg-white px-2 text-sm"
+                  maxLength={200}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] text-muted-foreground" htmlFor="imp-media">
+                  配信媒体
+                </label>
+                <Select
+                  id="imp-media"
+                  value={mediaChoice}
+                  onChange={(e) => {
+                    setMediaChoice(e.target.value);
+                    resetResults();
+                  }}
+                  className="h-8 w-48 text-sm"
+                >
+                  {mediaOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  <option value={MEDIA_OTHER}>直接入力 / なし</option>
+                </Select>
+              </div>
+              {mediaChoice === MEDIA_OTHER && (
+                <div className="space-y-1">
+                  <label className="text-[11px] text-muted-foreground" htmlFor="imp-media-other">
+                    配信媒体(直接入力。空なら入れない)
+                  </label>
+                  <input
+                    id="imp-media-other"
+                    type="text"
+                    value={mediaOther}
+                    onChange={(e) => {
+                      setMediaOther(e.target.value);
+                      resetResults();
+                    }}
+                    className="h-8 w-56 rounded border border-input bg-white px-2 text-sm"
+                    maxLength={100}
+                  />
+                </div>
+              )}
+              <p className="w-full text-[11px] text-muted-foreground">
+                取り込んだ行の「備考」に記事名、「配信媒体」に選んだ値が入ります。同じメールアドレスは
+                1
+                件にまとめ、同じ備考で登録済みのメールは作りません。会員との紐付けは取込後に記事反応リストで行います。
+              </p>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-3">
             <input
               type="file"
@@ -185,7 +283,7 @@ export function ImportPanel() {
               onChange={(e) => void onFileChange(e.target.files?.[0] ?? null)}
               className="text-sm file:mr-3 file:rounded file:border file:border-input file:bg-card file:px-3 file:py-1.5 file:text-sm"
             />
-            <Button size="sm" onClick={runPreview} disabled={!csvText || busy}>
+            <Button size="sm" onClick={runPreview} disabled={!csvText || busy || !clicksReady}>
               {stage === 'previewing' ? (
                 <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
               ) : (
@@ -196,17 +294,19 @@ export function ImportPanel() {
             {file && <span className="text-xs text-muted-foreground">{file.name}</span>}
           </div>
 
-          <label className="flex items-center gap-1.5 text-xs">
-            <input
-              type="checkbox"
-              checked={updateOnly}
-              onChange={(e) => {
-                setUpdateOnly(e.target.checked);
-                resetResults();
-              }}
-            />
-            更新のみ（既存IDの更新だけ・新規レコードは作成しない）
-          </label>
+          {!isClicks && (
+            <label className="flex items-center gap-1.5 text-xs">
+              <input
+                type="checkbox"
+                checked={updateOnly}
+                onChange={(e) => {
+                  setUpdateOnly(e.target.checked);
+                  resetResults();
+                }}
+              />
+              更新のみ（既存IDの更新だけ・新規レコードは作成しない）
+            </label>
+          )}
 
           <p className="rounded bg-gray-100 p-2 text-xs text-muted-foreground">
             ※ Web取込は約18MB(目安: 数万件)まで。対応歴など大量データの初期移行は

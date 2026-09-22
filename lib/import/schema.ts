@@ -177,6 +177,23 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
     ],
   },
 
+  // 記事反応リスト(クリック履歴 CSV)は専用ハンドラ(lib/domain/import_article_reaction_clicks.ts)で取込む。
+  // 配信ツールの書き出し(クリック日時 / 読者メールアドレス / 読者名前)を 1 人 1 件にまとめ、
+  // 取込時に画面で指定した備考(記事名)と配信媒体を入れる(CLAUDE.md §5.13b。migration 117)。
+  // ID は DB の gen_article_reaction_id() で採番。定期取込(Drive)の対象外(備考・媒体を画面で指定するため)。
+  article_reaction_clicks: {
+    object: 'article_reactions',
+    table: 'article_reactions',
+    label: '記事反応リスト(クリック履歴CSV)',
+    idField: 'id',
+    note: '配信ツールの「クリック履歴」CSV(Shift_JIS 可)をそのまま使えます。同じメールアドレスは 1 件にまとめ(登録日時はいちばん早いクリック)、取込時に指定した備考(記事名)と配信媒体を入れます。同じメール + 同じ備考が既にあれば作りません。会員との紐付けは取込後に一覧のチェックボックスから「会員を検索」で行います。',
+    fields: [
+      { field: 'registered_at', label: 'クリック日時', type: 'datetime', required: true },
+      { field: 'email', label: '読者メールアドレス', type: 'text', required: true },
+      { field: 'member_name', label: '読者名前', type: 'text' },
+    ],
+  },
+
   // 出金管理-親/子は専用ハンドラ(lib/domain/import_withdrawals.ts)で取込む。
   // ID(SO-/SC-)で突合。会員ID(K-)・償還-親No は実在チェックして紐付け(無ければ null)。
   // ここの fields はテンプレCSVのヘッダー生成にのみ使用(実CSVの日本語ヘッダーに一致)。
@@ -242,7 +259,7 @@ export const IMPORT_OBJECT_KEYS = Object.keys(IMPORT_OBJECTS);
 
 /**
  * 定期取込(Drive 連携 #1)の対象キー。
- * 対応歴(activities)・従業員(users)は定期取込の対象外(突発アップロードのみ)。
+ * 対応歴(activities)・従業員(users)・記事反応(クリック履歴CSV)は定期取込の対象外(突発アップロードのみ)。
  */
-const ROUTINE_EXCLUDED = new Set(['activities', 'users']);
+const ROUTINE_EXCLUDED = new Set(['activities', 'users', 'article_reaction_clicks']);
 export const ROUTINE_OBJECT_KEYS = IMPORT_OBJECT_KEYS.filter((k) => !ROUTINE_EXCLUDED.has(k));

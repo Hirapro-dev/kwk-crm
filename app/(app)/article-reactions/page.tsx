@@ -63,14 +63,14 @@ export default async function ArticleReactionsPage({ searchParams }: PageProps) 
           </div>
         </div>
 
-        {/* 検索帯(会員ID / 会員氏名 / 反応ID / 詳細 を部分一致) */}
+        {/* 検索帯(会員ID / 会員氏名 / メールアドレス / 反応ID / 詳細 / 備考 を部分一致) */}
         <div className="border-b px-4 py-2" style={{ backgroundColor: '#f9f9f9' }}>
           <form method="get" className="flex items-center gap-2">
             <input
               type="text"
               name="q"
               defaultValue={sp.q ?? ''}
-              placeholder="会員ID・会員氏名・反応ID・詳細で検索"
+              placeholder="会員ID・会員氏名・メールアドレス・反応ID・詳細・備考で検索"
               className="h-8 w-72 rounded border border-input bg-white px-2 text-sm"
             />
             <button
@@ -95,6 +95,7 @@ export default async function ArticleReactionsPage({ searchParams }: PageProps) 
           total={result.total}
           params={{ q: sp.q, sort: sp.sort, dir }}
           canDelete={me.role === 'admin'}
+          canMatch={me.role !== 'viewer'}
         />
       </Card>
     </div>

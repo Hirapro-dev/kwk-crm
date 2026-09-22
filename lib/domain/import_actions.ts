@@ -21,6 +21,11 @@ import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from './auth';
 import { commitActivitiesCsv, previewActivitiesCsv } from './import_activities';
 import { commitApplicationsCsv, previewApplicationsCsv } from './import_applications';
+import {
+  type ClickImportOptions,
+  commitArticleReactionClicksCsv,
+  previewArticleReactionClicksCsv,
+} from './import_article_reaction_clicks';
 import { commitArticleReactionsCsv, previewArticleReactionsCsv } from './import_article_reactions';
 import { commitInquiriesCsv, previewInquiriesCsv } from './import_inquiries';
 import { commitMembersCsv, previewMembersCsv } from './import_members';
@@ -34,6 +39,11 @@ import {
 
 const MAX_ROWS = 60_000; // バルクUIの上限(会員約23,580件に余裕を持たせる。超過分はスクリプト/分割を案内)
 const BATCH = 500;
+
+/** 取込時に画面で指定する追加の値(記事反応のクリック履歴 CSV だけが使う。§5.13b) */
+export interface ImportOptions {
+  clicks?: ClickImportOptions;
+}
 
 export interface PreviewResult {
   ok: boolean;
@@ -79,6 +89,7 @@ export async function previewImport(
   object: string,
   csvText: string,
   updateOnly = false,
+  options?: ImportOptions,
 ): Promise<PreviewResult> {
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
@@ -92,6 +103,8 @@ export async function previewImport(
     if (object === 'activities') return await previewActivitiesCsv([csvText], updateOnly);
     if (object === 'article_reactions')
       return await previewArticleReactionsCsv([csvText], updateOnly);
+    if (object === 'article_reaction_clicks')
+      return await previewArticleReactionClicksCsv([csvText], options?.clicks);
     if (object === 'withdrawal_parents')
       return await previewWithdrawalParentsCsv([csvText], updateOnly);
     if (object === 'withdrawal_children')
@@ -172,6 +185,7 @@ export async function commitImport(
   object: string,
   csvText: string,
   updateOnly = false,
+  options?: ImportOptions,
 ): Promise<CommitResult> {
   const adminErr = await assertAdmin();
   if (adminErr) return { ok: false, error: adminErr };
@@ -184,6 +198,8 @@ export async function commitImport(
     if (object === 'activities') return await commitActivitiesCsv([csvText], updateOnly);
     if (object === 'article_reactions')
       return await commitArticleReactionsCsv([csvText], updateOnly);
+    if (object === 'article_reaction_clicks')
+      return await commitArticleReactionClicksCsv([csvText], options?.clicks);
     if (object === 'withdrawal_parents')
       return await commitWithdrawalParentsCsv([csvText], updateOnly);
     if (object === 'withdrawal_children')

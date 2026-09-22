@@ -18,10 +18,14 @@ export interface ArticleReactionRow {
   member_legacy_sf_id: string | null;
   member_id: string | null;
   detail: string | null;
+  /** クリック履歴 CSV の取込分(migration 117)。Salesforce 形式の行は null */
+  email: string | null;
+  registered_at: string | null;
+  remarks: string | null;
 }
 
 const COLS =
-  'id,reacted_date,media,tool,reaction_type,form_name,member_name,member_legacy_sf_id,member_id,detail';
+  'id,reacted_date,media,tool,reaction_type,form_name,member_name,member_legacy_sf_id,member_id,detail,email,registered_at,remarks';
 
 /** 一覧でソート可能なカラム(SortHeader からの ?sort= を受ける) */
 const SORTABLE = new Set([
@@ -34,6 +38,9 @@ const SORTABLE = new Set([
   'reaction_type',
   'form_name',
   'detail',
+  'email',
+  'registered_at',
+  'remarks',
 ]);
 
 export interface ArticleReactionListParams {
@@ -74,7 +81,7 @@ export async function listArticleReactions(
   if (params.q?.trim()) {
     const q = params.q.trim().replace(/[%_]/g, '\\$&');
     query = query.or(
-      `id.ilike.%${q}%,member_id.ilike.%${q}%,member_name.ilike.%${q}%,detail.ilike.%${q}%`,
+      `id.ilike.%${q}%,member_id.ilike.%${q}%,member_name.ilike.%${q}%,detail.ilike.%${q}%,email.ilike.%${q}%,remarks.ilike.%${q}%`,
     );
   }
 
@@ -98,4 +105,25 @@ export async function getReactionsByMember(
     .limit(limit);
   if (error) return [];
   return (data ?? []) as ArticleReactionRow[];
+}
+
+/**
+ * 配信媒体の選択肢(既存の記事反応に入っている値を重複なしで返す。クリック履歴 CSV の取込画面用)。
+ * 失敗時は空配列で画面を壊さない。
+ */
+export async function listArticleReactionMedia(): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('article_reactions')
+    .select('media')
+    .is('deleted_at', null)
+    .not('media', 'is', null)
+    .order('media')
+    .limit(1000);
+  if (error) return [];
+  const set = new Set<string>();
+  for (const r of (data ?? []) as Array<{ media: string | null }>) {
+    if (r.media?.trim()) set.add(r.media.trim());
+  }
+  return [...set].sort();
 }

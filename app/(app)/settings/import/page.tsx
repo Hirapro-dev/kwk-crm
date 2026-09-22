@@ -6,12 +6,15 @@
  * /settings レイアウトで admin チェック済み。CLAUDE.md §6 / §5.9。
  */
 
+import { listArticleReactionMedia } from '@/lib/domain/article_reactions';
 import { ImportPanel } from './ImportPanel';
 
 // 大量行の取込に備え、実行時間上限を確保(Vercel 最大300s)
 export const maxDuration = 300;
 
-export default function ImportSettingsPage() {
+export default async function ImportSettingsPage() {
+  // 記事反応(クリック履歴CSV)の取込で選ぶ配信媒体の候補(既存の値)
+  const mediaOptions = await listArticleReactionMedia();
   return (
     <div className="space-y-4">
       <div>
@@ -21,7 +24,7 @@ export default function ImportSettingsPage() {
           IDで突合し、既存なら更新・無ければ新規作成します。確定前に内容をプレビューできます。
         </p>
       </div>
-      <ImportPanel />
+      <ImportPanel mediaOptions={mediaOptions} />
     </div>
   );
 }

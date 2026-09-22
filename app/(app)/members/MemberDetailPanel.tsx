@@ -466,7 +466,8 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                             <TableCell className="whitespace-nowrap py-2">
                               {r.reaction_type ?? '-'}
                             </TableCell>
-                            <TableCell className="py-2">{r.detail ?? '-'}</TableCell>
+                            {/* クリック履歴 CSV の取込分は詳細が無く備考(記事名)を持つ(§5.13b) */}
+                            <TableCell className="py-2">{r.detail ?? r.remarks ?? '-'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

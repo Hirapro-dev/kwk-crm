@@ -599,6 +599,27 @@ Phase 1 では:
 **画面**: `/withdrawal-parents` `/withdrawal-children` (一覧+詳細)。メニューバーは
 「出金管理」親タブのホバープルダウンから遷移(nav_items の parent_id / visible_roles)。
 
+### 5.13b article_reactions (記事反応リスト) ★2026-07 追加 (migration 50 / 51)、クリック履歴 CSV の取込は 2026-09-23 追加 (migration 117)
+会員がメルマガ等の配信に反応(クリック)した記録。1 行 = 1 反応。取込専用オブジェクト(画面 `/article-reactions`、会員詳細の関連「記事反応」)。
+- 列: `id` text PK(反応ID `KH…`)/ `reacted_date` date / `media`(配信媒体)/ `tool`(配信ツール)/ `reaction_type`(種類)/ `form_name` /
+  `member_name`(氏名スナップショット)/ `member_legacy_sf_id` / `member_id` FK → members nullable / `detail` /
+  **`email`**(メールアドレス、小文字)/ **`registered_at`**(登録日時)/ **`remarks`**(備考 = 記事名)(3 列は migration 117)/ `created_at` / `updated_at` / `deleted_at`。
+- RLS: SELECT 全ロール / 書込 admin(取込・一括更新はサービスロール)。一括削除は §5.14。
+- **取込は 2 方式**(設定 → データ取込のオブジェクト選択):
+  1. **Salesforce 形式**(従来。`import_article_reactions.ts`。反応ID KH… で upsert、会員ID K- で紐付け。定期取込の対象)
+  2. **クリック履歴 CSV**(2026-09-23。`import_article_reaction_clicks.ts`。配信ツールの書き出し「クリック日時 / リンクNo / 読者No /
+     読者メールアドレス / 読者名前」。Shift_JIS は取込画面で自動判定)。取込画面で **備考(記事名。必須)** と **配信媒体**(既存の値から選択 or 直接入力)を
+     指定してから取り込む。**同じメールアドレスは 1 件にまとめる**(登録日時 = いちばん早いクリック、氏名 = 空でない最初の値。純粋関数 `dedupeClickRows`)。
+     **同じメール + 同じ備考が既にあれば作らない**(プレビューで「スキップ」。DB 側も部分ユニーク `uq_artreact_email_remarks`)。
+     入れる値: `email` / `member_name` / `registered_at` / `reacted_date`(登録日時の日本時間の日付)/ `remarks` / `media` / `tool='メルマガ'` /
+     `reaction_type='クリック'`。ID は DB の DEFAULT `gen_article_reaction_id()`(連番 `article_reactions_id_seq`、`KH` + 8 桁、**KH01000000 から**。
+     Salesforce の KH0000xxxx 台と離す。K- / TA- / M- と同じ考え方)。会員の紐付けは取込時には行わない。定期取込(Drive)の対象外(備考・媒体を画面で指定するため)。
+- **一括の会員検索**(2026-09-23): 一覧の左端チェックで選び、選択中バーの「会員を検索(メール一致)」で、メールアドレスが会員の email1〜3 のどれかと
+  **完全一致**(小文字化)した行に会員ID・会員氏名を入れる。同じメールの会員が複数いる行(複数候補)・該当なし・メールなし(Salesforce 形式の行)は変えず、
+  件数を「紐付け / 複数候補 / 該当なし / メールなし」で出す。あいまい一致はしない(§5.15 と同方針)。viewer 以外、1 回 500 件まで
+  (Server Action `matchArticleReactionsByEmail`、純粋関数 `matchReactionsByEmail`、部品 `ArticleReactionBulkActions`)。
+- 一覧の検索対象: 反応ID / 会員ID / 会員氏名 / 詳細 に加えて メールアドレス / 備考(2026-09-23)。項目管理に 登録日時 / メールアドレス / 備考 を登録済み(初期値は一覧・詳細とも表示)。
+
 ### 5.17 lp_entries (LP) ★2026-09-16 追加 (migration 95)
 LP・メルマガ登録系フォーム(54 種類)の問合せは、Salesforce では問合せ(TA-)だが CRM の問合せ取込(§5.10c)の対象外だった
 (約 5.8 万件)。これを**問合せとは別のオブジェクト「LP」**として保持し、問合せの件数・集計・レポートには混ぜない
