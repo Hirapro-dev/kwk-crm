@@ -699,6 +699,14 @@ Asana の基本構成(プロジェクト > セクション > タスク > サブ�
   (氏名の部分一致、↑↓ Enter で選択)、本文の「@氏名」はバッジ表示(`splitLinksAndMentions` / `LinkifiedText`)。**受信トレイ** `/task/inbox`
   (自分宛のメンションを新しい順。未読は強調)。タスク詳細を開くとそのタスクの自分宛メンションを既読にする(`markTaskMentionsRead`)。
   未読件数は左メニュー「受信トレイ」とスマホの下タブにバッジ(`countMyUnreadMentions`)。スマホの下タブは ホーム / マイタスク / 受信トレイ / 検索 / メニュー。
+- **通知(Web Push + メール)**(2026-09-22 追加, migration 116。ユーザー決定: Web Push とメールの併用)。担当に割り当てられたとき(`createTask` /
+  `updateTask` で担当が変わったとき)とコメントで呼ばれたとき(`addTaskComment`)に、本人以外の相手へ送る。`push_subscriptions`(端末ごとの購読。
+  endpoint 一意。失効 404/410 で削除)/ `user_notification_settings`(プッシュ / メールの ON/OFF。行が無ければ両方 ON)。RLS は自分の行のみ、
+  送信時の参照はサービスロール。文面は純粋関数 `buildTaskNotification`(`lib/domain/task_notifications.ts`)、送信は `lib/notify/task_notify.ts`
+  (`web-push` + SES `sendViaSes`。失敗しても本体の処理は止めない)。画面は歯車メニュー「通知の設定」(`NotificationSettingsDialog`: この端末で受け取る/解除、
+  プッシュ・メールの ON/OFF、テスト通知)。Service Worker は `public/sw.js`(`TaskShell` が登録。通知クリックでタスクを開く)。タスク管理は
+  別の PWA(`public/manifest-task.json`、start_url `/task`)として「ホーム画面に追加」でき、**iPhone はその状態でだけプッシュが届く**(Safari の制限)。
+  環境変数は §13。
 - ID: タスクは連番(`bigserial`)で `/task/[id]`。K-/TA- のような接頭辞は付けない(Salesforce 併用の衝突が無いため)。
 - インデックス: `tasks(project_id, section_id, sort_order) WHERE deleted_at IS NULL` / `tasks(assignee_id, due_date) WHERE deleted_at IS NULL AND completed_at IS NULL`(マイタスク) /
   `tasks(member_id) WHERE deleted_at IS NULL` / `tasks(parent_task_id)` / `task_comments(task_id)` / `task_attachments(task_id)`。
@@ -1617,6 +1625,13 @@ MAIL_SES_CONFIGURATION_SET=       # 送信の配信状態を SNS に流す SES �
 
 # タスク管理の Asana 取込 (§5.20) — スクリプト専用。画面からは使わない
 ASANA_ACCESS_TOKEN=               # Asana の個人アクセストークン(マイ設定 → アプリ → 個人アクセストークン)
+
+# タスク通知 (§5.20 migration 116) — Web Push + メール
+NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY=   # VAPID 公開鍵(ブラウザにも渡す)。`npx web-push generate-vapid-keys` で生成
+WEB_PUSH_VAPID_PRIVATE_KEY=              # VAPID 秘密鍵(サーバー専用)
+WEB_PUSH_SUBJECT=mailto:support@hirapro.jp  # プッシュサービスへ伝える連絡先
+TASK_NOTIFY_FROM=                        # 通知メールの差出人(SES で検証済みドメインのアドレス)。未設定ならメールは送らない
+NEXT_PUBLIC_SITE_URL=https://crm.hirapro.com  # メール内リンクの基点(任意)
 ```
 
 ---

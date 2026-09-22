@@ -44,6 +44,10 @@ export function TaskShell({
       /* private mode など。既定のまま */
     }
   }, []);
+  // プッシュ通知用の Service Worker(migration 116)。登録だけ行い、購読は「通知の設定」で本人が行う
+  useEffect(() => {
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }, []);
   // 画面遷移したらスマホの重ねメニューは閉じる
   // biome-ignore lint/correctness/useExhaustiveDependencies: pathname の変化だけを見る
   useEffect(() => {
