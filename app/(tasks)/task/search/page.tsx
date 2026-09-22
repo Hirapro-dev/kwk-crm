@@ -3,6 +3,7 @@
  * タスク名とプロジェクト名の部分一致。スマホの下タブ「検索」から使う(PC でも使える)。
  */
 
+import { UserAvatar } from '@/components/users/UserAvatar';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { listTaskProjects, searchTasks } from '@/lib/domain/tasks';
 import { ListTodo } from 'lucide-react';
@@ -78,6 +79,13 @@ export default async function TaskSearchPage({
                           : ''}
                       </span>
                     </Link>
+                    {t.assignee && (
+                      <UserAvatar
+                        name={t.assignee.full_name}
+                        avatarPath={t.assignee.avatar_path}
+                        size={24}
+                      />
+                    )}
                     <DueBadge dueDate={t.due_date} completedAt={t.completed_at} />
                   </li>
                 ))}

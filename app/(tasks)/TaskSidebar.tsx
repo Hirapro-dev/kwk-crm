@@ -239,7 +239,7 @@ export function TaskSidebar({ projects, folders, canCreate }: Props) {
                 maxLength={50}
                 className="h-7 min-w-0 flex-1 rounded border bg-background px-2 text-xs"
                 aria-label="フォルダ名"
-                autoFocus
+                ref={(el) => el?.focus()}
               />
               <button
                 type="submit"
@@ -284,7 +284,7 @@ export function TaskSidebar({ projects, folders, canCreate }: Props) {
                         maxLength={50}
                         className="h-7 min-w-0 flex-1 rounded border bg-background px-2 text-xs"
                         aria-label="フォルダ名"
-                        autoFocus
+                        ref={(el) => el?.focus()}
                       />
                       <button
                         type="submit"

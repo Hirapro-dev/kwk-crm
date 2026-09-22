@@ -1,6 +1,7 @@
 'use client';
 
 import { Select } from '@/components/ui/select';
+import { UserAvatar } from '@/components/users/UserAvatar';
 import { setTaskCompleted, updateTask } from '@/lib/domain/task_actions';
 import { type DueTone, dueTone, todayJst } from '@/lib/domain/task_pure';
 import { Check } from 'lucide-react';
@@ -12,6 +13,7 @@ import { useState, useTransition } from 'react';
 export interface UserOption {
   id: string;
   full_name: string | null;
+  avatar_path?: string | null;
 }
 
 /** スマホ向けの期日バッジ(Asana 風の色付きピル。編集は詳細で) */
@@ -136,29 +138,36 @@ export function AssigneeCell({
   const router = useRouter();
   const [value, setValue] = useState(assigneeId ?? '');
   const [pending, startTransition] = useTransition();
+  const selected = users.find((u) => u.id === value) ?? null;
   return (
-    <Select
-      value={value}
-      disabled={pending}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => {
-        const v = e.target.value;
-        setValue(v);
-        startTransition(async () => {
-          const r = await updateTask(taskId, { assignee_id: v || null });
-          if (r.error) alert(r.error);
-          else router.refresh();
-        });
-      }}
-      className="h-9 max-w-[200px] border-input bg-background px-1 text-base sm:h-7 sm:max-w-[160px] sm:border-transparent sm:bg-transparent sm:text-xs sm:hover:border-input"
-      aria-label="担当"
-    >
-      <option value="">{assigneeNameRaw ? `${assigneeNameRaw}(未登録)` : '担当なし'}</option>
-      {users.map((u) => (
-        <option key={u.id} value={u.id}>
-          {u.full_name ?? u.id}
-        </option>
-      ))}
-    </Select>
+    <span className="inline-flex items-center gap-1.5">
+      {/* アイコン + 名前(セレクト)。migration 114 */}
+      {selected && (
+        <UserAvatar name={selected.full_name} avatarPath={selected.avatar_path} size={22} />
+      )}
+      <Select
+        value={value}
+        disabled={pending}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          const v = e.target.value;
+          setValue(v);
+          startTransition(async () => {
+            const r = await updateTask(taskId, { assignee_id: v || null });
+            if (r.error) alert(r.error);
+            else router.refresh();
+          });
+        }}
+        className="h-9 max-w-[200px] border-input bg-background px-1 text-base sm:h-7 sm:max-w-[160px] sm:border-transparent sm:bg-transparent sm:text-xs sm:hover:border-input"
+        aria-label="担当"
+      >
+        <option value="">{assigneeNameRaw ? `${assigneeNameRaw}(未登録)` : '担当なし'}</option>
+        {users.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.full_name ?? u.id}
+          </option>
+        ))}
+      </Select>
+    </span>
   );
 }

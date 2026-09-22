@@ -13,6 +13,8 @@ export interface AppUser {
   full_name: string | null;
   role: UserRole;
   is_active: boolean;
+  /** プロフィール画像(Storage user-avatars のキー)。migration 114 */
+  avatar_path?: string | null;
 }
 
 export interface Member {
