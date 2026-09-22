@@ -9,14 +9,15 @@
 
 import { getCurrentUser } from '@/lib/domain/auth';
 import { taskUserFolderSections } from '@/lib/domain/task_pure';
-import { listMyTaskUserFolders, listTaskProjects } from '@/lib/domain/tasks';
+import { countMyUnreadMentions, listMyTaskUserFolders, listTaskProjects } from '@/lib/domain/tasks';
 import { TaskShell } from './TaskShell';
 
 export default async function TasksLayout({ children }: { children: React.ReactNode }) {
-  const [me, projects, userFolders] = await Promise.all([
+  const [me, projects, userFolders, unreadMentions] = await Promise.all([
     getCurrentUser(),
     listTaskProjects(),
     listMyTaskUserFolders(),
+    countMyUnreadMentions(),
   ]);
   const sidebarProjects = projects.map((p) => ({
     id: p.id,
@@ -32,6 +33,7 @@ export default async function TasksLayout({ children }: { children: React.ReactN
       projects={sidebarProjects}
       folders={folders}
       canCreate={me.role !== 'viewer'}
+      unreadMentions={unreadMentions}
     >
       {children}
     </TaskShell>

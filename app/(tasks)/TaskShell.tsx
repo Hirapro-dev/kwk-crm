@@ -21,12 +21,15 @@ export function TaskShell({
   projects,
   folders,
   canCreate,
+  unreadMentions,
   children,
 }: {
   me: AppUser;
   projects: SidebarProject[];
   folders: TaskUserFolderSection<SidebarProject>[];
   canCreate: boolean;
+  /** 受信トレイの未読メンション数(バッジ) */
+  unreadMentions: number;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -84,13 +87,22 @@ export function TaskShell({
             collapsed ? 'md:hidden' : 'md:flex',
           )}
         >
-          <TaskSidebar projects={projects} folders={folders} canCreate={canCreate} />
+          <TaskSidebar
+            projects={projects}
+            folders={folders}
+            canCreate={canCreate}
+            unreadMentions={unreadMentions}
+          />
         </div>
         <main className="min-w-0 flex-1 overflow-y-auto bg-[#f7f8fa] p-3 pb-20 md:p-4">
           {children}
         </main>
       </div>
-      <TaskMobileTabBar onMenuClick={() => setMobileOpen((o) => !o)} menuOpen={mobileOpen} />
+      <TaskMobileTabBar
+        onMenuClick={() => setMobileOpen((o) => !o)}
+        menuOpen={mobileOpen}
+        unreadMentions={unreadMentions}
+      />
     </div>
   );
 }

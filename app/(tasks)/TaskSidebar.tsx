@@ -16,6 +16,7 @@ import {
   FolderKanban,
   GripVertical,
   Home,
+  Inbox,
   Pencil,
   Plus,
   Trash2,
@@ -41,6 +42,8 @@ interface Props {
   projects: SidebarProject[];
   folders: TaskUserFolderSection<SidebarProject>[];
   canCreate: boolean;
+  /** 受信トレイの未読メンション数(migration 115) */
+  unreadMentions?: number;
 }
 
 /** ドラッグ中のプロジェクト(dataTransfer に JSON で載せる) */
@@ -126,7 +129,7 @@ function ProjectRow({
   );
 }
 
-export function TaskSidebar({ projects, folders, canCreate }: Props) {
+export function TaskSidebar({ projects, folders, canCreate, unreadMentions = 0 }: Props) {
   const pathname = usePathname();
   const [folderPending, startFolder] = useTransition();
   const [folderError, setFolderError] = useState<string | null>(null);
@@ -179,7 +182,7 @@ export function TaskSidebar({ projects, folders, canCreate }: Props) {
     if (dropTarget !== key) setDropTarget(key);
   };
 
-  const item = (href: string, label: string, icon: React.ReactNode, exact = false) => {
+  const item = (href: string, label: string, icon: React.ReactNode, exact = false, badge = 0) => {
     const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
     return (
       <Link
@@ -191,6 +194,11 @@ export function TaskSidebar({ projects, folders, canCreate }: Props) {
       >
         {icon}
         {label}
+        {badge > 0 && (
+          <span className="ml-auto rounded-full bg-sky-600 px-1.5 text-[10px] font-semibold text-white">
+            {badge}
+          </span>
+        )}
       </Link>
     );
   };
@@ -201,6 +209,7 @@ export function TaskSidebar({ projects, folders, canCreate }: Props) {
       <nav className="space-y-0.5 p-2">
         {item('/task', 'ホーム', <Home className="h-4 w-4" />, true)}
         {item('/task/my', 'マイタスク', <CheckCircle2 className="h-4 w-4" />)}
+        {item('/task/inbox', '受信トレイ', <Inbox className="h-4 w-4" />, false, unreadMentions)}
       </nav>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
