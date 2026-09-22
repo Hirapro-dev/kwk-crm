@@ -33,6 +33,8 @@ export interface ClickImportOptions {
   remarks: string;
   /** 配信媒体(任意) */
   media?: string | null;
+  /** 日付(YYYY-MM-DD。任意)。指定すると全行の reacted_date(一覧の「日付」)をこの日にする。空ならクリック日(日本時間) */
+  reactedDate?: string | null;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: Tables 型が空のため supabase クライアントは緩い型
@@ -46,14 +48,25 @@ async function assertAdmin(): Promise<string | null> {
 
 function normalizeOptions(
   options: ClickImportOptions | undefined,
-): { remarks: string; media: string | null } | { error: string } {
+): { remarks: string; media: string | null; reactedDate: string | null } | { error: string } {
   const remarks = (options?.remarks ?? '').trim();
   if (remarks === '') return { error: '備考(記事名)を入力してください' };
   if (remarks.length > MAX_REMARKS)
     return { error: `備考は ${MAX_REMARKS} 文字以内にしてください` };
   const media = (options?.media ?? '').trim();
   if (media.length > MAX_MEDIA) return { error: `配信媒体は ${MAX_MEDIA} 文字以内にしてください` };
-  return { remarks, media: media === '' ? null : media };
+  const reactedDate = (options?.reactedDate ?? '').trim();
+  if (reactedDate !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(reactedDate)) {
+    return { error: '日付は YYYY-MM-DD 形式で指定してください' };
+  }
+  if (reactedDate !== '' && Number.isNaN(new Date(`${reactedDate}T00:00:00+09:00`).getTime())) {
+    return { error: '日付を解釈できません' };
+  }
+  return {
+    remarks,
+    media: media === '' ? null : media,
+    reactedDate: reactedDate === '' ? null : reactedDate,
+  };
 }
 
 /** CSV を解析して 1 人 1 件にまとめる。列が無ければエラー */
@@ -116,12 +129,18 @@ async function loadExistingEmails(
   return set;
 }
 
-function toRecord(row: DedupedClick, remarks: string, media: string | null) {
+function toRecord(
+  row: DedupedClick,
+  remarks: string,
+  media: string | null,
+  reactedDate: string | null,
+) {
   return {
     email: row.email,
     member_name: row.name,
     registered_at: row.registeredAt,
-    reacted_date: row.registeredDate,
+    // 日付は画面で指定した日を優先。無ければいちばん早いクリックの日(日本時間)
+    reacted_date: reactedDate ?? row.registeredDate,
     remarks,
     media,
     tool: 'メルマガ',
@@ -170,6 +189,7 @@ export async function previewArticleReactionClicksCsv(
       CLICK_CSV_COLUMNS.name,
       `備考=${opt.remarks}`,
       `配信媒体=${opt.media ?? '(なし)'}`,
+      `日付=${opt.reactedDate ?? 'クリック日'}`,
     ],
     ignoredHeaders: [],
     sample,
@@ -197,7 +217,7 @@ export async function commitArticleReactionClicksCsv(
   );
   const records = rows
     .filter((r) => !existing.has(r.email))
-    .map((r) => toRecord(r, opt.remarks, opt.media));
+    .map((r) => toRecord(r, opt.remarks, opt.media, opt.reactedDate));
   if (records.length === 0) {
     return {
       ok: false,
