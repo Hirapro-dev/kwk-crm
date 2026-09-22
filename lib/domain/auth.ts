@@ -32,7 +32,7 @@ export async function getCurrentUser(): Promise<AppUser> {
 
   const { data, error } = await supabase
     .from('users')
-    .select('id, email, first_name, last_name, full_name, role, is_active')
+    .select('id, email, first_name, last_name, full_name, role, is_active, avatar_path')
     .eq('id', authUser.id)
     .is('deleted_at', null)
     .maybeSingle();

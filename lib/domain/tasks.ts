@@ -43,7 +43,7 @@ export interface TaskRow {
   sort_order: number;
   created_at: string;
   updated_at: string;
-  assignee?: { id: string; full_name: string | null } | null;
+  assignee?: { id: string; full_name: string | null; avatar_path?: string | null } | null;
   member?: { id: string; name: string | null } | null;
   project?: { id: number; name: string; color: string | null } | null;
   section?: { id: number; name: string } | null;
@@ -59,7 +59,7 @@ export interface TaskComment {
   author_name_raw: string | null;
   body: string;
   created_at: string;
-  user?: { id: string; full_name: string | null } | null;
+  user?: { id: string; full_name: string | null; avatar_path?: string | null } | null;
 }
 
 export interface TaskAttachment {
@@ -76,7 +76,7 @@ export interface TaskAttachment {
 const TASK_COLS = `
   id, project_id, section_id, parent_task_id, name, notes, assignee_id, assignee_name_raw, member_id,
   start_date, due_date, completed_at, created_by, sort_order, created_at, updated_at,
-  assignee:users!tasks_assignee_id_fkey(id, full_name),
+  assignee:users!tasks_assignee_id_fkey(id, full_name, avatar_path),
   member:members!tasks_member_id_fkey(id, name),
   project:task_projects!tasks_project_id_fkey(id, name, color),
   section:task_sections!tasks_section_id_fkey(id, name)
@@ -277,7 +277,7 @@ export async function getTask(id: number): Promise<TaskDetail | null> {
     supabase
       .from('task_comments')
       .select(
-        'id, task_id, user_id, author_name_raw, body, created_at, user:users!task_comments_user_id_fkey(id, full_name)',
+        'id, task_id, user_id, author_name_raw, body, created_at, user:users!task_comments_user_id_fkey(id, full_name, avatar_path)',
       )
       .eq('task_id', id)
       .order('created_at', { ascending: true }),

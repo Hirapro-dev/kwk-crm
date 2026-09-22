@@ -1,12 +1,21 @@
 'use client';
 
 import { LogoutButton } from '@/components/layout/LogoutButton';
-import { ExternalLink, Settings as SettingsIcon } from 'lucide-react';
+import { ExternalLink, Settings as SettingsIcon, UserCircle2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { AvatarDialog } from './AvatarDialog';
 
 /** タスク管理のヘッダーの歯車メニュー(CRM の設定へ(admin)/ ログアウト)。メーラーの MailerSettingsMenu と同じ操作感 */
-export function TaskSettingsMenu({ isAdmin }: { isAdmin: boolean }) {
+export function TaskSettingsMenu({
+  isAdmin,
+  profile,
+}: {
+  isAdmin: boolean;
+  /** プロフィール画像の設定(migration 114) */
+  profile?: { name: string | null; email: string; avatarPath: string | null };
+}) {
   const [open, setOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -40,6 +49,20 @@ export function TaskSettingsMenu({ isAdmin }: { isAdmin: boolean }) {
           role="menu"
           className="absolute right-0 z-50 mt-2 w-56 rounded border bg-popover py-1 text-foreground shadow-lg"
         >
+          {profile && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                setAvatarOpen(true);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
+            >
+              <UserCircle2 className="h-3.5 w-3.5" />
+              プロフィール画像
+            </button>
+          )}
           {isAdmin && (
             <>
               <a
@@ -61,6 +84,15 @@ export function TaskSettingsMenu({ isAdmin }: { isAdmin: boolean }) {
           )}
           <LogoutButton variant="menu" />
         </div>
+      )}
+      {profile && (
+        <AvatarDialog
+          open={avatarOpen}
+          onOpenChange={setAvatarOpen}
+          name={profile.name}
+          email={profile.email}
+          avatarPath={profile.avatarPath}
+        />
       )}
     </div>
   );

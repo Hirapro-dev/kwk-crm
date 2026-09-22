@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { UserAvatar } from '@/components/users/UserAvatar';
 import { type MemberBrief, searchMembersForInquiry } from '@/lib/domain/inquiry_lead_actions';
 import {
   addTaskComment,
@@ -390,8 +391,17 @@ export function TaskDetail({
               >
                 {s.name}
               </Link>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {s.assignee?.full_name ?? s.assignee_name_raw ?? ''}
+              <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                {s.assignee && (
+                  <UserAvatar
+                    name={s.assignee.full_name}
+                    avatarPath={s.assignee.avatar_path}
+                    size={20}
+                  />
+                )}
+                <span className="hidden sm:inline">
+                  {s.assignee?.full_name ?? s.assignee_name_raw ?? ''}
+                </span>
               </span>
               <DueDateCell
                 taskId={s.id}
@@ -505,6 +515,11 @@ export function TaskDetail({
           {task.comments.map((c) => (
             <li key={c.id} className="rounded border p-2 text-sm">
               <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                <UserAvatar
+                  name={c.user?.full_name ?? c.author_name_raw}
+                  avatarPath={c.user?.avatar_path}
+                  size={22}
+                />
                 <span className="font-medium text-foreground">
                   {c.user?.full_name ?? c.author_name_raw ?? '(不明)'}
                 </span>

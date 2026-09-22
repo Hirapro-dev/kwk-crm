@@ -1,3 +1,4 @@
+import { UserAvatar } from '@/components/users/UserAvatar';
 import type { AppUser } from '@/lib/domain/types';
 import { ExternalLink, ListChecks, Menu } from 'lucide-react';
 import Link from 'next/link';
@@ -15,7 +16,6 @@ export function TaskTopbar({
   /** 左メニューを畳む/出す(PC。スマホは下タブの「メニュー」から) */
   onMenuClick?: () => void;
 }) {
-  const userInitial = (me.full_name ?? me.email).charAt(0).toUpperCase();
   return (
     <header className="sf-header relative">
       <div className="flex h-12 items-center gap-3 px-3 sm:px-4">
@@ -46,14 +46,13 @@ export function TaskTopbar({
             CRM を開く
             <ExternalLink className="h-3 w-3" aria-hidden="true" />
           </a>
-          <div
-            className="grid h-7 w-7 place-items-center rounded-full bg-white/20 text-xs font-semibold"
-            aria-hidden="true"
-          >
-            {userInitial}
-          </div>
+          {/* アイコン + 名前(スマホはアイコンのみ)。migration 114 */}
+          <UserAvatar name={me.full_name} email={me.email} avatarPath={me.avatar_path} size={28} />
           <span className="hidden text-xs opacity-90 sm:inline">{me.full_name ?? me.email}</span>
-          <TaskSettingsMenu isAdmin={me.role === 'admin'} />
+          <TaskSettingsMenu
+            isAdmin={me.role === 'admin'}
+            profile={{ name: me.full_name, email: me.email, avatarPath: me.avatar_path ?? null }}
+          />
         </div>
       </div>
     </header>

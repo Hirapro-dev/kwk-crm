@@ -11,6 +11,8 @@ export interface AdminUserRow {
   is_active: boolean;
   legacy_sf_id: string | null;
   created_at: string;
+  /** プロフィール画像(migration 114) */
+  avatar_path?: string | null;
 }
 
 export async function listAllUsers(opts?: {
@@ -23,7 +25,7 @@ export async function listAllUsers(opts?: {
   let query = supabase
     .from('users')
     .select(
-      'id, email, full_name, first_name, last_name, role, is_active, legacy_sf_id, created_at',
+      'id, email, full_name, first_name, last_name, role, is_active, legacy_sf_id, created_at, avatar_path',
     )
     .is('deleted_at', null);
 

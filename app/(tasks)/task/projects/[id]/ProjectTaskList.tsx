@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { UserAvatar } from '@/components/users/UserAvatar';
 import {
   createTask,
   createTaskSection,
@@ -181,12 +182,25 @@ export function ProjectTaskList({
                     className={`min-w-0 flex-1 text-base sm:truncate sm:text-sm ${t.completed_at ? 'text-muted-foreground line-through' : 'text-foreground sm:hover:underline'}`}
                   >
                     <span className="block truncate">{t.name}</span>
-                    {/* スマホ: 2 行目に担当(と会員)。編集は詳細で */}
-                    <span className="block truncate text-xs text-muted-foreground sm:hidden">
-                      {t.assignee?.full_name ?? t.assignee_name_raw ?? '担当なし'}
-                      {t.member ? ` · ${t.member.name ?? t.member.id}` : ''}
-                    </span>
+                    {/* スマホ: 2 行目に会員(担当はアイコンで右に)。編集は詳細で */}
+                    {(t.member || (!t.assignee && t.assignee_name_raw)) && (
+                      <span className="block truncate text-xs text-muted-foreground sm:hidden">
+                        {t.member
+                          ? (t.member.name ?? t.member.id)
+                          : `${t.assignee_name_raw}(未登録)`}
+                      </span>
+                    )}
                   </Link>
+                  {/* スマホ: 担当はアイコンのみ(migration 114) */}
+                  {t.assignee && (
+                    <span className="sm:hidden">
+                      <UserAvatar
+                        name={t.assignee.full_name}
+                        avatarPath={t.assignee.avatar_path}
+                        size={24}
+                      />
+                    </span>
+                  )}
                   <span className="sm:hidden">
                     <DueBadge dueDate={t.due_date} completedAt={t.completed_at} />
                   </span>
@@ -244,7 +258,14 @@ export function ProjectTaskList({
                       </>
                     ) : (
                       <>
-                        <span className="shrink-0 text-xs text-muted-foreground">
+                        <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                          {t.assignee && (
+                            <UserAvatar
+                              name={t.assignee.full_name}
+                              avatarPath={t.assignee.avatar_path}
+                              size={22}
+                            />
+                          )}
                           {t.assignee?.full_name ?? t.assignee_name_raw ?? '-'}
                         </span>
                         <DueDateCell

@@ -32,7 +32,11 @@ export async function TaskDetailPane({
     <TaskDetail
       task={task}
       sections={sections}
-      users={users.map((u) => ({ id: u.id, full_name: u.full_name }))}
+      users={users.map((u) => ({
+        id: u.id,
+        full_name: u.full_name,
+        avatar_path: u.avatar_path ?? null,
+      }))}
       currentUserId={me.id}
       canEdit={me.role !== 'viewer'}
       isAdmin={me.role === 'admin'}

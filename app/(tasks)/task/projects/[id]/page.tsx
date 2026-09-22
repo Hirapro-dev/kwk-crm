@@ -40,7 +40,11 @@ export default async function TaskProjectPage({
     listTaskProjectMembers(projectId),
   ]);
   const canManage = me.role === 'admin' || project.created_by === me.id;
-  const userOptions = users.map((u) => ({ id: u.id, full_name: u.full_name }));
+  const userOptions = users.map((u) => ({
+    id: u.id,
+    full_name: u.full_name,
+    avatar_path: u.avatar_path ?? null,
+  }));
 
   return (
     <div className="space-y-3">

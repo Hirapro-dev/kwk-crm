@@ -274,6 +274,11 @@ erDiagram
 - `first_name`, `last_name`, `full_name` text
 - `is_active` boolean default true
 - `role` text not null check in (`admin`, `manager`, `sales`, `viewer`)
+- `avatar_path` text nullable — **プロフィール画像**(2026-09-22 追加, migration 114)。Storage の**公開**バケット `user-avatars` のキー
+  (`<userId>/<時刻>.jpg`。一覧の多数の行に出すため署名 URL ではなく公開 URL で描画。本人が選んだ画像だけで会員情報は入れない)。
+  NULL は未設定で頭文字の丸を出す。設定はタスク管理のヘッダー右の歯車 →「プロフィール画像」(`AvatarDialog`。画面側で正方形に切り抜き 256px に縮小して
+  JPEG で送る。Server Action `uploadUserAvatar` / `removeUserAvatar` は本人の行だけをサービスロールで更新)。表示部品 `components/users/UserAvatar.tsx`、
+  純粋関数 `lib/domain/user_avatar.ts`。タスク管理では 担当・コメント投稿者・ヘッダー に**アイコン + 名前**、スマホの一覧では**アイコンのみ**(§8.1)
 - `created_at`, `updated_at` timestamptz
 
 ### 5.2 forms (フォームマスタ)
