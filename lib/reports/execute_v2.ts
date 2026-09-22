@@ -11,7 +11,12 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { buildReportQuery, BuilderError, DEFAULT_ROW_LIMIT } from './builder_v2';
+import {
+  BuilderError,
+  DEFAULT_ROW_LIMIT,
+  MAX_EXCEL_ROW_LIMIT,
+  buildReportQuery,
+} from './builder_v2';
 import { loadExtraColumnsForReportType } from './extra_columns';
 import type { ReportDefinition, ReportTypeId } from './types';
 
@@ -36,7 +41,8 @@ export interface ReportResult {
 
 export interface ExecuteOptions {
   /** Excel 出力時のみ true にして 50,000 行に拡張 */
-  excelMode?: boolean;
+  /** CSV / Excel のダウンロード。画面の 10,000 件ではなく MAX_EXCEL_ROW_LIMIT(50,000 件)まで取る(2026-09-22 に CSV も同じ上限に) */
+  exportMode?: boolean;
   /** デバッグ用 SQL を返すか */
   includeDebugSql?: boolean;
 }
@@ -60,9 +66,7 @@ export async function executeReport(
 
   let built: ReturnType<typeof buildReportQuery>;
   try {
-    const def = options.excelMode
-      ? { ...definition, row_limit: 50_000 }
-      : definition;
+    const def = options.exportMode ? { ...definition, row_limit: MAX_EXCEL_ROW_LIMIT } : definition;
     built = buildReportQuery(reportType, def, currentUserId, extraColumns);
   } catch (e) {
     if (e instanceof BuilderError) return { ok: false, error: e.message };
@@ -83,7 +87,7 @@ export async function executeReport(
 
   const rows = (Array.isArray(data) ? data : []) as Array<Record<string, unknown>>;
   const rowLimit =
-    definition.row_limit ?? (options.excelMode ? 50_000 : DEFAULT_ROW_LIMIT);
+    definition.row_limit ?? (options.exportMode ? MAX_EXCEL_ROW_LIMIT : DEFAULT_ROW_LIMIT);
   return {
     ok: true,
     columns: built.columns,

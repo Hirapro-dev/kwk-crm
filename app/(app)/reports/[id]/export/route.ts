@@ -7,13 +7,13 @@
  * - Excel: 50,000 行まで(builder の MAX_EXCEL_ROW_LIMIT)
  */
 
-import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { logReportRun } from '@/lib/domain/report_actions';
 import { getReport } from '@/lib/domain/reports';
 import { executeReport } from '@/lib/reports/execute_v2';
 import { toCsv, toXlsx } from '@/lib/reports/export_v2';
 import type { ReportTypeId } from '@/lib/reports/types';
+import { NextResponse } from 'next/server';
 
 type Params = { id: string };
 
@@ -31,10 +31,12 @@ export async function GET(
   }
   const me = await getCurrentUser();
 
-  const reportType = (report.report_type === 'custom' ? 'RT01' : report.report_type) as ReportTypeId;
+  const reportType = (
+    report.report_type === 'custom' ? 'RT01' : report.report_type
+  ) as ReportTypeId;
 
   const res = await executeReport(reportType, report.definition, me.id, {
-    excelMode: format === 'xlsx',
+    exportMode: true, // CSV も Excel も 50,000 件まで(画面は 10,000 件)
   });
 
   await logReportRun({
