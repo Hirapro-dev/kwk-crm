@@ -6,16 +6,20 @@
  * - 配信ツールの「クリック履歴」CSV(クリック日時 / 読者メールアドレス / 読者名前)を 1 人(メール)1 件にまとめる
  *   (判断は純粋関数 dedupeClickRows)。取込時に画面で指定した備考(記事名)と配信媒体を入れる。
  * - 同じメール + 同じ備考が既にあれば作らない(スキップ)。再取込しても増えない(DB 側も部分ユニーク)。
- * - ID は DB の DEFAULT(gen_article_reaction_id())に任せる。会員の紐付けはここでは行わない
- *   (一覧のチェックボックスから「会員を検索」。article_reaction_actions.ts)。
+ * - ID は DB の DEFAULT(gen_article_reaction_id())に任せる。
+ * - 会員照合: メールアドレスが会員の email1〜3 と完全一致(小文字化)し 1 人に絞れた行は、取込時に会員ID・会員氏名を入れる
+ *   (プレビューで「会員一致」件数を出す。2026-09-23)。複数候補・該当なしは紐付けず、後から一覧の「会員を検索」でやり直せる。
  * - 取込はサービスロールで実行(RLS の書込は admin のみのため。監査ログの対象外テーブル)。
  */
 
 import {
   CLICK_CSV_COLUMNS,
   type DedupedClick,
+  type EmailMatchResult,
   dedupeClickRows,
+  matchReactionsByEmail,
 } from '@/lib/domain/article_reaction_clicks';
+import { loadMembersByEmails } from '@/lib/domain/article_reaction_match_db';
 import { parseCsvRaw } from '@/lib/import/parse';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
@@ -129,15 +133,40 @@ async function loadExistingEmails(
   return set;
 }
 
+/** メール(小文字)→ 1 人に絞れた会員 */
+type LinkMap = Map<string, { memberId: string; memberName: string | null }>;
+
+/** 取り込む行の会員照合(メール完全一致)。行の id はメールで代用する */
+async function matchForImport(
+  supabase: Db,
+  rows: DedupedClick[],
+): Promise<{ result: EmailMatchResult; links: LinkMap }> {
+  const members = await loadMembersByEmails(
+    supabase,
+    rows.map((r) => r.email),
+  );
+  const result = matchReactionsByEmail(
+    rows.map((r) => ({ id: r.email, email: r.email })),
+    members,
+  );
+  const links: LinkMap = new Map();
+  for (const l of result.linked)
+    links.set(l.id, { memberId: l.memberId, memberName: l.memberName });
+  return { result, links };
+}
+
 function toRecord(
   row: DedupedClick,
   remarks: string,
   media: string | null,
   reactedDate: string | null,
+  link: { memberId: string; memberName: string | null } | undefined,
 ) {
   return {
     email: row.email,
-    member_name: row.name,
+    // 会員に紐付いた行は CRM の会員氏名を優先(CSV の読者名前はほとんど空)
+    member_name: link ? (link.memberName ?? row.name) : row.name,
+    member_id: link?.memberId ?? null,
     registered_at: row.registeredAt,
     // 日付は画面で指定した日を優先。無ければいちばん早いクリックの日(日本時間)
     reacted_date: reactedDate ?? row.registeredDate,
@@ -168,11 +197,21 @@ export async function previewArticleReactionClicksCsv(
     rows.map((r) => r.email),
   );
   const newRows = rows.filter((r) => !existing.has(r.email));
-  const sample: PreviewResult['sample'] = rows.slice(0, 20).map((r, i) => ({
-    row: i + 1,
-    id: r.email,
-    mode: existing.has(r.email) ? 'スキップ' : '新規',
-  }));
+  let match: Awaited<ReturnType<typeof matchForImport>>;
+  try {
+    match = await matchForImport(supabase, newRows);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  const sample: PreviewResult['sample'] = rows.slice(0, 20).map((r, i) => {
+    const link = match.links.get(r.email);
+    return {
+      row: i + 1,
+      id: r.email,
+      mode: existing.has(r.email) ? 'スキップ' : '新規',
+      note: link ? `${link.memberId} ${link.memberName ?? ''}`.trim() : undefined,
+    };
+  });
 
   return {
     ok: true,
@@ -181,6 +220,8 @@ export async function previewArticleReactionClicksCsv(
     newCount: newRows.length,
     updateCount: 0,
     skippedCount: existing.size,
+    matchedCount: match.result.linked.length,
+    multipleCount: match.result.multiple.length,
     errorCount: errors.length,
     errors: errors.slice(0, 50),
     targetLabels: [
@@ -215,9 +256,16 @@ export async function commitArticleReactionClicksCsv(
     opt.remarks,
     rows.map((r) => r.email),
   );
-  const records = rows
-    .filter((r) => !existing.has(r.email))
-    .map((r) => toRecord(r, opt.remarks, opt.media, opt.reactedDate));
+  const newRows = rows.filter((r) => !existing.has(r.email));
+  let match: Awaited<ReturnType<typeof matchForImport>>;
+  try {
+    match = await matchForImport(supabase, newRows);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  const records = newRows.map((r) =>
+    toRecord(r, opt.remarks, opt.media, opt.reactedDate, match.links.get(r.email)),
+  );
   if (records.length === 0) {
     return {
       ok: false,
@@ -253,6 +301,7 @@ export async function commitArticleReactionClicksCsv(
     newCount: inserted,
     updateCount: 0,
     skippedCount: existing.size,
+    matchedCount: match.result.linked.length,
     errorCount: errors.length,
     errors: errors.slice(0, 50),
   };

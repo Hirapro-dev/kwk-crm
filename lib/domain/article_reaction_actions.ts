@@ -9,7 +9,8 @@
  * 書込みはサービスロール(article_reactions の RLS 書込は admin のみのため。§5.14 と同じ方針)。
  */
 
-import { type MemberForMatch, matchReactionsByEmail } from '@/lib/domain/article_reaction_clicks';
+import { matchReactionsByEmail } from '@/lib/domain/article_reaction_clicks';
+import { loadMembersByEmails } from '@/lib/domain/article_reaction_match_db';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from './auth';
@@ -41,24 +42,17 @@ export async function matchArticleReactionsByEmail(ids: string[]): Promise<Match
   if (rErr) return { error: `記事反応の取得に失敗: ${rErr.message}` };
   const rows = (reactions ?? []) as Array<{ id: string; email: string | null }>;
 
-  const emails = [
-    ...new Set(rows.map((r) => (r.email ?? '').trim().toLowerCase()).filter(Boolean)),
-  ];
-  const members = new Map<string, MemberForMatch>();
-  for (let i = 0; i < emails.length; i += CHUNK) {
-    const chunk = emails.slice(i, i + CHUNK);
-    for (const col of ['email1', 'email2', 'email3'] as const) {
-      const { data, error } = await supabase
-        .from('members')
-        .select('id, name, email1, email2, email3')
-        .is('deleted_at', null)
-        .in(col, chunk);
-      if (error) return { error: `会員の検索に失敗: ${error.message}` };
-      for (const m of (data ?? []) as MemberForMatch[]) members.set(m.id, m);
-    }
+  let members: Awaited<ReturnType<typeof loadMembersByEmails>>;
+  try {
+    members = await loadMembersByEmails(
+      supabase,
+      rows.map((r) => r.email ?? ''),
+    );
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
   }
 
-  const result = matchReactionsByEmail(rows, [...members.values()]);
+  const result = matchReactionsByEmail(rows, members);
   for (let i = 0; i < result.linked.length; i += CHUNK) {
     const batch = result.linked
       .slice(i, i + CHUNK)

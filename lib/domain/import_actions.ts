@@ -61,13 +61,19 @@ export interface PreviewResult {
   targetLabels?: string[];
   /** 取込されない無視列 */
   ignoredHeaders?: string[];
-  /** プレビュー用サンプル(先頭20行、id + 状態) */
-  sample?: Array<{ row: number; id: string; mode: '新規' | '更新' | 'スキップ' }>;
+  /** 会員照合でメール完全一致し 1 人に絞れた件数(記事反応のクリック履歴 CSV だけ。§5.13b) */
+  matchedCount?: number;
+  /** 同じメールの会員が複数いて紐付けなかった件数(同上) */
+  multipleCount?: number;
+  /** プレビュー用サンプル(先頭20行、id + 状態。note は補足: 紐付ける会員ID・氏名など) */
+  sample?: Array<{ row: number; id: string; mode: '新規' | '更新' | 'スキップ'; note?: string }>;
 }
 
 export interface CommitResult {
   ok: boolean;
   error?: string;
+  /** 取込時に会員へ紐付けた件数(記事反応のクリック履歴 CSV だけ) */
+  matchedCount?: number;
   upserted?: number;
   /** 実際に取り込んだ行のうち、新規作成された件数 */
   newCount?: number;
