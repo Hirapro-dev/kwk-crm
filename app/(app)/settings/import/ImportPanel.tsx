@@ -215,7 +215,7 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
             <div className="flex flex-wrap items-end gap-3 rounded border border-input bg-gray-50 p-3">
               <div className="space-y-1">
                 <label className="text-[11px] text-muted-foreground" htmlFor="imp-remarks">
-                  備考(記事名) <span className="text-destructive">*</span>
+                  記事名 <span className="text-destructive">*</span>
                 </label>
                 <input
                   id="imp-remarks"
@@ -285,7 +285,8 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
                 </div>
               )}
               <p className="w-full text-[11px] text-muted-foreground">
-                取り込んだ行の「備考」に記事名、「配信媒体」に選んだ値、「日付」に指定した日(空ならその人のいちばん早いクリック日)が入ります。登録日時はクリック日時のままです。同じメールアドレスは
+                取り込んだ行の「詳細」と「備考」に記事名(Salesforce
+                形式の取込で記事名が入っていた「詳細」に揃えます)、「配信媒体」に選んだ値、「日付」に指定した日(空ならその人のいちばん早いクリック日)が入ります。登録日時はクリック日時のままです。同じメールアドレスは
                 1 件にまとめ、同じ備考で登録済みのメールは作りません。メールアドレスが会員の
                 Eメール1〜3
                 と完全一致した人は取込時に会員へ紐付けます(複数候補・該当なしは記事反応リストの「会員を検索」でやり直せます)。

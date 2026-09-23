@@ -186,7 +186,7 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
     table: 'article_reactions',
     label: '記事反応リスト(クリック履歴CSV)',
     idField: 'id',
-    note: '配信ツールの「クリック履歴」CSV(Shift_JIS 可)をそのまま使えます。同じメールアドレスは 1 件にまとめ(登録日時はいちばん早いクリック)、取込時に指定した備考(記事名)と配信媒体を入れます。同じメール + 同じ備考が既にあれば作りません。会員との紐付けは取込後に一覧のチェックボックスから「会員を検索」で行います。',
+    note: '配信ツールの「クリック履歴」CSV(Shift_JIS 可)をそのまま使えます。同じメールアドレスは 1 件にまとめ(登録日時はいちばん早いクリック)、取込時に指定した記事名(「詳細」と「備考」に入ります)・配信媒体・日付を入れます。同じメール + 同じ記事名が既にあれば作りません。メールアドレスが会員の Eメール1〜3 と完全一致した人は取込時に会員へ紐付けます(残りは一覧の「会員を検索」で)。',
     fields: [
       { field: 'registered_at', label: 'クリック日時', type: 'datetime', required: true },
       { field: 'email', label: '読者メールアドレス', type: 'text', required: true },
