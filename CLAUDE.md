@@ -608,10 +608,10 @@ Phase 1 では:
 - **取込は 2 方式**(設定 → データ取込のオブジェクト選択):
   1. **Salesforce 形式**(従来。`import_article_reactions.ts`。反応ID KH… で upsert、会員ID K- で紐付け。定期取込の対象)
   2. **クリック履歴 CSV**(2026-09-23。`import_article_reaction_clicks.ts`。配信ツールの書き出し「クリック日時 / リンクNo / 読者No /
-     読者メールアドレス / 読者名前」。Shift_JIS は取込画面で自動判定)。取込画面で **備考(記事名。必須)** と **配信媒体**(既存の値から選択 or 直接入力)を
+     読者メールアドレス / 読者名前」。Shift_JIS は取込画面で自動判定)。取込画面で **備考(記事名。必須)** と **配信媒体**(既存の値から選択 or 直接入力)、**日付**(任意。2026-09-23 追加)を
      指定してから取り込む。**同じメールアドレスは 1 件にまとめる**(登録日時 = いちばん早いクリック、氏名 = 空でない最初の値。純粋関数 `dedupeClickRows`)。
      **同じメール + 同じ備考が既にあれば作らない**(プレビューで「スキップ」。DB 側も部分ユニーク `uq_artreact_email_remarks`)。
-     入れる値: `email` / `member_name` / `registered_at` / `reacted_date`(登録日時の日本時間の日付)/ `remarks` / `media` / `tool='メルマガ'` /
+     入れる値: `email` / `member_name` / `registered_at`(いちばん早いクリック日時)/ `reacted_date`(画面で指定した日付。空なら登録日時の日本時間の日付)/ `remarks` / `media` / `tool='メルマガ'` /
      `reaction_type='クリック'`。ID は DB の DEFAULT `gen_article_reaction_id()`(連番 `article_reactions_id_seq`、`KH` + 8 桁、**KH01000000 から**。
      Salesforce の KH0000xxxx 台と離す。K- / TA- / M- と同じ考え方)。会員の紐付けは取込時には行わない。定期取込(Drive)の対象外(備考・媒体を画面で指定するため)。
 - **一括の会員検索**(2026-09-23): 一覧の左端チェックで選び、選択中バーの「会員を検索(メール一致)」で、メールアドレスが会員の email1〜3 のどれかと

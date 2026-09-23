@@ -59,12 +59,13 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
   const [remarks, setRemarks] = useState('');
   const [mediaChoice, setMediaChoice] = useState<string>(mediaOptions[0] ?? MEDIA_OTHER);
   const [mediaOther, setMediaOther] = useState('');
+  const [reactedDate, setReactedDate] = useState('');
 
   const def = IMPORT_OBJECTS[objectKey]!;
   const isClicks = objectKey === CLICKS_KEY;
   const mediaValue = mediaChoice === MEDIA_OTHER ? mediaOther.trim() : mediaChoice;
   const clickOptions = isClicks
-    ? { clicks: { remarks: remarks.trim(), media: mediaValue } }
+    ? { clicks: { remarks: remarks.trim(), media: mediaValue, reactedDate: reactedDate || null } }
     : undefined;
   const clicksReady = !isClicks || remarks.trim() !== '';
 
@@ -250,6 +251,21 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
                   <option value={MEDIA_OTHER}>直接入力 / なし</option>
                 </Select>
               </div>
+              <div className="space-y-1">
+                <label className="text-[11px] text-muted-foreground" htmlFor="imp-reacted-date">
+                  日付(空ならクリック日)
+                </label>
+                <input
+                  id="imp-reacted-date"
+                  type="date"
+                  value={reactedDate}
+                  onChange={(e) => {
+                    setReactedDate(e.target.value);
+                    resetResults();
+                  }}
+                  className="h-8 rounded border border-input bg-white px-2 text-sm"
+                />
+              </div>
               {mediaChoice === MEDIA_OTHER && (
                 <div className="space-y-1">
                   <label className="text-[11px] text-muted-foreground" htmlFor="imp-media-other">
@@ -269,7 +285,7 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
                 </div>
               )}
               <p className="w-full text-[11px] text-muted-foreground">
-                取り込んだ行の「備考」に記事名、「配信媒体」に選んだ値が入ります。同じメールアドレスは
+                取り込んだ行の「備考」に記事名、「配信媒体」に選んだ値、「日付」に指定した日(空ならその人のいちばん早いクリック日)が入ります。登録日時はクリック日時のままです。同じメールアドレスは
                 1
                 件にまとめ、同じ備考で登録済みのメールは作りません。会員との紐付けは取込後に記事反応リストで行います。
               </p>
