@@ -78,6 +78,34 @@ describe('parseMailBody', () => {
   it('同じラベルが複数あれば最初の値を使う', () => {
     expect(parseMailBody('お名前: A\nお名前: B', null).labels.お名前).toBe('A');
   });
+
+  // 意図: 「銘柄詳細:」のように値が次の行以降に書かれる項目を、次の空行までまとめて 1 つの値にする
+  // (未来予測レポート(リクエスト)の通知メール。2026-09-23)
+  it('「ラベル:」だけの行は次の空行までをまとめて値にし、先頭の見出し行(▼)は除く', () => {
+    const body = [
+      '【未来予測レポート（リクエスト）】登録がありました',
+      '',
+      '回答日時: 2026/9/22 22:53:47',
+      'お名前: 山田 太郎',
+      'メールアドレス: a@example.com',
+      '銘柄詳細:',
+      '▼リクエストいただいた銘柄',
+      '1. xels　保有数量: 1000',
+      '2. asec　保有数量: 500',
+      '',
+      '※集計は管理画面で確認できます。',
+    ].join('\n');
+    const p = parseMailBody(body, null);
+    expect(p.labels.銘柄詳細).toBe('1. xels　保有数量: 1000\n2. asec　保有数量: 500');
+    // まとめた行は個別のラベル(「1. xels　保有数量」)としては出さない
+    expect(p.labels['1. xels　保有数量']).toBeUndefined();
+    expect(p.labels.お名前).toBe('山田 太郎');
+    expect(p.labels.回答日時).toBe('2026/9/22 22:53:47');
+  });
+
+  it('「ラベル:」の後に行が無ければラベルにしない', () => {
+    expect(parseMailBody('銘柄詳細:\n\n※以上', null).labels.銘柄詳細).toBeUndefined();
+  });
 });
 
 describe('htmlToText', () => {

@@ -112,6 +112,10 @@ export function htmlToText(html: string): string {
 }
 
 const LABEL_LINE = /^([^:：]{1,40}?)\s*[:：]\s*(.+)$/;
+/** 「ラベル:」だけの行(値が次の行以降に書かれる複数行の項目。例: 「銘柄詳細:」) */
+const EMPTY_LABEL_LINE = /^([^:：]{1,40}?)\s*[:：]\s*$/;
+/** 複数行の値の先頭にある見出し行(「▼リクエストいただいた銘柄」など)は値に含めない */
+const HEADING_LINE = /^[▼▽■□◆◇●○★☆]/;
 
 /** 本文(テキスト。無ければ HTML をテキスト化)を行とラベルの辞書にする */
 /** 本文のテキスト(テキスト版があればそれ、無ければ HTML 版をテキスト化。どちらも無ければ空文字) */
@@ -127,19 +131,40 @@ export function parseMailBody(
   htmlBody: string | null | undefined,
 ): ParsedMailBody {
   const text = mailBodyText(textBody, htmlBody);
-  const lines = text
+  const rawLines = text
     .replace(/\r\n/g, '\n')
     .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l !== '');
+    .map((l) => l.trim());
+  const lines = rawLines.filter((l) => l !== '');
   const labels: Record<string, string> = {};
-  for (const line of lines) {
-    const m = line.match(LABEL_LINE);
-    if (!m) continue;
-    const label = (m[1] ?? '').trim();
-    const value = (m[2] ?? '').trim();
-    if (!label || !value || /https?/i.test(label)) continue;
+  const setLabel = (label: string, value: string) => {
+    if (!label || !value || /https?/i.test(label)) return;
     if (!(label in labels)) labels[label] = value;
+  };
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i] ?? '';
+    if (line === '') continue;
+    const m = line.match(LABEL_LINE);
+    if (m) {
+      setLabel((m[1] ?? '').trim(), (m[2] ?? '').trim());
+      continue;
+    }
+    // 「ラベル:」だけの行は、次の空行までの行をまとめて値にする(複数行の項目。2026-09-23)。
+    // 先頭の見出し行(▼ など)は除き、取り込んだ行は個別のラベルとしては扱わない
+    const e = line.match(EMPTY_LABEL_LINE);
+    if (!e) continue;
+    const block: string[] = [];
+    let j = i + 1;
+    for (; j < rawLines.length; j++) {
+      const l = rawLines[j] ?? '';
+      if (l === '') break;
+      if (block.length === 0 && HEADING_LINE.test(l)) continue;
+      block.push(l);
+    }
+    if (block.length > 0) {
+      setLabel((e[1] ?? '').trim(), block.join('\n'));
+      i = j - 1;
+    }
   }
   return { lines, labels };
 }
