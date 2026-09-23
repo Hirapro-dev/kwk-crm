@@ -4,7 +4,7 @@
  * 記事反応リスト: クリック履歴 CSV の取込 Server Actions(admin 限定。CLAUDE.md §5.13b。migration 117)
  *
  * - 配信ツールの「クリック履歴」CSV(クリック日時 / 読者メールアドレス / 読者名前)を 1 人(メール)1 件にまとめる
- *   (判断は純粋関数 dedupeClickRows)。取込時に画面で指定した備考(記事名)と配信媒体を入れる。
+ *   (判断は純粋関数 dedupeClickRows)。取込時に画面で指定した記事名(詳細と備考の両方に入れる)と配信媒体を入れる。
  * - 同じメール + 同じ備考が既にあれば作らない(スキップ)。再取込しても増えない(DB 側も部分ユニーク)。
  * - ID は DB の DEFAULT(gen_article_reaction_id())に任せる。
  * - 会員照合: メールアドレスが会員の email1〜3 と完全一致(小文字化)し 1 人に絞れた行は、取込時に会員ID・会員氏名を入れる
@@ -54,7 +54,7 @@ function normalizeOptions(
   options: ClickImportOptions | undefined,
 ): { remarks: string; media: string | null; reactedDate: string | null } | { error: string } {
   const remarks = (options?.remarks ?? '').trim();
-  if (remarks === '') return { error: '備考(記事名)を入力してください' };
+  if (remarks === '') return { error: '記事名を入力してください' };
   if (remarks.length > MAX_REMARKS)
     return { error: `備考は ${MAX_REMARKS} 文字以内にしてください` };
   const media = (options?.media ?? '').trim();
@@ -170,6 +170,9 @@ function toRecord(
     registered_at: row.registeredAt,
     // 日付は画面で指定した日を優先。無ければいちばん早いクリックの日(日本時間)
     reacted_date: reactedDate ?? row.registeredDate,
+    // 記事名は「詳細」(Salesforce 形式の取込で記事名が入っていた列)にも入れ、レポート・一覧の見た目を揃える(2026-09-23)。
+    // 「備考」は同じメール + 同じ記事名の重複防止キーとして残す
+    detail: remarks,
     remarks,
     media,
     tool: 'メルマガ',

@@ -611,7 +611,8 @@ Phase 1 では:
      読者メールアドレス / 読者名前」。Shift_JIS は取込画面で自動判定)。取込画面で **備考(記事名。必須)** と **配信媒体**(既存の値から選択 or 直接入力)、**日付**(任意。2026-09-23 追加)を
      指定してから取り込む。**同じメールアドレスは 1 件にまとめる**(登録日時 = いちばん早いクリック、氏名 = 空でない最初の値。純粋関数 `dedupeClickRows`)。
      **同じメール + 同じ備考が既にあれば作らない**(プレビューで「スキップ」。DB 側も部分ユニーク `uq_artreact_email_remarks`)。
-     入れる値: `email` / `member_name` / `registered_at`(いちばん早いクリック日時)/ `reacted_date`(画面で指定した日付。空なら登録日時の日本時間の日付)/ `remarks` / `media` / `tool='メルマガ'` /
+     入れる値: `email` / `member_name` / `registered_at`(いちばん早いクリック日時)/ `reacted_date`(画面で指定した日付。空なら登録日時の日本時間の日付)/
+     **`detail` = 記事名**(Salesforce 形式の取込で記事名が入っていた列に揃える。2026-09-23。既存のクリック取込分は同日に `detail` へ写した)/ `remarks` = 記事名(重複防止キー)/ `media` / `tool='メルマガ'` /
      `reaction_type='クリック'`。ID は DB の DEFAULT `gen_article_reaction_id()`(連番 `article_reactions_id_seq`、`KH` + 8 桁、**KH01000000 から**。
      Salesforce の KH0000xxxx 台と離す。K- / TA- / M- と同じ考え方)。**取込時の会員照合**(2026-09-23): メールが会員の email1〜3 と完全一致し 1 人に絞れた行は
      `member_id` / `member_name`(CRM の会員氏名)を入れて取り込む。プレビューに「会員一致」「複数候補」の件数とサンプルの紐付け先を出す(`matchedCount` / `multipleCount`)。
