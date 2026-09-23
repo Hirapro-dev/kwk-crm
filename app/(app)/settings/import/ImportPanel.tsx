@@ -286,8 +286,9 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
               )}
               <p className="w-full text-[11px] text-muted-foreground">
                 取り込んだ行の「備考」に記事名、「配信媒体」に選んだ値、「日付」に指定した日(空ならその人のいちばん早いクリック日)が入ります。登録日時はクリック日時のままです。同じメールアドレスは
-                1
-                件にまとめ、同じ備考で登録済みのメールは作りません。会員との紐付けは取込後に記事反応リストで行います。
+                1 件にまとめ、同じ備考で登録済みのメールは作りません。メールアドレスが会員の
+                Eメール1〜3
+                と完全一致した人は取込時に会員へ紐付けます(複数候補・該当なしは記事反応リストの「会員を検索」でやり直せます)。
               </p>
             </div>
           )}
@@ -346,6 +347,12 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
                 <Stat label="新規" value={preview.newCount ?? 0} tone="new" />
                 <Stat label="更新" value={preview.updateCount ?? 0} tone="update" />
                 <Stat label="スキップ" value={preview.skippedCount ?? 0} />
+                {preview.matchedCount !== undefined && (
+                  <Stat label="会員一致" value={preview.matchedCount} tone="update" />
+                )}
+                {(preview.multipleCount ?? 0) > 0 && (
+                  <Stat label="複数候補" value={preview.multipleCount ?? 0} />
+                )}
                 <Stat
                   label="エラー"
                   value={preview.errorCount ?? 0}
@@ -388,6 +395,9 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
                         <th className="px-2 py-1 text-left">行</th>
                         <th className="px-2 py-1 text-left">ID</th>
                         <th className="px-2 py-1 text-left">処理</th>
+                        {preview.sample.some((s) => s.note) && (
+                          <th className="px-2 py-1 text-left">紐付ける会員</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -400,6 +410,9 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
                               {s.mode}
                             </span>
                           </td>
+                          {preview.sample?.some((x) => x.note) && (
+                            <td className="px-2 py-0.5">{s.note ?? ''}</td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -445,6 +458,8 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
             {committed?.ok && (
               <p role="status" className="text-sm text-green-700">
                 {committed.upserted?.toLocaleString()} 件を取り込みました。
+                {committed.matchedCount !== undefined &&
+                  ` (会員一致 ${committed.matchedCount} 件を紐付け)`}
                 {(committed.skippedCount ?? 0) > 0 &&
                   ` (スキップ ${committed.skippedCount} 件: 変更なし等)`}
                 {(committed.errorCount ?? 0) > 0 && ` (エラー ${committed.errorCount} 件は除外)`}

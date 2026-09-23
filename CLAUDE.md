@@ -613,7 +613,10 @@ Phase 1 では:
      **同じメール + 同じ備考が既にあれば作らない**(プレビューで「スキップ」。DB 側も部分ユニーク `uq_artreact_email_remarks`)。
      入れる値: `email` / `member_name` / `registered_at`(いちばん早いクリック日時)/ `reacted_date`(画面で指定した日付。空なら登録日時の日本時間の日付)/ `remarks` / `media` / `tool='メルマガ'` /
      `reaction_type='クリック'`。ID は DB の DEFAULT `gen_article_reaction_id()`(連番 `article_reactions_id_seq`、`KH` + 8 桁、**KH01000000 から**。
-     Salesforce の KH0000xxxx 台と離す。K- / TA- / M- と同じ考え方)。会員の紐付けは取込時には行わない。定期取込(Drive)の対象外(備考・媒体を画面で指定するため)。
+     Salesforce の KH0000xxxx 台と離す。K- / TA- / M- と同じ考え方)。**取込時の会員照合**(2026-09-23): メールが会員の email1〜3 と完全一致し 1 人に絞れた行は
+     `member_id` / `member_name`(CRM の会員氏名)を入れて取り込む。プレビューに「会員一致」「複数候補」の件数とサンプルの紐付け先を出す(`matchedCount` / `multipleCount`)。
+     複数候補・該当なしは紐付けず、後から一覧の「会員を検索」でやり直せる。DB 参照は `loadMembersByEmails`(`article_reaction_match_db.ts`。一括検索と共通)。
+     定期取込(Drive)の対象外(備考・媒体を画面で指定するため)。
 - **一括の会員検索**(2026-09-23): 一覧の左端チェックで選び、選択中バーの「会員を検索(メール一致)」で、メールアドレスが会員の email1〜3 のどれかと
   **完全一致**(小文字化)した行に会員ID・会員氏名を入れる。同じメールの会員が複数いる行(複数候補)・該当なし・メールなし(Salesforce 形式の行)は変えず、
   件数を「紐付け / 複数候補 / 該当なし / メールなし」で出す。あいまい一致はしない(§5.15 と同方針)。viewer 以外、1 回 500 件まで
