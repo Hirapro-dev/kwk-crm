@@ -10,7 +10,8 @@
  *   「同じ反応」として作らず、その既存行にメール(と備考 = 記事名)を書き込む(空のときだけ。純粋関数 matchLegacyReactions。2026-09-23)。
  * - ID は DB の DEFAULT(gen_article_reaction_id())に任せる。
  * - 会員照合: メールアドレスが会員の email1〜3 と完全一致(小文字化)し 1 人に絞れた行は、取込時に会員ID・会員氏名を入れる
- *   (プレビューで「会員一致」件数を出す。2026-09-23)。複数候補・該当なしは紐付けず、後から一覧の「会員を検索」でやり直せる。
+ *   (プレビューで「会員一致」件数を出す。2026-09-23)。メールで当たらない行は読者名前が会員氏名と一致する会員が 1 人だけなら紐付ける。
+ *   複数候補・該当なしは紐付けず、後から一覧の「会員を検索」でやり直せる。
  * - 取込はサービスロールで実行(RLS の書込は admin のみのため。監査ログの対象外テーブル)。
  */
 
@@ -24,7 +25,10 @@ import {
   matchLegacyReactions,
   matchReactionsByEmail,
 } from '@/lib/domain/article_reaction_clicks';
-import { loadMembersByEmails } from '@/lib/domain/article_reaction_match_db';
+import {
+  loadMemberCandidatesByNames,
+  loadMembersByEmails,
+} from '@/lib/domain/article_reaction_match_db';
 import { parseCsvRaw } from '@/lib/import/parse';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
@@ -139,24 +143,31 @@ async function loadExistingEmails(
 }
 
 /** メール(小文字)→ 1 人に絞れた会員 */
-type LinkMap = Map<string, { memberId: string; memberName: string | null }>;
+type LinkMap = Map<string, { memberId: string; memberName: string | null; by: 'email' | 'name' }>;
 
 /** 取り込む行の会員照合(メール完全一致)。行の id はメールで代用する */
 async function matchForImport(
   supabase: Db,
   rows: DedupedClick[],
 ): Promise<{ result: EmailMatchResult; links: LinkMap }> {
-  const members = await loadMembersByEmails(
+  const byEmail = await loadMembersByEmails(
     supabase,
     rows.map((r) => r.email),
   );
+  // メールで当たらない人の氏名照合用(読者名前がある行だけ)
+  const byName = await loadMemberCandidatesByNames(
+    supabase,
+    rows.map((r) => r.name),
+  );
+  const merged = new Map(byEmail.map((m) => [m.id, m]));
+  for (const m of byName) merged.set(m.id, m);
   const result = matchReactionsByEmail(
-    rows.map((r) => ({ id: r.email, email: r.email })),
-    members,
+    rows.map((r) => ({ id: r.email, email: r.email, name: r.name })),
+    [...merged.values()],
   );
   const links: LinkMap = new Map();
   for (const l of result.linked)
-    links.set(l.id, { memberId: l.memberId, memberName: l.memberName });
+    links.set(l.id, { memberId: l.memberId, memberName: l.memberName, by: l.by });
   return { result, links };
 }
 
@@ -271,7 +282,7 @@ export async function previewArticleReactionClicksCsv(
       note: legacy
         ? `既存 ${legacy.existingId}(${legacy.by === 'email' ? 'メール' : '氏名'}一致)`
         : link
-          ? `${link.memberId} ${link.memberName ?? ''}`.trim()
+          ? `${link.memberId} ${link.memberName ?? ''}${link.by === 'name' ? '(氏名一致)' : ''}`.trim()
           : undefined,
     };
   });

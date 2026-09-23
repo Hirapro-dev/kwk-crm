@@ -26,7 +26,7 @@ export function ArticleReactionBulkActions({ ctx }: Props) {
         return;
       }
       setMessage(
-        `会員を検索しました: 紐付け ${r.linked ?? 0} / 複数候補 ${r.multiple ?? 0} / 該当なし ${r.none ?? 0} / メールなし ${r.noEmail ?? 0}`,
+        `会員を検索しました: 紐付け ${r.linked ?? 0}(うち氏名一致 ${r.linkedByName ?? 0}) / 複数候補 ${r.multiple ?? 0} / 該当なし ${r.none ?? 0} / メールなし ${r.noEmail ?? 0}`,
       );
       await ctx.refresh();
       ctx.clear();
@@ -40,7 +40,7 @@ export function ArticleReactionBulkActions({ ctx }: Props) {
         onClick={run}
         disabled={pending || ctx.ids.length === 0}
         className="h-8 rounded-md border border-input bg-background px-2 text-xs hover:bg-accent disabled:opacity-50"
-        title="メールアドレスが会員の Eメール1〜3 のどれかと完全一致した行に会員IDを入れます"
+        title="メールアドレスが会員の Eメール1〜3 のどれかと完全一致した行に会員IDを入れます。メールで当たらない行は氏名が一致する会員が 1 人だけなら紐付けます"
       >
         {pending ? '検索中…' : '会員を検索(メール一致)'}
       </button>

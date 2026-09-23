@@ -67,7 +67,29 @@ describe('matchReactionsByEmail', () => {
   ];
   it('email1〜3 のどれかに完全一致(小文字化)した会員が 1 人なら紐付ける', () => {
     const r = matchReactionsByEmail([{ id: 'r1', email: 'a@example.com' }], members);
-    expect(r.linked).toEqual([{ id: 'r1', memberId: 'K-1', memberName: '会員1' }]);
+    expect(r.linked).toEqual([{ id: 'r1', memberId: 'K-1', memberName: '会員1', by: 'email' }]);
+  });
+  // 意図: 配信ツールに登録したメールが CRM の会員と違う人を、氏名(空白を除いて一致)が 1 人だけなら拾う(2026-09-23)
+  it('メールで当たらない行は、氏名が一致する会員が 1 人だけなら紐付ける(同名が複数なら複数候補)', () => {
+    const ms = [
+      ...members,
+      { id: 'K-10', name: '久保田 雄樹', email1: 'k@freebit.jp', email2: null, email3: null },
+      { id: 'K-11', name: '田中 一郎', email1: null, email2: null, email3: null },
+      { id: 'K-12', name: '田中一郎', email1: null, email2: null, email3: null },
+    ];
+    const r = matchReactionsByEmail(
+      [
+        { id: 'r1', email: 'kiiyuk@outlook.jp', name: '久保田雄樹' },
+        { id: 'r2', email: 'zz@example.com', name: '田中一郎' },
+        { id: 'r3', email: 'y@example.com', name: '' },
+      ],
+      ms,
+    );
+    expect(r.linked).toEqual([
+      { id: 'r1', memberId: 'K-10', memberName: '久保田 雄樹', by: 'name' },
+    ]);
+    expect(r.multiple).toEqual(['r2']);
+    expect(r.none).toEqual(['r3']);
   });
   it('複数の会員が同じメールなら紐付けず「複数」、いなければ「該当なし」、メール無しは「メールなし」', () => {
     const r = matchReactionsByEmail(

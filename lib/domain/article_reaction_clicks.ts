@@ -124,6 +124,8 @@ export function dedupeClickRows(inputs: ClickRowInput[]): DedupeResult {
 export interface ReactionForMatch {
   id: string;
   email: string | null;
+  /** 読者名前(CSV)。メールで当たらないときの氏名照合に使う(任意) */
+  name?: string | null;
 }
 
 export interface MemberForMatch {
@@ -135,8 +137,8 @@ export interface MemberForMatch {
 }
 
 export interface EmailMatchResult {
-  /** 1 人に絞れた行 → 会員ID・会員氏名を入れる */
-  linked: Array<{ id: string; memberId: string; memberName: string | null }>;
+  /** 1 人に絞れた行 → 会員ID・会員氏名を入れる。by はその根拠(メール完全一致 / 氏名一致) */
+  linked: Array<{ id: string; memberId: string; memberName: string | null; by: 'email' | 'name' }>;
   /** 同じメールの会員が複数いて絞れない行(変えない) */
   multiple: string[];
   /** 該当する会員がいない行(変えない) */
@@ -147,13 +149,16 @@ export interface EmailMatchResult {
 
 /**
  * 記事反応のメールアドレスを会員の email1〜3 と完全一致(小文字化)で照合する。
- * 削除済みの会員は呼び出し側で除いて渡す。
+ * メールで当たらない行は、読者名前が会員氏名と一致(空白を除いて比較)する会員が 1 人だけなら紐付ける(2026-09-23。
+ * 配信ツールに登録したメールが CRM の会員のメールと違う人のため)。同名が複数なら「複数候補」で止める。
+ * 削除済みの会員は呼び出し側で除いて渡す。メールも氏名も無い行は noEmail。
  */
 export function matchReactionsByEmail(
   reactions: ReactionForMatch[],
   members: MemberForMatch[],
 ): EmailMatchResult {
   const byEmail = new Map<string, MemberForMatch[]>();
+  const byName = new Map<string, MemberForMatch[]>();
   for (const m of members) {
     for (const e of [m.email1, m.email2, m.email3]) {
       const key = (e ?? '').trim().toLowerCase();
@@ -161,6 +166,12 @@ export function matchReactionsByEmail(
       const list = byEmail.get(key) ?? [];
       if (!list.some((x) => x.id === m.id)) list.push(m);
       byEmail.set(key, list);
+    }
+    const n = normalizeName(m.name);
+    if (n) {
+      const list = byName.get(n) ?? [];
+      if (!list.some((x) => x.id === m.id)) list.push(m);
+      byName.set(n, list);
     }
   }
   const result: EmailMatchResult = { linked: [], multiple: [], none: [], noEmail: [] };
@@ -173,8 +184,19 @@ export function matchReactionsByEmail(
     const hits = byEmail.get(key) ?? [];
     if (hits.length === 1) {
       const m = hits[0] as MemberForMatch;
-      result.linked.push({ id: r.id, memberId: m.id, memberName: m.name });
-    } else if (hits.length > 1) {
+      result.linked.push({ id: r.id, memberId: m.id, memberName: m.name, by: 'email' });
+      continue;
+    }
+    if (hits.length > 1) {
+      result.multiple.push(r.id);
+      continue;
+    }
+    const n = normalizeName(r.name);
+    const nameHits = n ? (byName.get(n) ?? []) : [];
+    if (nameHits.length === 1) {
+      const m = nameHits[0] as MemberForMatch;
+      result.linked.push({ id: r.id, memberId: m.id, memberName: m.name, by: 'name' });
+    } else if (nameHits.length > 1) {
       result.multiple.push(r.id);
     } else {
       result.none.push(r.id);
