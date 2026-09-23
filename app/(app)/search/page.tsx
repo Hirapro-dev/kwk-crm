@@ -8,6 +8,7 @@ import { listApplications } from '@/lib/domain/applications';
 import { listInquiries } from '@/lib/domain/inquiries';
 import { listLpEntries } from '@/lib/domain/lp';
 import { listMembers } from '@/lib/domain/members';
+import { formatDate, formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 
 interface PageProps {
@@ -85,6 +86,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
                     href={`/members/${m.id}`}
                     title={m.name ?? '(名称未設定)'}
                     sub={sub}
+                    date={m.registered_at ? `登録 ${formatDateTime(m.registered_at)}` : undefined}
                   />
                 );
               })
@@ -104,6 +106,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
                   href={`/inquiries/${r.id}`}
                   title={r.name ?? '(氏名なし)'}
                   sub={`${r.id}${r.email ? ` ・ ${r.email}` : ''}${r.form?.name ? ` ・ ${r.form.name}` : ''}`}
+                  date={r.registered_at ? `登録 ${formatDateTime(r.registered_at)}` : undefined}
                 />
               ))
             )}
@@ -122,6 +125,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
                   href={`/lp/${r.id}`}
                   title={r.name ?? '(氏名なし)'}
                   sub={[r.id, r.email, r.form_name].filter(Boolean).join(' ・ ')}
+                  date={r.registered_at ? `登録 ${formatDateTime(r.registered_at)}` : undefined}
                 />
               ))
             )}
@@ -140,6 +144,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
                   href={`/applications/${a.id}`}
                   title={a.id}
                   sub={`${a.member?.name ?? a.member_id ?? ''}${a.project?.name ? ` ・ ${a.project.name}` : ''}`}
+                  date={a.application_date ? `申込 ${formatDate(a.application_date)}` : undefined}
                 />
               ))
             )}
@@ -174,10 +179,24 @@ function ResultCard({
   );
 }
 
-function ResultRow({ href, title, sub }: { href: string; title: string; sub: string }) {
+/** 検索結果の 1 行。date は右端に出す登録日時など(会員・問合せ・LP は登録日時、申込は申込日。2026-09-23) */
+function ResultRow({
+  href,
+  title,
+  sub,
+  date,
+}: {
+  href: string;
+  title: string;
+  sub: string;
+  date?: string;
+}) {
   return (
     <Link href={href} className="block px-4 py-2 hover:bg-accent/40">
-      <div className="text-sm font-medium text-primary">{title}</div>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-sm font-medium text-primary">{title}</div>
+        {date && <div className="shrink-0 text-xs text-muted-foreground">{date}</div>}
+      </div>
       <div className="truncate text-xs text-muted-foreground">{sub}</div>
     </Link>
   );
