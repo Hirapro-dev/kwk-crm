@@ -6,6 +6,8 @@
  * - 配信ツールの「クリック履歴」CSV(クリック日時 / 読者メールアドレス / 読者名前)を 1 人(メール)1 件にまとめる
  *   (判断は純粋関数 dedupeClickRows)。取込時に画面で指定した記事名(詳細と備考の両方に入れる)と配信媒体を入れる。
  * - 同じメール + 同じ備考が既にあれば作らない(スキップ)。再取込しても増えない(DB 側も部分ユニーク)。
+ * - Salesforce 形式で既に入っている同じ記事(詳細 = 記事名)・同じ日付の反応で、会員のメール または 会員氏名 が一致する行も
+ *   「同じ反応」として作らず、その既存行にメール(と備考 = 記事名)を書き込む(空のときだけ。純粋関数 matchLegacyReactions。2026-09-23)。
  * - ID は DB の DEFAULT(gen_article_reaction_id())に任せる。
  * - 会員照合: メールアドレスが会員の email1〜3 と完全一致(小文字化)し 1 人に絞れた行は、取込時に会員ID・会員氏名を入れる
  *   (プレビューで「会員一致」件数を出す。2026-09-23)。複数候補・該当なしは紐付けず、後から一覧の「会員を検索」でやり直せる。
@@ -16,7 +18,10 @@ import {
   CLICK_CSV_COLUMNS,
   type DedupedClick,
   type EmailMatchResult,
+  type LegacyMatch,
+  type LegacyReactionRow,
   dedupeClickRows,
+  matchLegacyReactions,
   matchReactionsByEmail,
 } from '@/lib/domain/article_reaction_clicks';
 import { loadMembersByEmails } from '@/lib/domain/article_reaction_match_db';
@@ -155,6 +160,48 @@ async function matchForImport(
   return { result, links };
 }
 
+/** 同じ記事名(詳細)の Salesforce 形式の行(メール列なし)と突き合わせる。既存行の ID → 会員のメール一覧も読む */
+async function matchLegacyForImport(
+  supabase: Db,
+  rows: DedupedClick[],
+  remarks: string,
+  reactedDate: string | null,
+): Promise<LegacyMatch[]> {
+  if (rows.length === 0) return [];
+  const { data, error } = await supabase
+    .from('article_reactions')
+    .select('id, member_id, member_name, reacted_date')
+    .eq('detail', remarks)
+    .is('email', null)
+    .is('deleted_at', null)
+    .limit(5000);
+  if (error) throw new Error(`既存の記事反応の確認に失敗: ${error.message}`);
+  const legacy = (data ?? []) as LegacyReactionRow[];
+  if (legacy.length === 0) return [];
+  const memberIds = [...new Set(legacy.map((l) => l.member_id).filter((v): v is string => !!v))];
+  const memberEmails = new Map<string, string[]>();
+  for (let i = 0; i < memberIds.length; i += BATCH) {
+    const chunk = memberIds.slice(i, i + BATCH);
+    const { data: ms, error: mErr } = await supabase
+      .from('members')
+      .select('id, email1, email2, email3')
+      .in('id', chunk);
+    if (mErr) throw new Error(`会員の確認に失敗: ${mErr.message}`);
+    for (const m of (ms ?? []) as Array<{
+      id: string;
+      email1: string | null;
+      email2: string | null;
+      email3: string | null;
+    }>) {
+      memberEmails.set(
+        m.id,
+        [m.email1, m.email2, m.email3].map((e) => (e ?? '').trim().toLowerCase()).filter(Boolean),
+      );
+    }
+  }
+  return matchLegacyReactions(rows, legacy, memberEmails, (r) => reactedDate ?? r.registeredDate);
+}
+
 function toRecord(
   row: DedupedClick,
   remarks: string,
@@ -199,20 +246,33 @@ export async function previewArticleReactionClicksCsv(
     opt.remarks,
     rows.map((r) => r.email),
   );
-  const newRows = rows.filter((r) => !existing.has(r.email));
+  const candidates = rows.filter((r) => !existing.has(r.email));
+  let legacyMatches: LegacyMatch[];
   let match: Awaited<ReturnType<typeof matchForImport>>;
   try {
-    match = await matchForImport(supabase, newRows);
+    legacyMatches = await matchLegacyForImport(supabase, candidates, opt.remarks, opt.reactedDate);
+    const legacyEmails = new Set(legacyMatches.map((m) => m.email));
+    match = await matchForImport(
+      supabase,
+      candidates.filter((r) => !legacyEmails.has(r.email)),
+    );
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+  const legacyByEmail = new Map(legacyMatches.map((m) => [m.email, m]));
+  const newRows = candidates.filter((r) => !legacyByEmail.has(r.email));
   const sample: PreviewResult['sample'] = rows.slice(0, 20).map((r, i) => {
     const link = match.links.get(r.email);
+    const legacy = legacyByEmail.get(r.email);
     return {
       row: i + 1,
       id: r.email,
-      mode: existing.has(r.email) ? 'スキップ' : '新規',
-      note: link ? `${link.memberId} ${link.memberName ?? ''}`.trim() : undefined,
+      mode: existing.has(r.email) || legacy ? 'スキップ' : '新規',
+      note: legacy
+        ? `既存 ${legacy.existingId}(${legacy.by === 'email' ? 'メール' : '氏名'}一致)`
+        : link
+          ? `${link.memberId} ${link.memberName ?? ''}`.trim()
+          : undefined,
     };
   });
 
@@ -223,6 +283,7 @@ export async function previewArticleReactionClicksCsv(
     newCount: newRows.length,
     updateCount: 0,
     skippedCount: existing.size,
+    legacyMatchedCount: legacyMatches.length,
     matchedCount: match.result.linked.length,
     multipleCount: match.result.multiple.length,
     errorCount: errors.length,
@@ -259,26 +320,55 @@ export async function commitArticleReactionClicksCsv(
     opt.remarks,
     rows.map((r) => r.email),
   );
-  const newRows = rows.filter((r) => !existing.has(r.email));
+  const candidates = rows.filter((r) => !existing.has(r.email));
+  let legacyMatches: LegacyMatch[];
   let match: Awaited<ReturnType<typeof matchForImport>>;
   try {
-    match = await matchForImport(supabase, newRows);
+    legacyMatches = await matchLegacyForImport(supabase, candidates, opt.remarks, opt.reactedDate);
+    const legacyEmails = new Set(legacyMatches.map((m) => m.email));
+    match = await matchForImport(
+      supabase,
+      candidates.filter((r) => !legacyEmails.has(r.email)),
+    );
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+  const legacyEmailSet = new Set(legacyMatches.map((m) => m.email));
+  const newRows = candidates.filter((r) => !legacyEmailSet.has(r.email));
   const records = newRows.map((r) =>
     toRecord(r, opt.remarks, opt.media, opt.reactedDate, match.links.get(r.email)),
   );
+
+  // Salesforce 形式の既存行に一致した分: 新しい行は作らず、既存行にメールと備考(記事名)を書き込む(空のときだけ。
+  // 同じ既存行に複数のクリック行が当たったときは最初の 1 件だけ)
+  const seenLegacy = new Set<string>();
+  for (const m of legacyMatches) {
+    if (seenLegacy.has(m.existingId)) continue;
+    seenLegacy.add(m.existingId);
+    const { error } = await supabase
+      .from('article_reactions')
+      .update({ email: m.email, remarks: opt.remarks })
+      .eq('id', m.existingId)
+      .is('email', null);
+    if (error) {
+      return {
+        ok: false,
+        error: `既存行へのメール書込みに失敗(${m.existingId}): ${error.message}`,
+      };
+    }
+  }
+
   if (records.length === 0) {
     return {
       ok: false,
       error:
-        existing.size > 0
-          ? `すべて登録済みです(同じ備考「${opt.remarks}」で ${existing.size} 件)`
+        existing.size + legacyMatches.length > 0
+          ? `すべて登録済みです(同じ記事名「${opt.remarks}」で ${existing.size} 件、Salesforce 取込分との一致 ${legacyMatches.length} 件)`
           : '取込可能な有効行がありません',
       errorCount: errors.length,
       errors: errors.slice(0, 50),
       skippedCount: existing.size,
+      legacyMatchedCount: legacyMatches.length,
     };
   }
 
@@ -304,6 +394,7 @@ export async function commitArticleReactionClicksCsv(
     newCount: inserted,
     updateCount: 0,
     skippedCount: existing.size,
+    legacyMatchedCount: legacyMatches.length,
     matchedCount: match.result.linked.length,
     errorCount: errors.length,
     errors: errors.slice(0, 50),
