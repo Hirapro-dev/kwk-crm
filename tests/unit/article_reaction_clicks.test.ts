@@ -1,7 +1,9 @@
 import {
   dedupeClickRows,
   jstDateOf,
+  matchLegacyReactions,
   matchReactionsByEmail,
+  normalizeName,
   parseJstDateTime,
 } from '@/lib/domain/article_reaction_clicks';
 import { describe, expect, it } from 'vitest';
@@ -84,5 +86,63 @@ describe('matchReactionsByEmail', () => {
   it('部分一致では紐付けない(誤紐付け防止)', () => {
     const r = matchReactionsByEmail([{ id: 'r1', email: 'a@example.co' }], members);
     expect(r.none).toEqual(['r1']);
+  });
+});
+
+describe('matchLegacyReactions', () => {
+  // 意図: Salesforce 形式で既に入っている同じ記事・同じ日の反応を二重に作らない(§5.13b。2026-09-23)。
+  // 人の一致は 会員のメール または 会員氏名(空白を除く)。記事名は呼び出し側で絞る前提
+  const click = (email: string, name: string | null, date: string) => ({
+    email,
+    name,
+    registeredAt: `${date}T00:00:00.000Z`,
+    registeredDate: date,
+    clickCount: 1,
+  });
+  const legacy = [
+    { id: 'KH00000002', member_id: 'K-1', member_name: '山田 太郎', reacted_date: '2026-09-21' },
+    { id: 'KH00000001', member_id: null, member_name: '鈴木　花子', reacted_date: '2026-09-21' },
+    { id: 'KH00000003', member_id: 'K-1', member_name: '山田 太郎', reacted_date: '2026-09-20' },
+  ];
+  const emails = new Map([['K-1', ['A@example.com']]]);
+  const byDate = (r: { registeredDate: string }) => r.registeredDate;
+
+  it('同じ日付で会員のメールが一致すれば既存行に当たる(メール一致を優先)', () => {
+    const r = matchLegacyReactions(
+      [click('a@example.com', null, '2026-09-21')],
+      legacy,
+      emails,
+      byDate,
+    );
+    expect(r).toEqual([{ email: 'a@example.com', existingId: 'KH00000002', by: 'email' }]);
+  });
+  it('メールが無ければ会員氏名(空白を除く)で当たる', () => {
+    const r = matchLegacyReactions(
+      [click('x@example.com', '鈴木花子', '2026-09-21')],
+      legacy,
+      emails,
+      byDate,
+    );
+    expect(r).toEqual([{ email: 'x@example.com', existingId: 'KH00000001', by: 'name' }]);
+  });
+  it('日付が違えば当たらない。氏名も空なら当たらない', () => {
+    expect(
+      matchLegacyReactions([click('a@example.com', null, '2026-09-22')], legacy, emails, byDate),
+    ).toEqual([]);
+    expect(
+      matchLegacyReactions([click('x@example.com', '', '2026-09-21')], legacy, emails, byDate),
+    ).toEqual([]);
+  });
+  it('画面で指定した日付で比較できる', () => {
+    const r = matchLegacyReactions(
+      [click('a@example.com', null, '2026-09-23')],
+      legacy,
+      emails,
+      () => '2026-09-20',
+    );
+    expect(r[0]?.existingId).toBe('KH00000003');
+  });
+  it('normalizeName は半角・全角の空白を除く', () => {
+    expect(normalizeName(' 山田　太郎 ')).toBe('山田太郎');
   });
 });

@@ -65,6 +65,8 @@ export interface PreviewResult {
   matchedCount?: number;
   /** 同じメールの会員が複数いて紐付けなかった件数(同上) */
   multipleCount?: number;
+  /** Salesforce 形式の既存行(同じ記事名・日付、会員のメール or 氏名が一致)に当たり、作らなかった件数(同上) */
+  legacyMatchedCount?: number;
   /** プレビュー用サンプル(先頭20行、id + 状態。note は補足: 紐付ける会員ID・氏名など) */
   sample?: Array<{ row: number; id: string; mode: '新規' | '更新' | 'スキップ'; note?: string }>;
 }
@@ -74,6 +76,8 @@ export interface CommitResult {
   error?: string;
   /** 取込時に会員へ紐付けた件数(記事反応のクリック履歴 CSV だけ) */
   matchedCount?: number;
+  /** Salesforce 形式の既存行に当たり、新しい行を作らずメールを書き込んだ件数(同上) */
+  legacyMatchedCount?: number;
   upserted?: number;
   /** 実際に取り込んだ行のうち、新規作成された件数 */
   newCount?: number;

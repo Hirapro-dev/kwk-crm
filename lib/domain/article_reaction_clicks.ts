@@ -182,3 +182,70 @@ export function matchReactionsByEmail(
   }
   return result;
 }
+
+/** 既存の Salesforce 形式の行(メール列なし。詳細 = 記事名) */
+export interface LegacyReactionRow {
+  id: string;
+  member_id: string | null;
+  member_name: string | null;
+  reacted_date: string | null;
+}
+
+/** 氏名の比較用: 空白(半角・全角)を除く */
+export function normalizeName(name: string | null | undefined): string {
+  return (name ?? '').replace(/[\s\u3000]/g, '');
+}
+
+export interface LegacyMatch {
+  /** クリック行のメール(小文字) */
+  email: string;
+  /** 一致した既存行の ID */
+  existingId: string;
+  /** 一致の根拠 */
+  by: 'email' | 'name';
+}
+
+/**
+ * クリック履歴の行(1 人 1 件)を、既存の Salesforce 形式の行と突き合わせる(2026-09-23)。
+ * 同じ記事名の既存行(呼び出し側で絞る)のうち、日付が同じで、
+ *   会員のメール(email1〜3)がクリック行のメールと一致する(email)、または
+ *   会員氏名が読者名前と一致する(空白を除いて比較。name)
+ * ものを「同じ反応」とみなす。メール一致を優先し、候補が複数なら先頭(ID 順)を使う。
+ * @param effectiveDate クリック行 → 取り込むときの日付(画面で指定した日付、無ければクリック日)
+ * @param memberEmails 会員ID → メール(小文字)の一覧
+ */
+export function matchLegacyReactions(
+  clicks: DedupedClick[],
+  legacy: LegacyReactionRow[],
+  memberEmails: Map<string, string[]>,
+  effectiveDate: (row: DedupedClick) => string,
+): LegacyMatch[] {
+  const byEmail = new Map<string, LegacyReactionRow[]>();
+  const byName = new Map<string, LegacyReactionRow[]>();
+  const sorted = [...legacy].sort((a, b) => a.id.localeCompare(b.id));
+  for (const l of sorted) {
+    if (!l.reacted_date) continue;
+    for (const e of l.member_id ? (memberEmails.get(l.member_id) ?? []) : []) {
+      const key = `${l.reacted_date}|${e.toLowerCase()}`;
+      byEmail.set(key, [...(byEmail.get(key) ?? []), l]);
+    }
+    const n = normalizeName(l.member_name);
+    if (n) {
+      const key = `${l.reacted_date}|${n}`;
+      byName.set(key, [...(byName.get(key) ?? []), l]);
+    }
+  }
+  const out: LegacyMatch[] = [];
+  for (const c of clicks) {
+    const date = effectiveDate(c);
+    const e = byEmail.get(`${date}|${c.email}`)?.[0];
+    if (e) {
+      out.push({ email: c.email, existingId: e.id, by: 'email' });
+      continue;
+    }
+    const n = normalizeName(c.name);
+    const m = n ? byName.get(`${date}|${n}`)?.[0] : undefined;
+    if (m) out.push({ email: c.email, existingId: m.id, by: 'name' });
+  }
+  return out;
+}

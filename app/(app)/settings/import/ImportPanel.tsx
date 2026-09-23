@@ -289,7 +289,8 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
                 形式の取込で記事名が入っていた「詳細」に揃えます)、「配信媒体」に選んだ値、「日付」に指定した日(空ならその人のいちばん早いクリック日)が入ります。登録日時はクリック日時のままです。同じメールアドレスは
                 1 件にまとめ、同じ備考で登録済みのメールは作りません。メールアドレスが会員の
                 Eメール1〜3
-                と完全一致した人は取込時に会員へ紐付けます(複数候補・該当なしは記事反応リストの「会員を検索」でやり直せます)。
+                と完全一致した人は取込時に会員へ紐付けます(複数候補・該当なしは記事反応リストの「会員を検索」でやり直せます)。Salesforce
+                形式で既に入っている同じ記事名・同じ日付の反応で、会員のメールまたは会員氏名が一致するものは作らず、その既存行にメールを記録します。
               </p>
             </div>
           )}
@@ -348,6 +349,9 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
                 <Stat label="新規" value={preview.newCount ?? 0} tone="new" />
                 <Stat label="更新" value={preview.updateCount ?? 0} tone="update" />
                 <Stat label="スキップ" value={preview.skippedCount ?? 0} />
+                {(preview.legacyMatchedCount ?? 0) > 0 && (
+                  <Stat label="既存(SF取込分)" value={preview.legacyMatchedCount ?? 0} />
+                )}
                 {preview.matchedCount !== undefined && (
                   <Stat label="会員一致" value={preview.matchedCount} tone="update" />
                 )}
@@ -461,6 +465,8 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
                 {committed.upserted?.toLocaleString()} 件を取り込みました。
                 {committed.matchedCount !== undefined &&
                   ` (会員一致 ${committed.matchedCount} 件を紐付け)`}
+                {(committed.legacyMatchedCount ?? 0) > 0 &&
+                  ` (Salesforce 取込分と一致 ${committed.legacyMatchedCount} 件: 作らずに既存行へメールを記録)`}
                 {(committed.skippedCount ?? 0) > 0 &&
                   ` (スキップ ${committed.skippedCount} 件: 変更なし等)`}
                 {(committed.errorCount ?? 0) > 0 && ` (エラー ${committed.errorCount} 件は除外)`}
