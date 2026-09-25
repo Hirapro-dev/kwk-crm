@@ -15,6 +15,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
+import { jstYesterday } from '@/lib/domain/article_reaction_clicks';
 import {
   type CommitResult,
   type PreviewResult,
@@ -59,7 +60,8 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
   const [remarks, setRemarks] = useState('');
   const [mediaChoice, setMediaChoice] = useState<string>(mediaOptions[0] ?? MEDIA_OTHER);
   const [mediaOther, setMediaOther] = useState('');
-  const [reactedDate, setReactedDate] = useState('');
+  // 日付の既定は日本時間の昨日(配信は前日、翌朝に取り込む運用。2026-09-25)
+  const [reactedDate, setReactedDate] = useState(() => jstYesterday());
 
   const def = IMPORT_OBJECTS[objectKey]!;
   const isClicks = objectKey === CLICKS_KEY;
@@ -253,7 +255,7 @@ export function ImportPanel({ mediaOptions = [] }: Props) {
               </div>
               <div className="space-y-1">
                 <label className="text-[11px] text-muted-foreground" htmlFor="imp-reacted-date">
-                  日付(空ならクリック日)
+                  日付(既定は昨日。空ならクリック日)
                 </label>
                 <input
                   id="imp-reacted-date"

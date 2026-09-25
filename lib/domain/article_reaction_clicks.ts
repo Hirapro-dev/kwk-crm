@@ -67,6 +67,11 @@ export function parseJstDateTime(input: string): string | null {
   return t.toISOString();
 }
 
+/** 日本時間での「昨日」(YYYY-MM-DD)。取込画面の日付の既定値(配信は前日で、翌朝にクリック履歴を取り込む運用。2026-09-25) */
+export function jstYesterday(now: Date = new Date()): string {
+  return jstDateOf(new Date(now.getTime() - 24 * 3600 * 1000).toISOString());
+}
+
 /** UTC の ISO 文字列 → 日本時間の日付(YYYY-MM-DD) */
 export function jstDateOf(iso: string): string {
   const t = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
