@@ -9,6 +9,7 @@
 import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTable';
 import { TableCell } from '@/components/ui/table';
 import { deleteRecords } from '@/lib/domain/delete_actions';
+import type { LegacyBondListParams } from '@/lib/domain/legacy_bonds';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { loadMoreLegacyBonds } from '@/lib/domain/list_more_actions';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
@@ -21,7 +22,7 @@ interface Props {
   initialRows: Row[];
   fields: FieldDefinition[];
   total: number;
-  params: { q?: string; sort?: string; dir?: 'asc' | 'desc' };
+  params: LegacyBondListParams;
   /** 左端の選択チェックボックス・削除ボタンを出すか(admin のみ) */
   canDelete?: boolean;
 }

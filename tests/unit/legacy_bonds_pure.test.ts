@@ -1,4 +1,4 @@
-import { convertLegacyBondRow } from '@/lib/domain/legacy_bonds_pure';
+import { convertLegacyBondRow, normalizeRedemptionMonth } from '@/lib/domain/legacy_bonds_pure';
 import { IMPORT_OBJECTS } from '@/lib/import/schema';
 import { describe, expect, it } from 'vitest';
 
@@ -72,5 +72,18 @@ describe('convertLegacyBondRow', () => {
       '旧社債管理ID',
     );
     expect(convertLegacyBondRow({ ...base, 入金額: 'abc' }, fields, ctx).error).toContain('入金額');
+  });
+});
+
+// 意図: 償還対象月は "YYYY/MM" の文字列で持つため、月のフィルタは同じ形にそろえてから文字列で比較する
+describe('normalizeRedemptionMonth', () => {
+  it('"2025-08" / "2025/8" を "2025/08" にする', () => {
+    expect(normalizeRedemptionMonth('2025-08')).toBe('2025/08');
+    expect(normalizeRedemptionMonth('2025/8')).toBe('2025/08');
+  });
+  it('空・不正な値・13 月は null', () => {
+    expect(normalizeRedemptionMonth('')).toBeNull();
+    expect(normalizeRedemptionMonth('2025')).toBeNull();
+    expect(normalizeRedemptionMonth('2025-13')).toBeNull();
   });
 });

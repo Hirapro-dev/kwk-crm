@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { LEGACY_BOND_RESULT_NONE, normalizeRedemptionMonth } from './legacy_bonds_pure';
 
 export interface LegacyBondRow {
   id: string;
@@ -60,6 +61,13 @@ const SORTABLE = new Set([
 
 export interface LegacyBondListParams {
   q?: string;
+  /** 社債名(完全一致) */
+  bondName?: string;
+  /** 今回の結果(完全一致。LEGACY_BOND_RESULT_NONE は未入力) */
+  result?: string;
+  /** 償還対象月の範囲(YYYY-MM / YYYY/MM。両端を含む) */
+  monthFrom?: string;
+  monthTo?: string;
   sort?: string;
   dir?: 'asc' | 'desc';
   page?: number;
@@ -79,8 +87,8 @@ export async function listLegacyBonds(
   const supabase = await createClient();
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(200, Math.max(10, params.pageSize ?? 50));
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
+  const rangeFrom = (page - 1) * pageSize;
+  const rangeTo = rangeFrom + pageSize - 1;
 
   let query = supabase.from('legacy_bonds').select(COLS, { count: 'exact' }).is('deleted_at', null);
 
@@ -91,7 +99,7 @@ export async function listLegacyBonds(
   query = query
     .order('redemption_month', { ascending: false, nullsFirst: false })
     .order('id', { ascending: false })
-    .range(from, to);
+    .range(rangeFrom, rangeTo);
 
   if (params.q?.trim()) {
     const q = params.q.trim().replace(/[%_]/g, '\\$&');
@@ -99,6 +107,14 @@ export async function listLegacyBonds(
       `id.ilike.%${q}%,member_id.ilike.%${q}%,member_name.ilike.%${q}%,application_no.ilike.%${q}%,bond_name.ilike.%${q}%,result.ilike.%${q}%`,
     );
   }
+  if (params.bondName) query = query.eq('bond_name', params.bondName);
+  if (params.result === LEGACY_BOND_RESULT_NONE) query = query.is('result', null);
+  else if (params.result) query = query.eq('result', params.result);
+  // 償還対象月は "YYYY/MM" の文字列なので、同じ形にそろえて文字列で範囲比較する
+  const from = normalizeRedemptionMonth(params.monthFrom);
+  const to = normalizeRedemptionMonth(params.monthTo);
+  if (from) query = query.gte('redemption_month', from);
+  if (to) query = query.lte('redemption_month', to);
 
   const { data, error, count } = await query;
   if (error) throw new Error(`旧社債管理の取得に失敗: ${error.message}`);
@@ -133,4 +149,25 @@ export async function getLegacyBondsByMember(
     .limit(limit);
   if (error) return [];
   return (data ?? []) as LegacyBondRow[];
+}
+
+/** 一覧のフィルタの選択肢(社債名・今回の結果。件数が少ないので全行から集める。失敗時は空) */
+export async function listLegacyBondFilterOptions(): Promise<{
+  bondNames: string[];
+  results: string[];
+}> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('legacy_bonds')
+    .select('bond_name, result')
+    .is('deleted_at', null)
+    .limit(5000);
+  if (error) return { bondNames: [], results: [] };
+  const bonds = new Set<string>();
+  const results = new Set<string>();
+  for (const r of (data ?? []) as Array<{ bond_name: string | null; result: string | null }>) {
+    if (r.bond_name) bonds.add(r.bond_name);
+    if (r.result) results.add(r.result);
+  }
+  return { bondNames: [...bonds].sort(), results: [...results].sort() };
 }

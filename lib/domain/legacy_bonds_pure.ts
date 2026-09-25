@@ -55,3 +55,31 @@ export function convertLegacyBondRow(
   if (typeof rec.prev_years === 'number') rec.prev_years = Math.trunc(rec.prev_years);
   return { record: rec };
 }
+
+/** 一覧の「今回の結果」フィルタで「未入力」を表す値 */
+export const LEGACY_BOND_RESULT_NONE = '__none__';
+
+/** 一覧の並び替えの選択肢(列名 → 表示名)。SortHeader(列見出し)と同じ ?sort= / ?dir= を使う */
+export const LEGACY_BOND_SORT_OPTIONS: ReadonlyArray<{ field: string; label: string }> = [
+  { field: 'redemption_month', label: '償還対象月' },
+  { field: 'id', label: '旧社債管理ID' },
+  { field: 'member_name', label: '会員氏名' },
+  { field: 'bond_name', label: '社債名' },
+  { field: 'payment_amount', label: '入金額' },
+  { field: 'redemption_amount', label: '償還金額' },
+  { field: 'interest', label: '利息' },
+  { field: 'result', label: '今回の結果' },
+  { field: 'contract_sent_date', label: '契約書送付日' },
+];
+
+/**
+ * 月の入力(<input type="month"> の "2025-08" / 手入力の "2025/8")を DB の償還対象月の形 "2025/08" にする。
+ * 解釈できなければ null(フィルタを掛けない)。
+ */
+export function normalizeRedemptionMonth(input: string | null | undefined): string | null {
+  const m = (input ?? '').trim().match(/^(\d{4})[-/](\d{1,2})$/);
+  if (!m) return null;
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  return `${m[1]}/${String(month).padStart(2, '0')}`;
+}
