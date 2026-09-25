@@ -138,8 +138,41 @@ class ParamBag {
 }
 
 /**
+ * 比較に使うプレースホルダの型キャスト。
+ * exec_report_sql(migration 07)はパラメータをすべて text として束縛するため、数値・日付・日時の列と比べるときは
+ * 値側に型を付けないと「operator does not exist: numeric < text」になる(2026-09-25 に判明。入金額 < 10000000 など)。
+ * 文字列の列はキャスト不要。
+ */
+export function paramCastFor(dataType: AllowedColumnDef['dataType']): string {
+  switch (dataType) {
+    case 'number':
+      return '::numeric';
+    case 'date':
+      return '::date';
+    case 'datetime':
+      return '::timestamptz';
+    case 'boolean':
+      return '::boolean';
+    default:
+      return '';
+  }
+}
+
+/** キャストする型の値として解釈できるかを確認する(不正な値は DB に送らず分かるメッセージで止める) */
+function assertCastable(cast: string, v: unknown, label: string): void {
+  if (v === null || v === undefined || v === '') return;
+  if (cast === '::numeric' && !Number.isFinite(Number(String(v).replace(/,/g, '')))) {
+    throw new BuilderError(`「${label}」には数値を入力してください(${String(v)})`);
+  }
+  if ((cast === '::date' || cast === '::timestamptz') && Number.isNaN(Date.parse(String(v)))) {
+    throw new BuilderError(`「${label}」には日付を入力してください(${String(v)})`);
+  }
+}
+
+/**
  * フィルタ演算子をパラメータ化された SQL 片に変換。
- * 値はすべて ParamBag を通してプレースホルダ化する。
+ * 値はすべて ParamBag を通してプレースホルダ化し、比較する列の型に合わせてキャストを付ける(paramCastFor)。
+ * @param castType 比較する値の型。省略時は列の dataType(HAVING で集計値と比べるときは呼び出し側が渡す)
  */
 function operatorToSql(
   colSql: string,
@@ -147,15 +180,24 @@ function operatorToSql(
   pb: ParamBag,
   colDef: AllowedColumnDef,
   currentUserId: string,
+  castType?: AllowedColumnDef['dataType'],
 ): string {
   const op: FilterOperator = cond.op;
   const value = cond.value === '${current_user}' ? currentUserId : cond.value;
+  const cast = paramCastFor(castType ?? colDef.dataType);
+  const label = colDef.label ?? cond.field;
+  /** 比較用のプレースホルダ(型キャスト付き)。数値はカンマを除いて渡す */
+  const ph = (v: unknown): string => {
+    assertCastable(cast, v, label);
+    const norm = cast === '::numeric' && typeof v === 'string' ? v.replace(/,/g, '') : v;
+    return `${pb.push(norm)}${cast}`;
+  };
 
   switch (op) {
     case 'equals':
-      return `${colSql} = ${pb.push(value)}`;
+      return `${colSql} = ${ph(value)}`;
     case 'not_equals':
-      return `${colSql} <> ${pb.push(value)}`;
+      return `${colSql} <> ${ph(value)}`;
     case 'contains':
       return `${colSql} ILIKE ${pb.push(`%${escapeLike(String(value ?? ''))}%`)}`;
     case 'not_contains':
@@ -167,32 +209,32 @@ function operatorToSql(
     case 'in': {
       const vs = cond.values ?? [];
       if (vs.length === 0) return '1 = 0';
-      const phs = vs.map((v) => pb.push(v));
+      const phs = vs.map((v) => ph(v));
       return `${colSql} IN (${phs.join(', ')})`;
     }
     case 'not_in': {
       const vs = cond.values ?? [];
       if (vs.length === 0) return '1 = 1';
-      const phs = vs.map((v) => pb.push(v));
+      const phs = vs.map((v) => ph(v));
       return `${colSql} NOT IN (${phs.join(', ')})`;
     }
     case 'gt':
-      return `${colSql} > ${pb.push(value)}`;
+      return `${colSql} > ${ph(value)}`;
     case 'gte':
-      return `${colSql} >= ${pb.push(value)}`;
+      return `${colSql} >= ${ph(value)}`;
     case 'lt':
-      return `${colSql} < ${pb.push(value)}`;
+      return `${colSql} < ${ph(value)}`;
     case 'lte':
-      return `${colSql} <= ${pb.push(value)}`;
+      return `${colSql} <= ${ph(value)}`;
     case 'between': {
       const vs = cond.values ?? [];
       if (vs.length !== 2) return '1 = 0';
-      return `${colSql} BETWEEN ${pb.push(vs[0])} AND ${pb.push(vs[1])}`;
+      return `${colSql} BETWEEN ${ph(vs[0])} AND ${ph(vs[1])}`;
     }
     case 'before':
-      return `${colSql} < ${pb.push(value)}`;
+      return `${colSql} < ${ph(value)}`;
     case 'after':
-      return `${colSql} > ${pb.push(value)}`;
+      return `${colSql} > ${ph(value)}`;
     case 'this_week':
       return `${colSql} >= date_trunc('week', now()) AND ${colSql} < date_trunc('week', now()) + interval '7 days'`;
     case 'this_month':
@@ -456,8 +498,13 @@ export function buildReportQuery(
       const colDef = validateColumn(reportType, h.field, extraColumns);
       const srcSql = sourceSql(h.field);
       const colSql = h.aggregate ? AGG_SQL[h.aggregate](srcSql) : srcSql;
-      // operatorToSql は WHERE 用だが HAVING でもそのまま使える
-      havingParts.push(operatorToSql(colSql, h, pb, colDef, currentUserId));
+      // operatorToSql は WHERE 用だが HAVING でもそのまま使える。
+      // 件数・合計・平均は数値、最小・最大は元の列の型と比べる
+      const aggType =
+        h.aggregate && ['count', 'count_distinct', 'sum', 'avg'].includes(h.aggregate)
+          ? 'number'
+          : undefined;
+      havingParts.push(operatorToSql(colSql, h, pb, colDef, currentUserId, aggType));
       usedSources.add(h.field);
     }
   }

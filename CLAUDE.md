@@ -1392,7 +1392,9 @@ report_subscriptions:
 **ユーザー入力は決して SQL に直接連結しない。** バックエンドで以下を実施:
 
 1. **ホワイトリスト方式**: レポートタイプごとに `allowed_columns` `allowed_joins` `allowed_filters` を TypeScript の定義で固定
-2. **パラメータ化クエリ**: 値はすべて Supabase クライアントのバインドパラメータで渡す
+2. **パラメータ化クエリ**: 値はすべて Supabase クライアントのバインドパラメータで渡す。`exec_report_sql`(migration 07)はパラメータを**すべて text で束縛する**ため、
+   数値・日付・日時・真偽の列と比べる条件は値側に型キャストを付ける(`$1::numeric` / `::date` / `::timestamptz` / `::boolean`。`paramCastFor`。HAVING の件数・合計・平均は数値)。
+   付けないと「operator does not exist: numeric < text」になる(2026-09-25 に判明・修正。それまで数値・日付の比較条件はすべて失敗していた)。数値でない値・日付でない値は DB に送らず分かるエラーにする
 3. **クエリタイムアウト**: 30秒。超えたら `statement_timeout` でキャンセル
 4. **結果上限**: 画面表示は 10,000 行、CSV / Excel のダウンロードは 50,000 行まで(`MAX_EXCEL_ROW_LIMIT`。2026-09-22 まで CSV は画面と同じ 10,000 行だった。それ以上が必要なら分割取得 + ストリーミングの作り替えが要る)
 5. **EXPLAIN ANALYZE**: 開発時に必ず実行計画を確認
