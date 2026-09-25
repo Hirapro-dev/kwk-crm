@@ -5,16 +5,25 @@
  * 一覧カラムはオブジェクト管理(/settings/objects/legacy_bonds)の設定に従う。表示は無限スクロール。
  */
 
+import { LegacyBondsFilterBar } from '@/components/legacy_bonds/LegacyBondsFilterBar';
 import { LegacyBondsInfinite } from '@/components/legacy_bonds/LegacyBondsInfinite';
 import { Card } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
-import { listLegacyBonds } from '@/lib/domain/legacy_bonds';
+import { listLegacyBondFilterOptions, listLegacyBonds } from '@/lib/domain/legacy_bonds';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
-import Link from 'next/link';
+import { Suspense } from 'react';
 
 interface PageProps {
-  searchParams: Promise<{ q?: string; sort?: string; dir?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    bond?: string;
+    result?: string;
+    from?: string;
+    to?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 }
 
 export default async function LegacyBondsPage({ searchParams }: PageProps) {
@@ -29,11 +38,24 @@ export default async function LegacyBondsPage({ searchParams }: PageProps) {
 
   const sp = await searchParams;
   const dir = sp.dir === 'asc' ? 'asc' : 'desc';
-  const [result, listFields] = await Promise.all([
-    listLegacyBonds({ q: sp.q, sort: sp.sort, dir, page: 1, pageSize: LIST_PAGE_SIZE }),
+  // 絞り込み・並び替えの条件(無限スクロールの追加読み込みにも同じものを渡す)
+  const params = {
+    q: sp.q,
+    bondName: sp.bond,
+    result: sp.result,
+    monthFrom: sp.from,
+    monthTo: sp.to,
+    sort: sp.sort,
+    dir,
+  } as const;
+  const [result, listFields, options] = await Promise.all([
+    listLegacyBonds({ ...params, page: 1, pageSize: LIST_PAGE_SIZE }),
     getVisibleFields('legacy_bonds', 'list'),
+    listLegacyBondFilterOptions(),
   ]);
-  const listKey = `${sp.q ?? ''}|${sp.sort ?? ''}|${dir}`;
+  const listKey = [sp.q, sp.bond, sp.result, sp.from, sp.to, sp.sort, dir]
+    .map((v) => v ?? '')
+    .join('|');
 
   return (
     <div className="space-y-3">
@@ -56,28 +78,23 @@ export default async function LegacyBondsPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        {/* 検索帯(旧社債管理ID / 会員ID / 会員氏名 / 申込ID / 社債名 / 今回の結果 を部分一致) */}
+        {/* 検索・フィルタ・並び替え(社債名 / 今回の結果 / 償還対象月の範囲 / 並び替え項目と向き) */}
         <div className="border-b px-4 py-2" style={{ backgroundColor: '#f9f9f9' }}>
-          <form method="get" className="flex items-center gap-2">
-            <input
-              type="text"
-              name="q"
-              defaultValue={sp.q ?? ''}
-              placeholder="旧社債管理ID・会員ID・会員氏名・申込ID・社債名・今回の結果で検索"
-              className="h-8 w-96 rounded border border-input bg-white px-2 text-sm"
+          <Suspense>
+            <LegacyBondsFilterBar
+              initial={{
+                q: sp.q ?? '',
+                bond: sp.bond ?? '',
+                result: sp.result ?? '',
+                from: sp.from ?? '',
+                to: sp.to ?? '',
+                sort: sp.sort ?? '',
+                dir,
+              }}
+              bondNames={options.bondNames}
+              results={options.results}
             />
-            <button
-              type="submit"
-              className="h-8 rounded bg-primary px-3 text-sm font-medium text-primary-foreground"
-            >
-              検索
-            </button>
-            {sp.q ? (
-              <Link href="/legacy-bonds" className="sf-link text-sm">
-                クリア
-              </Link>
-            ) : null}
-          </form>
+          </Suspense>
         </div>
 
         <LegacyBondsInfinite
@@ -85,7 +102,7 @@ export default async function LegacyBondsPage({ searchParams }: PageProps) {
           initialRows={result.rows as unknown as Array<Record<string, unknown>>}
           fields={listFields}
           total={result.total}
-          params={{ q: sp.q, sort: sp.sort, dir }}
+          params={params}
           canDelete
         />
       </Card>

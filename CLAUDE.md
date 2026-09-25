@@ -645,7 +645,9 @@ Salesforce の「旧社債管理」(旧社債の継続・償還の管理。1 行
 - **取込**: 設定 → データ取込のオブジェクト「旧社債管理」(`import_legacy_bonds.ts`。CSV は値を整形せず読む `parseCsvRaw`。行の変換は純粋関数
   `convertLegacyBondRow`(`legacy_bonds_pure.ts`、テスト付き)。Shift_JIS は取込画面で自動判定)。定期取込(Drive)の対象にもなる。
 - **画面**: `/legacy-bonds`(一覧。旧社債管理ID / 会員ID / 会員氏名 / 申込ID / 社債名 / 今回の結果 の部分一致検索、既定の並びは償還対象月の新しい順、
-  admin は一括削除可 §5.14)/ `/legacy-bonds/[id]`(詳細。編集なし)。`object_definitions` に `legacy_bonds`(sort 95、BND)。
+  admin は一括削除可 §5.14。**フィルタ**(2026-09-25): 社債名・今回の結果(「未入力」も選べる)・償還対象月の範囲(`?bond` / `?result` / `?from` / `?to`。
+  月は `YYYY/MM` にそろえて文字列で比較 `normalizeRedemptionMonth`)。**並び替え**: 列見出しのクリックに加え、フィルタ帯の「並び替え」と昇順/降順の選択(`?sort` / `?dir`。
+  `LegacyBondsFilterBar`))/ `/legacy-bonds/[id]`(詳細。編集なし)。`object_definitions` に `legacy_bonds`(sort 95、BND)。
 - 一括削除: `soft_delete_records` に `legacy_bonds` を追加(migration 118 で関数を再定義)。
 
 ### 5.17 lp_entries (LP) ★2026-09-16 追加 (migration 95)
