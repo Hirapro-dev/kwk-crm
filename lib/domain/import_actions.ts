@@ -28,6 +28,7 @@ import {
 } from './import_article_reaction_clicks';
 import { commitArticleReactionsCsv, previewArticleReactionsCsv } from './import_article_reactions';
 import { commitInquiriesCsv, previewInquiriesCsv } from './import_inquiries';
+import { commitLegacyBondsCsv, previewLegacyBondsCsv } from './import_legacy_bonds';
 import { commitMembersCsv, previewMembersCsv } from './import_members';
 import { commitUsersCsv, previewUsersCsv } from './import_users';
 import {
@@ -120,6 +121,7 @@ export async function previewImport(
     if (object === 'withdrawal_children')
       return await previewWithdrawalChildrenCsv([csvText], updateOnly);
     if (object === 'users') return await previewUsersCsv([csvText], updateOnly);
+    if (object === 'legacy_bonds') return await previewLegacyBondsCsv([csvText], updateOnly);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -215,6 +217,7 @@ export async function commitImport(
     if (object === 'withdrawal_children')
       return await commitWithdrawalChildrenCsv([csvText], updateOnly);
     if (object === 'users') return await commitUsersCsv([csvText], updateOnly);
+    if (object === 'legacy_bonds') return await commitLegacyBondsCsv([csvText], updateOnly);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

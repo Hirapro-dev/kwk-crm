@@ -253,6 +253,37 @@ export const IMPORT_OBJECTS: Record<string, ImportObjectDef> = {
       { field: 'is_active', label: '有効', type: 'boolean', default: true },
     ],
   },
+  // 旧社債管理(legacy_bonds)は専用ハンドラ(lib/domain/import_legacy_bonds.ts)で取込む(CLAUDE.md §5.13c。migration 118)。
+  // 旧社債管理ID(KS-)で突合。会員ID(K-)・申込ID(M-)は実在チェックして紐付け(無ければ null、原文は保持)、案件は名前で解決。
+  // ここの fields はテンプレCSVのヘッダー生成にのみ使用(実CSVの日本語ヘッダーに一致)。閲覧・取込とも admin のみ。
+  legacy_bonds: {
+    object: 'legacy_bonds',
+    table: 'legacy_bonds',
+    label: '旧社債管理',
+    idField: 'id',
+    note: 'Salesforce の「旧社債管理一覧」CSV(Shift_JIS 可)をそのまま使えます。旧社債管理ID(KS-)で突合。会員ID(K-)で会員に、申込ID(M-)で申込に紐付け(未登録は null・原文は保持)、案件は案件マスタの名前で解決します。',
+    fields: [
+      { field: 'id', label: '旧社債管理ID', type: 'text', required: true },
+      { field: 'member_id', label: '会員ID', type: 'text' },
+      { field: 'member_name', label: '会員氏名', type: 'text' },
+      { field: 'application_no', label: '申込ID', type: 'text' },
+      { field: 'project_name', label: '案件', type: 'text' },
+      { field: 'bond_name', label: '社債名', type: 'text' },
+      { field: 'payment_amount', label: '入金額', type: 'number' },
+      { field: 'redemption_month', label: '償還対象月', type: 'text' },
+      { field: 'redemption_amount', label: '償還金額', type: 'number' },
+      { field: 'prev_principal', label: '前回継続元金', type: 'number' },
+      { field: 'prev_years', label: '前回継続年数', type: 'number' },
+      { field: 'prev_interest_rate', label: '前回継続利息（年）', type: 'number' },
+      { field: 'interest', label: '利息', type: 'number' },
+      { field: 'withholding_tax', label: '源泉税', type: 'number' },
+      { field: 'result', label: '今回の結果', type: 'text' },
+      { field: 'contract_sent_date', label: '契約書送付日', type: 'date' },
+      { field: 'partial_continue_amount', label: '一部継続金額', type: 'number' },
+      { field: 'partial_redemption_amount', label: '一部償還金額', type: 'number' },
+      { field: 'bank_info', label: '銀行情報', type: 'text' },
+    ],
+  },
 };
 
 export const IMPORT_OBJECT_KEYS = Object.keys(IMPORT_OBJECTS);
