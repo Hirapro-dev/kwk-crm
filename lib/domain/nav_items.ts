@@ -102,6 +102,15 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
     visible_roles: ['admin', 'manager', 'support'],
   },
   {
+    id: 'legacy_bonds',
+    label: '旧社債管理',
+    href: '/legacy-bonds',
+    match_prefix: true,
+    sort_order: 49,
+    is_visible: true,
+    visible_roles: ['admin'],
+  },
+  {
     id: 'summary',
     label: 'サマリ',
     href: '/summary',

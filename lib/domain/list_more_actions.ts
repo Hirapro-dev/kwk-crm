@@ -9,6 +9,7 @@ import { listActivities } from './activities';
 import { listApplications } from './applications';
 import { listArticleReactions } from './article_reactions';
 import { listInquiries } from './inquiries';
+import { type LegacyBondListParams, listLegacyBonds } from './legacy_bonds';
 import { LIST_PAGE_SIZE } from './list_constants';
 import { listLpEntries } from './lp';
 import { listMailThreads } from './mail';
@@ -147,5 +148,11 @@ export async function loadMoreActivities(
   page: number,
 ) {
   const r = await listActivities({ ...params, page, pageSize: LIST_PAGE_SIZE });
+  return r.rows;
+}
+
+/** 旧社債管理(admin のみ。RLS で他ロールには行が返らない。§5.13c) */
+export async function loadMoreLegacyBonds(params: LegacyBondListParams, page: number) {
+  const r = await listLegacyBonds({ ...params, page, pageSize: LIST_PAGE_SIZE });
   return r.rows;
 }

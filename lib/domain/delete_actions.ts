@@ -22,6 +22,7 @@ const DELETABLE_OBJECTS = {
   withdrawal_parents: '/withdrawal-parents',
   withdrawal_children: '/withdrawal-children',
   lp_entries: '/lp',
+  legacy_bonds: '/legacy-bonds',
 } as const;
 
 export type DeletableObject = keyof typeof DELETABLE_OBJECTS;

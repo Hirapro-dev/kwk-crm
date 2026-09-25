@@ -630,6 +630,24 @@ Phase 1 では:
   (Server Action `matchArticleReactionsByEmail`、純粋関数 `matchReactionsByEmail`、部品 `ArticleReactionBulkActions`)。
 - 一覧の検索対象: 反応ID / 会員ID / 会員氏名 / 詳細 に加えて メールアドレス / 備考(2026-09-23)。項目管理に 登録日時 / メールアドレス / 備考 を登録済み(初期値は一覧・詳細とも表示)。
 
+### 5.13c legacy_bonds (旧社債管理) ★2026-09-25 追加 (migration 118)
+Salesforce の「旧社債管理」(旧社債の継続・償還の管理。1 行 = 1 償還対象月の 1 申込。46 件)を取込専用オブジェクトとして保持する。
+**閲覧・取込・削除とも admin のみ**(ユーザー決定。RLS の SELECT も `is_admin()`。メニュー `nav_items.legacy_bonds` は `visible_roles=['admin']`)。
+出金管理(§5.13)と同じ形(一覧 + 詳細、CSV 取込、論理削除、項目管理で列の表示を切替)。
+- 列(CSV 列 → カラム): 旧社債管理ID → `id` text PK(`KS-…`。再取込は id で upsert)/ 会員ID → `member_id` FK → members(実在時のみ)/ 会員氏名 → `member_name` /
+  申込ID → `application_no`(原文)+ `application_id` FK → applications(実在時のみ)/ 案件 → `project_name`(原文)+ `project_id` FK → projects(**名前で解決**。実在時のみ)/
+  社債名 → `bond_name` / 入金額 → `payment_amount` / 償還対象月 → `redemption_month`(`YYYY/MM` の文字列)/ 償還金額 → `redemption_amount` /
+  前回継続元金 → `prev_principal` / 前回継続年数 → `prev_years` int / 前回継続利息（年） → `prev_interest_rate`(%)/ 利息 → `interest` / 源泉税 → `withholding_tax` /
+  今回の結果 → `result`(全額継続 / 回答待ち / 回答待ち（未） / 全額償還 / 空。自由文字列)/ 契約書送付日 → `contract_sent_date` date /
+  一部継続金額 → `partial_continue_amount` / 一部償還金額 → `partial_redemption_amount` / 銀行情報 → `bank_info` / `created_at` / `updated_at` / `deleted_at`。
+- **リレーション**(ユーザー決定「紐づくものは紐づけて」): 会員(K-)・申込(M-)は実在チェックして FK、案件は案件マスタの名前(「旧社債」= T-000000003)で解決。
+  無いものは NULL にして原文を残す(FK エラーにしない)。一覧・詳細では会員 → 会員詳細、申込ID → 申込詳細へリンク。会員詳細の関連に「旧社債管理」(admin のみ)。
+- **取込**: 設定 → データ取込のオブジェクト「旧社債管理」(`import_legacy_bonds.ts`。CSV は値を整形せず読む `parseCsvRaw`。行の変換は純粋関数
+  `convertLegacyBondRow`(`legacy_bonds_pure.ts`、テスト付き)。Shift_JIS は取込画面で自動判定)。定期取込(Drive)の対象にもなる。
+- **画面**: `/legacy-bonds`(一覧。旧社債管理ID / 会員ID / 会員氏名 / 申込ID / 社債名 / 今回の結果 の部分一致検索、既定の並びは償還対象月の新しい順、
+  admin は一括削除可 §5.14)/ `/legacy-bonds/[id]`(詳細。編集なし)。`object_definitions` に `legacy_bonds`(sort 95、BND)。
+- 一括削除: `soft_delete_records` に `legacy_bonds` を追加(migration 118 で関数を再定義)。
+
 ### 5.17 lp_entries (LP) ★2026-09-16 追加 (migration 95)
 LP・メルマガ登録系フォーム(54 種類)の問合せは、Salesforce では問合せ(TA-)だが CRM の問合せ取込(§5.10c)の対象外だった
 (約 5.8 万件)。これを**問合せとは別のオブジェクト「LP」**として保持し、問合せの件数・集計・レポートには混ぜない
@@ -787,8 +805,8 @@ Asana の基本構成(プロジェクト > セクション > タスク > サブ�
 
 - **論理削除のみ**。`deleted_at` をセットする(§4.3 のとおり物理削除はしない)。
 - **admin のみ**。他ロールには選択列自体を描画せず、RPC 側でも `is_admin()` で弾く。
-- **対象7オブジェクト**: `members` / `inquiries` / `applications` /
-  `article_reactions` / `withdrawal_parents` / `withdrawal_children` / `lp_entries`(2026-09-16 追加, migration 95)。
+- **対象8オブジェクト**: `members` / `inquiries` / `applications` /
+  `article_reactions` / `withdrawal_parents` / `withdrawal_children` / `lp_entries`(2026-09-16 追加, migration 95)/ `legacy_bonds`(2026-09-25 追加, migration 118)。
   いずれも主キーが text のため引数は `text[]` で統一。
   ※ `activities` は一覧がタイムライン表示のため対象外(既存の1件削除のみ)。
 - **RPC** `soft_delete_records(p_object text, p_ids text[]) RETURNS integer`
@@ -1187,6 +1205,7 @@ Supabase RLSで以下を実装:
 | `/task/my` | マイタスク | 自分が担当の未完了タスクを 期限切れ / 今日 / 今後 7 日 / それ以降 / 期日なし に分けて表示(純粋関数 `groupMyTasksByDue`)。行内で完了・期日変更。完了済みは切替で直近 200 件。**行のタスク名をクリックすると右側に詳細が開く分割ビュー**(`?task=<id>`。Asana と同じ。閉じる / 全画面(`/task/[id]`)。2026-09-18) |
 | `/task/projects` `/task/projects/[id]` | タスクのプロジェクト一覧 / リスト表示 | 閲覧できるプロジェクトだけ(公開 or メンバー)。リスト表示はセクションごとにタスクを並べ、行内で完了・担当・期日を変更、セクション間の移動、セクション・タスクの追加。設定(名前・色・公開範囲・メンバー・アーカイブ)は作成者と admin。**行のタスク名をクリックすると右側に詳細が開く分割ビュー**(`?task=<id>`。共通部品 `TaskDetailPane` が `/task/[id]` と同じ `TaskDetail` を埋め込みモードで描画。閉じる / 全画面。2026-09-18) |
 | `/task/[id]` | タスク詳細 | 名前・説明(複数行。**本文中の URL はリンク化して別タブで開く**(純粋関数 `splitLinks` / `LinkifiedText`)。編集は「編集」で切替。2026-09-18)・担当・開始日/期日・セクション・会員の紐付け・サブタスク・コメント(URL はリンク化)・添付(Storage `task-attachments`。キーは ASCII 化した名前 `storageSafeName`、元のファイル名は `filename` 列でダウンロード時に付ける)・完了 |
+| `/legacy-bonds` `/legacy-bonds/[id]` | 旧社債管理 一覧 / 詳細 | 旧社債の継続・償還の管理(§5.13c。取込専用オブジェクト)。**admin のみ**(メニュー・画面・RLS)。検索・無限スクロール、会員 / 申込へリンク、admin は一括削除可 |
 | `/settings/ads` `/settings/acquisition-points` | 広告マスタ / 顧客情報取得ポイントマスタ | 設定の「マスター管理」(§5.18 / §5.19)。admin のみ |
 | `/mail` | メーラー(一覧) | **CRM 本体とは別画面**(`app/(mailer)` ルートグループ、独自ヘッダー)。ヘッダーの**メールアイコン**(歯車の左)とアプリランチャー(9点アイコン)の「メーラー」から**別タブ**で開く。メニューバー(nav_items)には出さない。メールディーラー風に**左: 受信箱フォルダ**(ドメイン > アドレス、未対応件数付き。migration 77 `mail_box_counts()`。受信箱が数百件あるため既定では全ドメインを閉じた状態にし、選択中の受信箱のドメインだけ開く。`expandedDomainForBox`。ユーザーごとに受信箱をピン留めして上部の「ピン留め」区画にまとめられる。§5.15 `mail_box_pins`。さらに**マイフォルダ**(§5.15 migration 92)を作り、受信箱をドラッグ&ドロップで入れて対応ごとに整理できる)**/ 右: 一覧**。一覧上部に状態タブ(新着=未対応 / 対応中 / 対応完了 / すべて / メルマガ / 自動応答 / 迷惑メール、件数付き。`?tab=`、既定は新着)、担当・未読・件名で絞り込み (§5.15)。一覧の列は **日付 / 状態 / 件名 / From / 受信箱(すべての受信箱のときのみ)/ 担当 /(取込候補では 取込ルール / 処理結果)**。行の左端のチェックで複数選び、選択中バーから **状態・分類・担当・既読/未読をまとめて変更**できる(viewer 以外。Server Action `bulkUpdateMailThreads`、1回 500 件まで。`InfiniteTable` の `selection.actions`。2026-09-16)。**admin は行のゴミ箱と「選択したメールを削除」で論理削除**できる(`deleteMailThreads`。§5.14 と同じく 1 回 500 件まで、`deleted_at` をセットするだけ。書込みはサービスロール: PostgREST は UPDATE を常に RETURNING 付きで実行するため、削除日時を付けて閲覧ポリシーから外れた行は RLS に拒否される。他オブジェクトの論理削除が SECURITY DEFINER の RPC なのも同じ理由。会員に紐付いたスレッドは migration 93 のトリガーで対応歴も論理削除。2026-09-17。それまでは削除処理が無いのに行のゴミ箱だけが描かれて押しても何も起きなかった → 共通部品側で `onDelete` の無い一覧にはゴミ箱を出さないよう修正)。ヘッダー右の歯車メニューは全ロールに出し、**ログアウト**はその中(メール設定の項目は admin のみ) |
 | `/mail/[id]` | メールスレッド | 左フォルダはそのまま右にスレッド。上部に「← 前のメール / 次のメール →」(一覧と同じ並び・絞り込みを URL クエリで引き継ぐ。`getAdjacentMailThreads`)。メッセージ時系列表示(**HTML 本文があれば HTML 版を既定表示**、テキスト版に切替可。画像は「画像を表示」を押したときだけ読み込む)。返信フォーム: **送信元**(既定はスレッドの受信箱。送信可能な受信箱をプルダウンで選択。受信箱が数百件あるため**ドメインごとのセクション(optgroup)**に分ける。署名の選択も同じ。`groupAddressesByDomain`。2026-09-16。スレッドの受信箱は変えない)/ 差出人表示名 / **署名**(署名マスタ §5.15 の有効な署名から名前で選択。既定は送信元の受信箱に設定した既定署名。「署名なし」も可。2026-09-18 に受信箱ごとの署名から変更)/ 本文 / **引用**(直近の受信メールを最初から入れる。編集可)。送る本文は 本文 → 署名 → 引用 の順に合成し、画面で見えるものをそのまま送る(サーバーは署名を付け足さない。`lib/domain/mail_text.ts`)。担当・ステータス変更、会員紐付け。**取込候補から開いたとき(`?folder=candidates`)は返信フォームを出さない**(取込ルールの設定のみ。§5.16。2026-09-15 決定) |

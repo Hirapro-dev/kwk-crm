@@ -36,6 +36,7 @@ import { listApplications } from '@/lib/domain/applications';
 import { getReactionsByMember } from '@/lib/domain/article_reactions';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { listInquiries } from '@/lib/domain/inquiries';
+import { getLegacyBondsByMember } from '@/lib/domain/legacy_bonds';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { listLpEntriesByMember } from '@/lib/domain/lp';
 import { getAdNameMap, listAcquisitionPoints } from '@/lib/domain/masters';
@@ -85,6 +86,7 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     relReactions,
     relLps,
     relTasks,
+    relBonds,
     acquisitionPoints,
     adNames,
   ] = await Promise.all([
@@ -101,6 +103,8 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     getReactionsByMember(memberId, 100),
     listLpEntriesByMember(memberId, 100),
     listTasksByMember(memberId, 100),
+    // 旧社債管理(admin のみ。他ロールは RLS で空になるが、問い合わせ自体を省く。§5.13c)
+    me.role === 'admin' ? getLegacyBondsByMember(memberId, 100) : Promise.resolve([]),
     // 編集フォームの「個人情報取得ポイント」の選択肢(有効なマスタのみ。§5.19)
     listAcquisitionPoints({ activeOnly: true }),
     getAdNameMap(),
@@ -430,6 +434,72 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                   </div>
                 )}
               </CollapsibleSection>
+
+              {/* 旧社債管理(admin のみ。§5.13c) */}
+              {me.role === 'admin' && (
+                <CollapsibleSection title="旧社債管理" count={relBonds.length} bodyClassName="p-0">
+                  {relBonds.length === 0 ? (
+                    <p className="p-4 text-sm text-muted-foreground">旧社債管理はありません</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50 hover:bg-gray-50">
+                            <TableHead className="h-9 whitespace-nowrap">旧社債管理ID</TableHead>
+                            <TableHead className="h-9 whitespace-nowrap">社債名</TableHead>
+                            <TableHead className="h-9 whitespace-nowrap">償還対象月</TableHead>
+                            <TableHead className="h-9 whitespace-nowrap text-right">
+                              償還金額
+                            </TableHead>
+                            <TableHead className="h-9 whitespace-nowrap">今回の結果</TableHead>
+                            <TableHead className="h-9 whitespace-nowrap">申込ID</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {relBonds.map((b) => (
+                            <TableRow key={b.id} className="sf-row-hover">
+                              <TableCell className="whitespace-nowrap py-2">
+                                <Link
+                                  href={`/legacy-bonds/${b.id}`}
+                                  className="text-primary hover:underline"
+                                >
+                                  {b.id}
+                                </Link>
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap py-2">
+                                {b.bond_name ?? '-'}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap py-2">
+                                {b.redemption_month ?? '-'}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap py-2 text-right tabular-nums">
+                                {b.redemption_amount != null
+                                  ? `¥${Number(b.redemption_amount).toLocaleString()}`
+                                  : '-'}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap py-2">
+                                {b.result ?? '-'}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap py-2">
+                                {b.application_id ? (
+                                  <Link
+                                    href={`/applications/${b.application_id}`}
+                                    className="text-primary hover:underline"
+                                  >
+                                    {b.application_no ?? b.application_id}
+                                  </Link>
+                                ) : (
+                                  (b.application_no ?? '-')
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CollapsibleSection>
+              )}
 
               {/* 記事反応履歴 */}
               <CollapsibleSection
