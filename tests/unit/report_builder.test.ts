@@ -158,8 +158,51 @@ describe('buildReportQuery(仕様書 §9.8)', () => {
       CURRENT_USER,
     );
     expect(q.sql).toContain('m.name ILIKE $1');
-    expect(q.sql).toContain('m.total_amount >= $2');
+    // 数値列はパラメータ(text で束縛される)に ::numeric を付ける(exec_report_sql が text で渡すため)
+    expect(q.sql).toContain('m.total_amount >= $2::numeric');
     expect(q.params).toEqual(['%山田%', 1000000]);
+  });
+
+  // 意図: exec_report_sql はパラメータを text で束縛するので、数値・日付の列との比較は値側に型を付けないと
+  // 「operator does not exist: numeric < text」になる(2026-09-25 の不具合。申込一覧の 入金額 < 10000000)
+  it('数値・日付の比較にはキャストを付け、文字列の比較と部分一致には付けない', () => {
+    const q = buildReportQuery(
+      'RT06',
+      {
+        columns: [{ id: 'c1', source: 'a.id', label: '申込ID' }],
+        filters: {
+          logic: 'AND',
+          conditions: [
+            { field: 'a.payment_amount', op: 'lt', value: '10,000,000' },
+            { field: 'a.application_date', op: 'before', value: '2026-01-01' },
+            { field: 'a.status', op: 'equals', value: '完了' },
+          ],
+        },
+      },
+      CURRENT_USER,
+    );
+    expect(q.sql).toContain('a.payment_amount < $1::numeric');
+    expect(q.sql).toContain('a.application_date < $2::date');
+    expect(q.sql).toContain('a.status = $3');
+    expect(q.sql).not.toContain('$3::');
+    // 数値のカンマは除いて渡す
+    expect(q.params).toEqual(['10000000', '2026-01-01', '完了']);
+  });
+
+  it('数値列に数値でない値を入れると分かるエラーにする(DB に送らない)', () => {
+    expect(() =>
+      buildReportQuery(
+        'RT06',
+        {
+          columns: [{ id: 'c1', source: 'a.id', label: '申込ID' }],
+          filters: {
+            logic: 'AND',
+            conditions: [{ field: 'a.payment_amount', op: 'lt', value: 'abc' }],
+          },
+        },
+        CURRENT_USER,
+      ),
+    ).toThrow(/数値を入力/);
   });
 
   it('${current_user} プレースホルダが展開される', () => {
