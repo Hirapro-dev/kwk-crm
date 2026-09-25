@@ -113,17 +113,25 @@ export async function getReactionsByMember(
  */
 export async function listArticleReactionMedia(): Promise<string[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('article_reactions')
-    .select('media')
-    .is('deleted_at', null)
-    .not('media', 'is', null)
-    .order('media')
-    .limit(1000);
-  if (error) return [];
-  const set = new Set<string>();
-  for (const r of (data ?? []) as Array<{ media: string | null }>) {
-    if (r.media?.trim()) set.add(r.media.trim());
+  // DISTINCT は PostgREST で書けないため、レポート実行用の RPC(SELECT のみ・RLS 適用)で取る。
+  // 以前は先頭 1,000 行だけを読んでいたため、media の並びで後ろに来る「仮想通貨長者」が候補に出なかった(2026-09-25 修正)
+  const { data, error } = await supabase.rpc('exec_report_sql', {
+    query_sql:
+      'SELECT DISTINCT media FROM public.article_reactions WHERE deleted_at IS NULL AND media IS NOT NULL ORDER BY media',
+    query_params: [],
+  });
+  const set = new Set<string>(ARTICLE_REACTION_MEDIA_DEFAULTS);
+  if (!error && Array.isArray(data)) {
+    for (const r of data as Array<{ media: string | null }>) {
+      if (r.media?.trim()) set.add(r.media.trim());
+    }
   }
   return [...set].sort();
 }
+
+/** 配信媒体の既定の選択肢(DB に 1 件も無くても出す。Salesforce の配信媒体) */
+export const ARTICLE_REACTION_MEDIA_DEFAULTS = [
+  'KAWARA版一般会員',
+  'KAWARA版正会員',
+  '仮想通貨長者',
+];

@@ -1,6 +1,7 @@
 import {
   dedupeClickRows,
   jstDateOf,
+  jstYesterday,
   matchLegacyReactions,
   matchReactionsByEmail,
   normalizeName,
@@ -27,6 +28,12 @@ describe('parseJstDateTime', () => {
   });
   it('jstDateOf は日本時間の日付を返す(UTC では前日でも)', () => {
     expect(jstDateOf('2026-09-22T23:00:35.000Z')).toBe('2026-09-23');
+  });
+  it('jstYesterday は日本時間の昨日(UTC の日付が違う早朝でも)', () => {
+    // 2026-09-25 08:00 JST = 2026-09-24T23:00Z → 昨日は 09-24
+    expect(jstYesterday(new Date('2026-09-24T23:00:00.000Z'))).toBe('2026-09-24');
+    // 2026-09-25 00:30 JST(UTC ではまだ 24 日)→ 昨日は 09-24
+    expect(jstYesterday(new Date('2026-09-24T15:30:00.000Z'))).toBe('2026-09-24');
   });
 });
 
