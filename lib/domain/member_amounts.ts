@@ -59,6 +59,6 @@ export function computeMemberAmounts(
   for (const k of Object.keys(out)) if (isProjectAmountKey(k)) out[k] = '0';
   for (const [k, v] of usage) if (v !== 0) out[`${k}利用額`] = amountText(v);
   for (const [k, v] of withdrawal) if (v !== 0) out[`${k}出金額`] = amountText(v);
-  if (total !== 0 || '累計入金額' in out) out['累計入金額'] = amountText(total);
+  if (total !== 0 || '累計入金額' in out) out.累計入金額 = amountText(total);
   return out;
 }
