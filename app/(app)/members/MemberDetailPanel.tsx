@@ -45,6 +45,7 @@ import { getMember } from '@/lib/domain/members';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { listTasksByMember } from '@/lib/domain/tasks';
 import { listAllUsers } from '@/lib/domain/users_admin';
+import { getWithdrawalChildrenByMember } from '@/lib/domain/withdrawals';
 import { formatDate, formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -59,6 +60,8 @@ interface Props {
   embedded?: boolean;
 }
 
+/** 出金管理を閲覧できるロール(§5.13 の RLS と同じ) */
+const WITHDRAWAL_ROLES = new Set(['admin', 'manager', 'support']);
 export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded }: Props) {
   const member = await getMember(memberId);
   if (!member) {
@@ -87,6 +90,7 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     relLps,
     relTasks,
     relBonds,
+    relWithdrawals,
     acquisitionPoints,
     adNames,
   ] = await Promise.all([
@@ -105,6 +109,10 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
     listTasksByMember(memberId, 100),
     // 旧社債管理(admin のみ。他ロールは RLS で空になるが、問い合わせ自体を省く。§5.13c)
     me.role === 'admin' ? getLegacyBondsByMember(memberId, 100) : Promise.resolve([]),
+    // 出金管理履歴(admin / manager / support のみ。他ロールは RLS で空になるが、問い合わせ自体を省く。2026-10-01)
+    WITHDRAWAL_ROLES.has(me.role)
+      ? getWithdrawalChildrenByMember(memberId, 100)
+      : Promise.resolve([]),
     // 編集フォームの「個人情報取得ポイント」の選択肢(有効なマスタのみ。§5.19)
     listAcquisitionPoints({ activeOnly: true }),
     getAdNameMap(),
@@ -315,6 +323,70 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                 )}
               </CollapsibleSection>
 
+              {/* 出金管理履歴(§5.13。出金管理-子 = 1 回ごとの出金。admin / manager / support のみ。2026-10-01) */}
+              {WITHDRAWAL_ROLES.has(me.role) && (
+                <CollapsibleSection
+                  title="出金管理履歴"
+                  count={relWithdrawals.length}
+                  bodyClassName="p-0"
+                >
+                  {relWithdrawals.length === 0 ? (
+                    <p className="p-4 text-sm text-muted-foreground">出金管理の履歴はありません</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50 hover:bg-gray-50">
+                            <TableHead className="h-9 whitespace-nowrap">出金日</TableHead>
+                            <TableHead className="h-9 whitespace-nowrap text-right">
+                              出金額
+                            </TableHead>
+                            <TableHead className="h-9 whitespace-nowrap">投資案件</TableHead>
+                            <TableHead className="h-9 whitespace-nowrap">償還-子No</TableHead>
+                            <TableHead className="h-9 whitespace-nowrap">償還-親No</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {relWithdrawals.map((w) => (
+                            <TableRow key={w.id} className="sf-row-hover">
+                              <TableCell className="whitespace-nowrap py-2">
+                                {formatDate(w.withdrawal_date) || '-'}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap py-2 text-right tabular-nums">
+                                {w.amount != null ? `¥${Number(w.amount).toLocaleString()}` : '-'}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap py-2">
+                                {w.project_name ?? '-'}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap py-2">
+                                <Link
+                                  href={`/withdrawal-children/${w.id}`}
+                                  className="text-primary hover:underline"
+                                >
+                                  {w.id}
+                                </Link>
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap py-2">
+                                {w.parent_id ? (
+                                  <Link
+                                    href={`/withdrawal-parents/${w.parent_id}`}
+                                    className="text-primary hover:underline"
+                                  >
+                                    {w.parent_no ?? w.parent_id}
+                                  </Link>
+                                ) : (
+                                  (w.parent_no ?? '-')
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CollapsibleSection>
+              )}
+
               {/* 問合せ履歴 */}
               <CollapsibleSection title="問合せ履歴" count={relInqs.total} bodyClassName="p-0">
                 {relInqs.rows.length === 0 ? (
@@ -358,42 +430,49 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                 )}
               </CollapsibleSection>
 
-              {/* タスク(§5.20。閲覧できるプロジェクトのものだけ) */}
-              <CollapsibleSection title="タスク" count={relTasks.length} bodyClassName="p-0">
-                {relTasks.length === 0 ? (
-                  <p className="p-4 text-sm text-muted-foreground">タスクはありません</p>
+              {/* 記事反応履歴 */}
+              <CollapsibleSection title="記事反応" count={relReactions.length} bodyClassName="p-0">
+                {relReactions.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">記事反応はありません</p>
                 ) : (
-                  <ul className="divide-y">
-                    {relTasks.map((t) => (
-                      <li key={t.id} className="flex items-center gap-3 px-4 py-2 text-sm">
-                        <span
-                          className={`inline-block h-2.5 w-2.5 rounded-full ${t.completed_at ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                        />
-                        <a
-                          href={`/task/${t.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`min-w-0 flex-1 truncate text-primary hover:underline ${t.completed_at ? 'line-through opacity-70' : ''}`}
-                        >
-                          {t.name}
-                        </a>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {t.project?.name ?? ''}
-                        </span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {t.assignee?.full_name ?? t.assignee_name_raw ?? ''}
-                        </span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {t.due_date ?? ''}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50 hover:bg-gray-50">
+                          <TableHead className="h-9 whitespace-nowrap">日付</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">配信媒体</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">配信ツール</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">種類</TableHead>
+                          <TableHead className="h-9 whitespace-nowrap">詳細</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {relReactions.map((r) => (
+                          <TableRow key={r.id} className="sf-row-hover">
+                            <TableCell className="whitespace-nowrap py-2">
+                              {formatDate(r.reacted_date) || '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {r.media ?? '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {r.tool ?? '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap py-2">
+                              {r.reaction_type ?? '-'}
+                            </TableCell>
+                            {/* クリック履歴 CSV の取込分は詳細が無く備考(記事名)を持つ(§5.13b) */}
+                            <TableCell className="py-2">{r.detail ?? r.remarks ?? '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CollapsibleSection>
 
               {/* LP登録(§5.17。LP・メルマガ登録系フォームの問合せ) */}
-              <CollapsibleSection title="LP登録" count={relLps.length} bodyClassName="p-0">
+              <CollapsibleSection title="LP" count={relLps.length} bodyClassName="p-0">
                 {relLps.length === 0 ? (
                   <p className="p-4 text-sm text-muted-foreground">LP登録はありません</p>
                 ) : (
@@ -432,6 +511,40 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                       </TableBody>
                     </Table>
                   </div>
+                )}
+              </CollapsibleSection>
+
+              {/* タスク(§5.20。閲覧できるプロジェクトのものだけ) */}
+              <CollapsibleSection title="タスク" count={relTasks.length} bodyClassName="p-0">
+                {relTasks.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">タスクはありません</p>
+                ) : (
+                  <ul className="divide-y">
+                    {relTasks.map((t) => (
+                      <li key={t.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                        <span
+                          className={`inline-block h-2.5 w-2.5 rounded-full ${t.completed_at ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                        />
+                        <a
+                          href={`/task/${t.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`min-w-0 flex-1 truncate text-primary hover:underline ${t.completed_at ? 'line-through opacity-70' : ''}`}
+                        >
+                          {t.name}
+                        </a>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {t.project?.name ?? ''}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {t.assignee?.full_name ?? t.assignee_name_raw ?? ''}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {t.due_date ?? ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </CollapsibleSection>
 
@@ -500,51 +613,6 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
                   )}
                 </CollapsibleSection>
               )}
-
-              {/* 記事反応履歴 */}
-              <CollapsibleSection
-                title="記事反応履歴"
-                count={relReactions.length}
-                bodyClassName="p-0"
-              >
-                {relReactions.length === 0 ? (
-                  <p className="p-4 text-sm text-muted-foreground">記事反応はありません</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-gray-50 hover:bg-gray-50">
-                          <TableHead className="h-9 whitespace-nowrap">日付</TableHead>
-                          <TableHead className="h-9 whitespace-nowrap">配信媒体</TableHead>
-                          <TableHead className="h-9 whitespace-nowrap">配信ツール</TableHead>
-                          <TableHead className="h-9 whitespace-nowrap">種類</TableHead>
-                          <TableHead className="h-9 whitespace-nowrap">詳細</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {relReactions.map((r) => (
-                          <TableRow key={r.id} className="sf-row-hover">
-                            <TableCell className="whitespace-nowrap py-2">
-                              {formatDate(r.reacted_date) || '-'}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap py-2">
-                              {r.media ?? '-'}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap py-2">
-                              {r.tool ?? '-'}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap py-2">
-                              {r.reaction_type ?? '-'}
-                            </TableCell>
-                            {/* クリック履歴 CSV の取込分は詳細が無く備考(記事名)を持つ(§5.13b) */}
-                            <TableCell className="py-2">{r.detail ?? r.remarks ?? '-'}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CollapsibleSection>
             </div>
           }
         />

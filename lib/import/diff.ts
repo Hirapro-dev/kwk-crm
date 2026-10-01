@@ -11,7 +11,7 @@
  * 値の比較は canonForCompare で正規化してから行う:
  *   - null / undefined / 空文字 は同一視
  *   - 数値は 1000 と 1000.00 を同一視
- *   - 日付/日時は表現差(書式・タイムゾーン表記)を吸収してエポックで比較
+ *   - 日付/日時は表現差(書式・タイムゾーン表記)を吸収してエポックで比較(時差の表記が無いものは UTC として読む)
  *   - JSONB(extra) はキー順に依存しない安定文字列で比較
  */
 
@@ -28,6 +28,42 @@ function stableJson(v: unknown): string {
   return `{${keys.map((k) => `${JSON.stringify(k)}:${stableJson(obj[k])}`).join(',')}}`;
 }
 
+/**
+ * 日付/日時の文字列をエポック(ミリ秒)にする。解釈できなければ null。
+ * 時差の表記(Z / +09:00 など)があればそれに従い、**無ければ UTC として読む**。
+ * DB(Supabase のセッションのタイムゾーンは UTC)は時差なしの日時を UTC として保存し、読み出すと "+00:00" 付きで返すため、
+ * 取込側の「2023-03-01T00:00:00」と DB 側の「2023-03-01T00:00:00+00:00」を同じ値として比べる必要がある。
+ * 以前は Date.parse に任せており、時差なしを実行環境の現地時刻として読んでいたため、日本時間の環境では
+ * 起算日時のある申込が毎回「更新」と判定されていた(2026-10-01 修正)。
+ */
+export function parseDateTimeAsUtc(s: string): number | null {
+  const m = s
+    .trim()
+    .match(
+      /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?\s*(Z|[+-]\d{2}(?::?\d{2})?)?$/i,
+    );
+  if (!m) return null;
+  const [, y, mo, d, h = '0', mi = '0', se = '0', frac = '0', tz] = m;
+  const ms = Number(`0.${frac}`) * 1000;
+  let t = Date.UTC(
+    Number(y),
+    Number(mo) - 1,
+    Number(d),
+    Number(h),
+    Number(mi),
+    Number(se),
+    Math.round(ms),
+  );
+  if (!Number.isFinite(t)) return null;
+  if (tz && tz.toUpperCase() !== 'Z') {
+    const tm = tz.match(/^([+-])(\d{2}):?(\d{2})?$/);
+    if (!tm) return null;
+    const offset = (Number(tm[2]) * 60 + Number(tm[3] ?? '0')) * 60 * 1000;
+    t -= tm[1] === '+' ? offset : -offset;
+  }
+  return t;
+}
+
 /** 比較用の正規化文字列を返す(表現差を吸収する) */
 export function canonForCompare(v: unknown): string {
   if (v === null || v === undefined) return '';
@@ -37,10 +73,8 @@ export function canonForCompare(v: unknown): string {
   const s = String(v).trim();
   if (s === '') return '';
   // 日付/日時(YYYY-MM-DD / YYYY/MM/DD, 時刻付きも可): エポックで比較して書式差を吸収
-  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}([ T]\d{1,2}:\d{2}(:\d{2})?)?/.test(s)) {
-    const t = Date.parse(s.replace(/\//g, '-'));
-    if (Number.isFinite(t)) return `@${t}`;
-  }
+  const t = parseDateTimeAsUtc(s);
+  if (t !== null) return `@${t}`;
   // 数値: 1000 と 1000.00 を同一視
   if (/^-?\d+(\.\d+)?$/.test(s)) {
     const n = Number(s);

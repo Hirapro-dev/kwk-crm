@@ -1,0 +1,104 @@
+/**
+ * 申込詳細の編集(CLAUDE.md §8.1 `/applications/[id]`。admin のみ。2026-10-01)の純粋関数。
+ * 画面の入力(すべて文字列)を、DB 列のホワイトリストと型に従って更新内容に変換する。サーバー依存なし。
+ */
+
+import { APP_STATUSES, FLOW_TYPES } from './applications_constants';
+
+type ColType = 'text' | 'status' | 'flow' | 'ref' | 'date' | 'datetime' | 'number';
+
+/** 編集できる DB 列と型。id / inquiry_id / 取込時の原文(*_name_raw)/ extra は含めない(extra は別扱い) */
+export const EDITABLE_APPLICATION_COLUMNS: Readonly<Record<string, ColType>> = {
+  project_id: 'ref',
+  member_id: 'ref',
+  owner_id: 'ref',
+  acquirer_id: 'ref',
+  status: 'status',
+  flow_type: 'flow',
+  application_date: 'date',
+  contract_sent_date: 'date',
+  scheduled_payment_date: 'date',
+  payment_date: 'date',
+  withdrawal_date: 'date',
+  transfer_date: 'date',
+  contract_end_date: 'date',
+  start_datetime: 'datetime',
+  scheduled_amount: 'number',
+  payment_amount: 'number',
+  crypto_excluded_amount: 'number',
+  yen_interest: 'number',
+  interest: 'number',
+  withdrawal_amount: 'number',
+  transfer_amount: 'number',
+  campaign_target_amount: 'number',
+  start_month: 'text',
+  contract_period: 'text',
+  transfer_to: 'text',
+  transfer_from: 'text',
+};
+
+/** UTC の ISO 文字列 → 画面の datetime-local 用(日本時間の "YYYY-MM-DDTHH:mm") */
+export function toJstDateTimeLocal(v: unknown): string {
+  if (!v) return '';
+  const d = new Date(String(v));
+  if (Number.isNaN(d.getTime())) return '';
+  return new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 16);
+}
+
+/**
+ * 画面の入力を更新内容にする。ホワイトリスト外の列は無視する。
+ * - 空文字は null(ただし案件・会員・ステータスは必須)
+ * - 数値はカンマ・空白を除いて数値にする / 日付は YYYY-MM-DD / 起算日時は日本時間として UTC の ISO に
+ * - ステータス・区分は選択肢の値だけ
+ */
+export function buildApplicationPatch(
+  form: Record<string, string | null | undefined>,
+): { patch: Record<string, string | number | null> } | { error: string } {
+  const patch: Record<string, string | number | null> = {};
+  for (const [key, raw] of Object.entries(form)) {
+    const type = EDITABLE_APPLICATION_COLUMNS[key];
+    if (!type) continue;
+    const v = (raw ?? '').trim();
+    if (v === '') {
+      if (key === 'project_id') return { error: '案件は必須です' };
+      if (key === 'member_id') return { error: '会員は必須です' };
+      if (key === 'status') return { error: 'ステータスは必須です' };
+      patch[key] = null;
+      continue;
+    }
+    switch (type) {
+      case 'status':
+        if (!(APP_STATUSES as string[]).includes(v)) return { error: `ステータスが不正です: ${v}` };
+        patch[key] = v;
+        break;
+      case 'flow':
+        if (!(FLOW_TYPES as string[]).includes(v))
+          return { error: `入金/移動の区分が不正です: ${v}` };
+        patch[key] = v;
+        break;
+      case 'number': {
+        const n = Number(v.replace(/[,\s]/g, ''));
+        if (!Number.isFinite(n)) return { error: `数値を入力してください(${v})` };
+        patch[key] = n;
+        break;
+      }
+      case 'date': {
+        const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m || Number.isNaN(Date.parse(`${v}T00:00:00Z`)))
+          return { error: `日付の形式が不正です(${v})` };
+        patch[key] = v;
+        break;
+      }
+      case 'datetime': {
+        const m = v.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+        const d = m ? new Date(`${v}:00+09:00`) : null;
+        if (!d || Number.isNaN(d.getTime())) return { error: `日時の形式が不正です(${v})` };
+        patch[key] = d.toISOString();
+        break;
+      }
+      default:
+        patch[key] = v.slice(0, 500);
+    }
+  }
+  return { patch };
+}

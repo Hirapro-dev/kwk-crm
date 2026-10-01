@@ -5,6 +5,7 @@
  * - JSONB extra(案件固有項目)
  */
 
+import { ApplicationEditDialog } from '@/components/applications/ApplicationEditDialog';
 import { renderApplicationHighlightFieldValue } from '@/components/applications/ApplicationHighlightFieldValue';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
 import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
@@ -12,7 +13,10 @@ import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getApplication } from '@/lib/domain/applications';
+import { getCurrentUser } from '@/lib/domain/auth';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
+import { listProjects } from '@/lib/domain/projects';
+import { listAllUsers } from '@/lib/domain/users_admin';
 import { formatDate } from '@/lib/utils/date';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -23,7 +27,8 @@ interface PageProps {
 
 export default async function ApplicationDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const [app, detailFields, highlightFields] = await Promise.all([
+  const [me, app, detailFields, highlightFields] = await Promise.all([
+    getCurrentUser(),
     getApplication(id),
     // オブジェクト管理 (/settings/objects/applications) で「詳細」表示ONのフィールドのみ
     getVisibleFields('applications', 'detail'),
@@ -31,6 +36,11 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
     getVisibleFields('applications', 'highlight'),
   ]);
   if (!app) notFound();
+  // 編集は admin のみ(§8.1。2026-10-01)。案件・ユーザーの選択肢は admin のときだけ読む
+  const canEdit = me.role === 'admin';
+  const [projects, users] = canEdit
+    ? await Promise.all([listProjects(), listAllUsers({ activeOnly: true })])
+    : [[], []];
 
   // ハイライト設定があればそれで組み立て、無ければ従来の既定4項目にフォールバック
   const highlightFacts =
@@ -79,7 +89,19 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
         recordName={app.project?.name ?? '(案件未設定)'}
         recordSubName={app.id}
         facts={highlightFacts}
-        actions={<ShareLinkButton />}
+        actions={
+          <>
+            <ShareLinkButton />
+            {canEdit && (
+              <ApplicationEditDialog
+                application={app as unknown as Record<string, unknown> & { id: string }}
+                detailFields={detailFields}
+                projects={projects.map((p) => ({ id: String(p.id), name: p.name }))}
+                users={users.map((u) => ({ id: u.id, name: u.full_name ?? u.email }))}
+              />
+            )}
+          </>
+        }
       />
 
       {/*
