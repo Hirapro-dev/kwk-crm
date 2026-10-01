@@ -176,7 +176,7 @@ export function ApplicationEditDialog({ application, detailFields, projects, use
                         {type === 'datetime' && '(日本時間)'}
                       </Label>
                       {select ??
-                        (!f.is_in_db && v.length > 60 ? (
+                        (!f.is_in_db && (f.field_name === '備考' || v.length > 60) ? (
                           <Textarea
                             value={v}
                             rows={3}

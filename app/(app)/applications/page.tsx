@@ -9,7 +9,7 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { listProjects } from '@/lib/domain/projects';
-import { listAllUsers } from '@/lib/domain/users_admin';
+import { listCurrentMembers } from '@/lib/domain/users_admin';
 import { Suspense } from 'react';
 import { ApplicationsFilterBar } from './ApplicationsFilterBar';
 import { ApplicationsInfinite } from './ApplicationsInfinite';
@@ -48,7 +48,8 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
     listProjects(),
     // オブジェクト管理 (/settings/objects/applications) の一覧表示制御に従う
     getVisibleFields('applications', 'list'),
-    listAllUsers({ activeOnly: true }),
+    // 申込獲得者の選択肢は現メンバー(有効でログイン実績のある人)だけ(2026-10-01)
+    listCurrentMembers(),
   ]);
 
   return (
@@ -62,7 +63,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
           actions={
             me.role !== 'viewer' ? (
               <NewApplicationDialog
-                projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+                projects={projects.map((p) => ({ id: String(p.id), name: p.name }))}
                 users={users.map((u) => ({ id: u.id, name: u.full_name ?? u.email }))}
               />
             ) : undefined
