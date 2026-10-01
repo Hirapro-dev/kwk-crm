@@ -184,3 +184,24 @@ export async function getChildrenByParent(parentId: string): Promise<WithdrawalC
   if (error) return [];
   return (data ?? []) as WithdrawalChildRow[];
 }
+
+/**
+ * 会員詳細の関連「出金管理履歴」用: 指定会員の出金(子)を出金日の新しい順で返す(2026-10-01)。
+ * RLS で admin / manager / support 以外には行が返らない。失敗時は空配列で画面を壊さない。
+ */
+export async function getWithdrawalChildrenByMember(
+  memberId: string,
+  limit = 100,
+): Promise<WithdrawalChildRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('withdrawal_children')
+    .select(CHILD_COLS)
+    .eq('member_id', memberId)
+    .is('deleted_at', null)
+    .order('withdrawal_date', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return (data ?? []) as WithdrawalChildRow[];
+}

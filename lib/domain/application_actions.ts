@@ -3,8 +3,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { buildApplicationPatch } from './application_edit';
 import { APP_STATUSES, FLOW_TYPES } from './applications';
 import { getCurrentUser } from './auth';
+import { mergeInquiryExtra } from './inquiry_extra_edit';
+import { getVisibleFields } from './object_metadata';
 
 /**
  * 申込ステータス遷移(仕様書 §3 / §5.6)。
@@ -164,4 +167,71 @@ export async function createApplication(
   revalidatePath('/applications');
   revalidatePath(`/members/${d.memberId}`);
   return { ok: true, id: newId };
+}
+
+/**
+ * 申込の編集(§8.1 `/applications/[id]` の「編集」。admin のみ。2026-10-01)。
+ * DB 列は EDITABLE_APPLICATION_COLUMNS のホワイトリスト(変換・検証は純粋関数 buildApplicationPatch)、
+ * 可変項目(extra)は項目管理で「詳細」表示 ON の定義済みキーだけ差し替える(他のキーは残す)。
+ * 案件・会員・担当・申込獲得者は実在するものだけ受け付ける。
+ */
+export async function updateApplication(input: {
+  id: string;
+  /** DB 列(列名 → 入力値の文字列) */
+  columns: Record<string, string>;
+  /** 可変項目(キー → 値)。空文字はキー削除 */
+  extra?: Record<string, string>;
+}): Promise<{ error?: string }> {
+  const me = await getCurrentUser();
+  if (me.role !== 'admin') return { error: '申込の編集は admin のみ可能です' };
+  const built = buildApplicationPatch(input.columns);
+  if ('error' in built) return { error: built.error };
+  const patch: Record<string, unknown> = { ...built.patch };
+
+  const supabase = await createClient();
+  const { data: cur, error: curErr } = await supabase
+    .from('applications')
+    .select('id, member_id, extra')
+    .eq('id', input.id)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (curErr || !cur) return { error: '申込が見つかりません' };
+
+  // 参照先の実在確認(存在しない ID で FK エラーにしない・削除済みの会員に付け替えない)
+  const exists = async (table: string, id: unknown, softDelete: boolean) => {
+    let q = supabase.from(table).select('id').eq('id', String(id));
+    if (softDelete) q = q.is('deleted_at', null);
+    const { data } = await q.maybeSingle();
+    return !!data;
+  };
+  if (patch.project_id && !(await exists('projects', patch.project_id, false)))
+    return { error: '案件が見つかりません' };
+  if (patch.member_id && !(await exists('members', patch.member_id, true)))
+    return { error: `会員 ${String(patch.member_id)} が見つかりません(削除済みか、ID の誤り)` };
+  for (const k of ['owner_id', 'acquirer_id'] as const) {
+    if (patch[k] && !(await exists('users', patch[k], false)))
+      return { error: `${k === 'owner_id' ? '担当' : '申込獲得者'}のユーザーが見つかりません` };
+  }
+
+  if (input.extra) {
+    const defs = await getVisibleFields('applications', 'detail');
+    const allowed = new Set(
+      defs.filter((f) => !f.is_in_db && !f.is_placeholder).map((f) => f.field_name),
+    );
+    patch.extra = mergeInquiryExtra(
+      (cur as { extra: Record<string, unknown> | null }).extra,
+      input.extra,
+      allowed,
+    );
+  }
+  if (Object.keys(patch).length === 0) return {};
+  const { error } = await supabase.from('applications').update(patch).eq('id', input.id);
+  if (error) return { error: `更新に失敗しました: ${error.message}` };
+  revalidatePath(`/applications/${input.id}`);
+  revalidatePath('/applications');
+  const oldMember = (cur as { member_id: string | null }).member_id;
+  if (oldMember) revalidatePath(`/members/${oldMember}`);
+  if (patch.member_id && patch.member_id !== oldMember)
+    revalidatePath(`/members/${String(patch.member_id)}`);
+  return {};
 }
