@@ -1,5 +1,6 @@
 'use client';
 
+import { UserCombobox } from '@/components/members/UserCombobox';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -233,14 +234,13 @@ export function NewApplicationDialog({ projects, users }: Props) {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">案件(必須)</Label>
-                <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                  <option value="">選択</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={String(p.id)}>
-                      {p.name}
-                    </option>
-                  ))}
-                </Select>
+                {/* 案件が多いため、文字を入れると候補を絞り込む(2026-10-01) */}
+                <UserCombobox
+                  users={projects.map((p) => ({ id: p.id, full_name: p.name }))}
+                  value={projectId || null}
+                  onChange={(id) => setProjectId(id ?? '')}
+                  placeholder="案件名で検索"
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">申込日(必須)</Label>
