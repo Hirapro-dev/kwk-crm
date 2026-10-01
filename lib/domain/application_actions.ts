@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { CreateApplicationSchema, startDateToTimestamp } from './application_create_schema';
 import { buildApplicationPatch } from './application_edit';
 import { APP_STATUSES, FLOW_TYPES } from './applications';
 import { getCurrentUser } from './auth';
@@ -74,39 +75,7 @@ export async function updateApplicationStatus(input: {
  * 契約期間は 起算日時(start_datetime。日本時間で解釈)〜契約期日(contract_end_date。migration 107)と
  * 「●ヶ月」(contract_period)を別に持つ。利息(interest)は既存の円金利(yen_interest)とは別の列で、円金利はフォームに出さない。
  */
-const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日付は YYYY-MM-DD 形式で指定してください');
-const optionalDate = z.union([dateStr, z.literal(''), z.null(), z.undefined()]);
-const optionalAmount = z.union([z.number().finite().nonnegative(), z.null(), z.undefined()]);
-
-const CreateApplicationSchema = z.object({
-  memberId: z.string().regex(/^K-\d{9}$/, '会員を選択してください'),
-  projectId: z.number().int().positive('案件を選択してください'),
-  applicationDate: dateStr,
-  status: z.enum(APP_STATUSES as [string, ...string[]]),
-  flowType: z.union([
-    z.enum(FLOW_TYPES as [string, ...string[]]),
-    z.literal(''),
-    z.null(),
-    z.undefined(),
-  ]),
-  acquirerId: z.union([z.string().uuid(), z.literal(''), z.null(), z.undefined()]),
-  contractSentDate: optionalDate,
-  /** 利息(%)。既存の円金利 yen_interest とは別の列 interest(migration 107) */
-  interest: optionalAmount,
-  /** 起算日時。datetime-local の値(YYYY-MM-DDTHH:MM。日本時間) */
-  startDatetime: z.union([
-    z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, '起算日時の形式が不正です'),
-    z.literal(''),
-    z.null(),
-    z.undefined(),
-  ]),
-  contractEndDate: optionalDate,
-  paymentDate: optionalDate,
-  paymentAmount: optionalAmount,
-  contractPeriod: z.union([z.string().max(50), z.null(), z.undefined()]),
-});
-
-export type CreateApplicationInput = z.input<typeof CreateApplicationSchema>;
+type CreateApplicationInput = z.input<typeof CreateApplicationSchema>;
 
 export interface CreateApplicationResult {
   ok: boolean;
@@ -154,13 +123,14 @@ export async function createApplication(
     acquirer_id: d.acquirerId || null,
     contract_sent_date: d.contractSentDate || null,
     interest: d.interest ?? null,
-    // 画面の datetime-local は日本時間。サーバー(UTC)で解釈がずれないよう +09:00 を明示する
-    start_datetime: d.startDatetime ? new Date(`${d.startDatetime}:00+09:00`).toISOString() : null,
+    // 起算日は日付だけ入力(2026-10-01)。日本時間のその日 0 時として保存する
+    start_datetime: startDateToTimestamp(d.startDate),
     contract_end_date: d.contractEndDate || null,
     payment_date: d.paymentDate || null,
     payment_amount: d.paymentAmount ?? null,
     contract_period: d.contractPeriod?.trim() || null,
-    extra: {},
+    // 備考は可変項目「備考」に入れる(項目管理に登録済み。2026-10-01)
+    extra: d.remarks?.trim() ? { 備考: d.remarks.trim() } : {},
   });
   if (error) return { ok: false, error: `登録に失敗しました: ${error.message}` };
 

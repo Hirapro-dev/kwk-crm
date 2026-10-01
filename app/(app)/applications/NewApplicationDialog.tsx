@@ -11,6 +11,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { createApplication } from '@/lib/domain/application_actions';
 import { APP_STATUSES, FLOW_TYPES } from '@/lib/domain/applications_constants';
 import { type MemberBrief, searchMembersForInquiry } from '@/lib/domain/inquiry_lead_actions';
@@ -26,7 +27,7 @@ import { useEffect, useState, useTransition } from 'react';
  * 登録後は作成した申込の詳細へ移動する。
  */
 interface Props {
-  projects: Array<{ id: number; name: string }>;
+  projects: Array<{ id: string; name: string }>;
   users: Array<{ id: string; name: string }>;
 }
 
@@ -56,7 +57,8 @@ export function NewApplicationDialog({ projects, users }: Props) {
   const [acquirerId, setAcquirerId] = useState('');
   const [contractSentDate, setContractSentDate] = useState('');
   const [interest, setInterest] = useState('');
-  const [startDatetime, setStartDatetime] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [remarks, setRemarks] = useState('');
   const [contractEndDate, setContractEndDate] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -91,7 +93,8 @@ export function NewApplicationDialog({ projects, users }: Props) {
     setAcquirerId('');
     setContractSentDate('');
     setInterest('');
-    setStartDatetime('');
+    setStartDate('');
+    setRemarks('');
     setContractEndDate('');
     setPaymentDate('');
     setPaymentAmount('');
@@ -128,18 +131,19 @@ export function NewApplicationDialog({ projects, users }: Props) {
     startTransition(async () => {
       const r = await createApplication({
         memberId: member.id,
-        projectId: Number(projectId),
+        projectId,
         applicationDate,
         status,
         flowType: flowType || null,
         acquirerId: acquirerId || null,
         contractSentDate: contractSentDate || null,
         interest: it,
-        startDatetime: startDatetime || null,
+        startDate: startDate || null,
         contractEndDate: contractEndDate || null,
         paymentDate: paymentDate || null,
         paymentAmount: pa,
         contractPeriod: contractPeriod || null,
+        remarks: remarks || null,
       });
       if (!r.ok || !r.id) {
         setError(r.error ?? '登録に失敗しました');
@@ -296,11 +300,11 @@ export function NewApplicationDialog({ projects, users }: Props) {
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">起算日時(契約期間の開始)</Label>
+                <Label className="text-xs text-muted-foreground">起算日(契約期間の開始)</Label>
                 <Input
-                  type="datetime-local"
-                  value={startDatetime}
-                  onChange={(e) => setStartDatetime(e.target.value)}
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
                 />
               </div>
               <div className="space-y-1">
@@ -335,6 +339,16 @@ export function NewApplicationDialog({ projects, users }: Props) {
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
                   placeholder="例: 1000000"
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label className="text-xs text-muted-foreground">備考</Label>
+                <Textarea
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  rows={3}
+                  maxLength={2000}
+                  placeholder="自由記入(2,000 文字まで)"
                 />
               </div>
             </div>
