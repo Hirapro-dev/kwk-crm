@@ -34,9 +34,10 @@ export function UserCombobox({ users, value, onChange, placeholder }: Props) {
   // 開いている間は入力テキスト、閉じているときは選択名を表示
   const inputValue = open ? query : selectedLabel;
 
-  const filtered = query.trim()
-    ? users.filter((u) => (u.full_name ?? '').toLowerCase().includes(query.trim().toLowerCase()))
-    : users;
+  // 全角/半角・大文字/小文字を区別せずに部分一致(「ａｓｅｃ」でも「ASECコイン」に当たる)
+  const norm = (s: string) => s.normalize('NFKC').toLowerCase();
+  const q = norm(query.trim());
+  const filtered = q ? users.filter((u) => norm(u.full_name ?? '').includes(q)) : users;
 
   // 外側クリックで閉じる
   useEffect(() => {
