@@ -356,6 +356,20 @@ erDiagram
   CSV から取り込まれる。会員詳細の編集ダイアログ(`MemberEditDialog`)ではこの2キーだけ編集できる
   (2026-09-15 追加。ホワイトリスト `EDITABLE_MEMBER_EXTRA_KEYS`、`lib/domain/member_extra_edit.ts`。
   `updateMember` が現在の extra に差し込んで書き戻し、他のキーは触らない。空にしたキーは削除)
+- **案件別の利用額・出金額と累計入金額は申込から自動計算する**(2026-10-01 ユーザー決定。会員 CSV の取込はもう行わない方針のため)。
+  `extra` の「<キー>利用額」「<キー>出金額」「累計入金額」を、その会員の申込(削除済みを除く)から DB で計算して上書きする:
+  - **<キー>利用額** = その案件の申込のうち ステータス「完了」の 入金額 + 資金移動額(資金移動で入ってきた額)
+  - **<キー>出金額** = その案件の申込のうち ステータス「出金」の 出金額
+  - **累計入金額** = 全申込の 入金額 + 出金額 + ステータス「完了」の資金移動額
+  - <キー> は案件マスタの `member_amount_key`(無ければ案件名)。Salesforce の項目名が案件名と違う 8 案件(ASECコイン → ASEC 等)に設定済み。
+  - 2026-10-01 時点の比較: 利用額 99.8% / 出金額 100% / 累計入金額 99.8% が Salesforce の値と一致(資金移動額を含めない式では利用額 91.6%・累計入金額 92.9%)。
+  - 申込の INSERT / UPDATE(会員・案件・ステータス・入金額・出金額・資金移動額・削除の変更時)/ DELETE で、DB トリガーが元と先の会員を計算し直す
+    (`recompute_member_amounts(member_id)`。SECURITY DEFINER。値が変わらなければ書き込まない)。計算式は純粋関数 `computeMemberAmounts`
+    (`lib/domain/member_amounts.ts`、テスト付き)と同じで、適用後に DB の結果と全件照合する。
+  - 既に値があるキーで計算結果が 0 のものは "0"、値の無いキーは計算結果が 0 なら作らない。「C.I.Oシリーズ合計利用額」と総取引額・総入金額・総利用額の列は対象外(Salesforce の値のまま)。
+  - 項目の定義が無かった 9 案件(MRT_0.01%借入 ほか)の「利用額」「出金額」を項目管理に追加(migration 119)。
+  - 申込の無い金額が利用額に入っている 7 名(K-000000508 / 000593 / 005211 / 007579 / 011424 / 012117 / 012139。計 約 1,284 万円)は、扱いが決まるまで一括の計算し直しから外す
+    (その会員の申込が変われば計算し直される)。
 - `created_at`, `updated_at`, `deleted_at` timestamptz
 
 ### 5.5 projects (案件マスタ)
@@ -365,6 +379,9 @@ erDiagram
 - `name` text unique not null
 - `description` text
 - `is_active` boolean default true
+- `member_amount_key` text nullable — 会員の「<キー>利用額 / <キー>出金額」の <キー>(2026-10-01 追加, migration 119)。NULL なら案件名を使う。
+  Salesforce の項目名が案件名と違う案件だけ設定(ASECコイン → ASEC / SIRコイン → SIR / OTOSENプロジェクト → OTOSEN / PIFコイン → PIF /
+  テロメアオーナーズクラブ → テロメアOC / OTOSEN M＆A → OTOSEN M&A / G.P.P SG FUND → GPP SG FUND / WEBプロ_借入 → WEBプロ借入)。§5.4 の自動計算で使う
 
 > **2026-05 更新**: `category` カラムは廃止しました(migration 08)。案件は名前ベースで管理し、分類が必要になった場合は別途タグ機構を検討します。
 
