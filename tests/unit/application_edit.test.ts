@@ -35,6 +35,18 @@ describe('buildApplicationPatch', () => {
     });
     expect(r).toEqual({ patch: { interest: 15 } });
   });
+  it('利息種別は 月利 / 年利 / 契約期間内 だけ。空は未設定(null)', () => {
+    // 利息(%)が何の期間あたりの率かを表すため、自由入力の値は DB の CHECK に当たる前に止める(migration 121)
+    expect(buildApplicationPatch({ interest_type: '年利' })).toEqual({
+      patch: { interest_type: '年利' },
+    });
+    expect(buildApplicationPatch({ interest_type: '' })).toEqual({
+      patch: { interest_type: null },
+    });
+    expect(buildApplicationPatch({ interest_type: '日利' })).toEqual({
+      error: '利息種別が不正です: 日利',
+    });
+  });
   it('必須項目の空・選択肢外のステータス・不正な数値と日付はエラー', () => {
     expect(buildApplicationPatch({ project_id: '' })).toEqual({ error: '案件は必須です' });
     expect(buildApplicationPatch({ member_id: '' })).toEqual({ error: '会員は必須です' });

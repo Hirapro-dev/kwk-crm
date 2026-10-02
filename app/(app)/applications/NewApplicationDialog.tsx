@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { createApplication } from '@/lib/domain/application_actions';
-import { APP_STATUSES, FLOW_TYPES } from '@/lib/domain/applications_constants';
+import { APP_STATUSES, FLOW_TYPES, INTEREST_TYPES } from '@/lib/domain/applications_constants';
 import { type MemberBrief, searchMembersForInquiry } from '@/lib/domain/inquiry_lead_actions';
 import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -57,6 +57,7 @@ export function NewApplicationDialog({ projects, users }: Props) {
   const [flowType, setFlowType] = useState('');
   const [acquirerId, setAcquirerId] = useState('');
   const [contractSentDate, setContractSentDate] = useState('');
+  const [interestType, setInterestType] = useState('');
   const [interest, setInterest] = useState('');
   const [startDate, setStartDate] = useState('');
   const [remarks, setRemarks] = useState('');
@@ -93,6 +94,7 @@ export function NewApplicationDialog({ projects, users }: Props) {
     setFlowType('');
     setAcquirerId('');
     setContractSentDate('');
+    setInterestType('');
     setInterest('');
     setStartDate('');
     setRemarks('');
@@ -138,6 +140,7 @@ export function NewApplicationDialog({ projects, users }: Props) {
         flowType: flowType || null,
         acquirerId: acquirerId || null,
         contractSentDate: contractSentDate || null,
+        interestType: interestType || null,
         interest: it,
         startDate: startDate || null,
         contractEndDate: contractEndDate || null,
@@ -289,6 +292,17 @@ export function NewApplicationDialog({ projects, users }: Props) {
                   value={contractSentDate}
                   onChange={(e) => setContractSentDate(e.target.value)}
                 />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">利息種別</Label>
+                <Select value={interestType} onChange={(e) => setInterestType(e.target.value)}>
+                  <option value="">未設定</option>
+                  {INTEREST_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">利息(%)</Label>

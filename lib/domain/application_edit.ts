@@ -3,9 +3,9 @@
  * 画面の入力(すべて文字列)を、DB 列のホワイトリストと型に従って更新内容に変換する。サーバー依存なし。
  */
 
-import { APP_STATUSES, FLOW_TYPES } from './applications_constants';
+import { APP_STATUSES, FLOW_TYPES, INTEREST_TYPES } from './applications_constants';
 
-type ColType = 'text' | 'status' | 'flow' | 'ref' | 'date' | 'datetime' | 'number';
+type ColType = 'text' | 'status' | 'flow' | 'interestType' | 'ref' | 'date' | 'datetime' | 'number';
 
 /** 編集できる DB 列と型。id / inquiry_id / 取込時の原文(*_name_raw)/ extra は含めない(extra は別扱い) */
 export const EDITABLE_APPLICATION_COLUMNS: Readonly<Record<string, ColType>> = {
@@ -27,6 +27,7 @@ export const EDITABLE_APPLICATION_COLUMNS: Readonly<Record<string, ColType>> = {
   payment_amount: 'number',
   crypto_excluded_amount: 'number',
   yen_interest: 'number',
+  interest_type: 'interestType',
   interest: 'number',
   withdrawal_amount: 'number',
   transfer_amount: 'number',
@@ -49,7 +50,7 @@ export function toJstDateTimeLocal(v: unknown): string {
  * 画面の入力を更新内容にする。ホワイトリスト外の列は無視する。
  * - 空文字は null(ただし案件・会員・ステータスは必須)
  * - 数値はカンマ・空白を除いて数値にする / 日付は YYYY-MM-DD / 起算日時は日本時間として UTC の ISO に
- * - ステータス・区分は選択肢の値だけ
+ * - ステータス・区分・利息種別は選択肢の値だけ
  */
 export function buildApplicationPatch(
   form: Record<string, string | null | undefined>,
@@ -74,6 +75,10 @@ export function buildApplicationPatch(
       case 'flow':
         if (!(FLOW_TYPES as string[]).includes(v))
           return { error: `入金/移動の区分が不正です: ${v}` };
+        patch[key] = v;
+        break;
+      case 'interestType':
+        if (!(INTEREST_TYPES as string[]).includes(v)) return { error: `利息種別が不正です: ${v}` };
         patch[key] = v;
         break;
       case 'number': {

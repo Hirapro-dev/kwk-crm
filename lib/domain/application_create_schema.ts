@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { APP_STATUSES, FLOW_TYPES } from './applications_constants';
+import { APP_STATUSES, FLOW_TYPES, INTEREST_TYPES } from './applications_constants';
 
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日付は YYYY-MM-DD 形式で指定してください');
 const optionalDate = z.union([dateStr, z.literal(''), z.null(), z.undefined()]);
@@ -27,6 +27,13 @@ export const CreateApplicationSchema = z.object({
   ]),
   acquirerId: z.union([z.string().uuid(), z.literal(''), z.null(), z.undefined()]),
   contractSentDate: optionalDate,
+  /** 利息種別(月利 / 年利 / 契約期間内。migration 121) */
+  interestType: z.union([
+    z.enum(INTEREST_TYPES as [string, ...string[]]),
+    z.literal(''),
+    z.null(),
+    z.undefined(),
+  ]),
   /** 利息(%)。既存の円金利 yen_interest とは別の列 interest(migration 107) */
   interest: optionalAmount,
   /** 起算日(契約期間の開始)。日付のみ(2026-10-01 に時刻の入力をやめた)。日本時間のその日の 0 時として保存する */
