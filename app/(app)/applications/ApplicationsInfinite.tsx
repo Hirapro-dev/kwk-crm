@@ -3,6 +3,7 @@
 import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTable';
 import { Badge } from '@/components/ui/badge';
 import { TableCell } from '@/components/ui/table';
+import { formatApplicationUnitValue } from '@/lib/domain/application_units';
 import type { AppStatus, ApplicationListItem } from '@/lib/domain/applications';
 import { deleteRecords } from '@/lib/domain/delete_actions';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
@@ -132,7 +133,10 @@ export function ApplicationsInfinite({ initialRows, fields, total, params, canDe
 
       // 汎用(日付/数値/テキスト/extra)
       const raw = getFieldValue(rec, f.field_name, f.is_in_db, f.csv_column_name);
-      const formatted = formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
+      // 利息は %、契約期間は ヶ月 を値に付ける(項目名には付けない。2026-10-02)
+      const formatted =
+        formatApplicationUnitValue(f.field_name, raw) ??
+        formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
       const text = formatted === '' ? '-' : formatted;
       if (isFirst) {
         return (

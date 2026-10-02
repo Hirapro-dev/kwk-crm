@@ -12,6 +12,7 @@ import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatApplicationUnitValue } from '@/lib/domain/application_units';
 import { getApplication } from '@/lib/domain/applications';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
@@ -127,6 +128,9 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
               project_id: app.project?.name ?? '-',
               acquirer_id: app.acquirer?.full_name ?? app.acquirer_name_raw ?? '-',
               owner_id: app.owner?.full_name ?? app.owner_name_raw ?? '-',
+              // 利息は %、契約期間は ヶ月 を値に付ける(項目名には付けない。2026-10-02)
+              interest: formatApplicationUnitValue('interest', app.interest),
+              contract_period: formatApplicationUnitValue('contract_period', app.contract_period),
             }}
           />
         </CardContent>

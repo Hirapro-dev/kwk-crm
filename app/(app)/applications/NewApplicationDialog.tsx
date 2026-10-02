@@ -318,10 +318,11 @@ export function NewApplicationDialog({ projects, users }: Props) {
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">契約期間(ヶ月)</Label>
                 <Input
+                  inputMode="numeric"
                   value={contractPeriod}
                   onChange={(e) => setContractPeriod(e.target.value)}
                   placeholder="例: 12"
-                  maxLength={50}
+                  maxLength={10}
                 />
               </div>
               <div className="space-y-1">

@@ -189,7 +189,13 @@ export function ApplicationEditDialog({ application, detailFields, projects, use
                                 ? 'date'
                                 : 'text'
                             }
-                            inputMode={type === 'number' ? 'decimal' : undefined}
+                            inputMode={
+                              type === 'number'
+                                ? 'decimal'
+                                : type === 'months'
+                                  ? 'numeric'
+                                  : undefined
+                            }
                             value={v}
                             placeholder={f.field_name === 'member_id' ? 'K-000000000' : undefined}
                             className={f.field_name === 'member_id' ? 'font-mono' : undefined}

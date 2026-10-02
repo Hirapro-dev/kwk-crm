@@ -412,7 +412,7 @@ erDiagram
 - `payment_amount` numeric(18,2)
 - `crypto_excluded_amount` numeric(18,2)
 - `yen_interest` numeric(8,4) — 円金利(CSV 取込)。下の「利息」とは別の項目でそのまま残す
-- `interest` numeric(18,2) nullable — **利息(%)**(表示名は「利息（%）」。2026-10-02)(2026-09-18 追加, migration 107。申込の新規登録で入力(表示は「利息(%)」。ユーザー決定)。CSV「利息」列からも取り込む(migration 108 でマッピング追加)。値は数値のまま保存(CSV には 0.01〜600 の値がある)。field_definitions に登録済み(初期値は詳細のみ表示))
+- `interest` numeric(18,2) nullable — **利息(%)**(表示名は「利息」。一覧・詳細では値に「%」を付けて表示(例: 0.01%)。入力・編集は数字。`formatApplicationUnitValue`。2026-10-02)(2026-09-18 追加, migration 107。申込の新規登録で入力(表示は「利息(%)」。ユーザー決定)。CSV「利息」列からも取り込む(migration 108 でマッピング追加)。値は数値のまま保存(CSV には 0.01〜600 の値がある)。field_definitions に登録済み(初期値は詳細のみ表示))
 - `interest_type` text nullable — **利息種別**(2026-10-02 追加, migration 121。利息(%)が何の期間あたりの率か)。check in (`月利`, `年利`, `契約期間内`, null許容)。申込の新規登録・詳細の編集でプルダウンから選ぶ(`INTEREST_TYPES`)。既存の申込は未設定。CSV 取込の対象外。field_definitions に登録済み(初期値は詳細のみ表示、並びは利息の直前)
 - `withdrawal_amount` numeric(18,2)
 - `withdrawal_date` date
@@ -421,7 +421,7 @@ erDiagram
 - `transfer_to` text — 資金移動先
 - `transfer_from` text nullable — 資金移動元(2026-09-18 追加, migration 108。CSV「資金移動元」。資金移動先とは別の値)
 - `campaign_target_amount` numeric(18,2) nullable — ｷｬﾝﾍﾟｰﾝ対象金額(2026-09-18 追加, migration 108。CSV「ｷｬﾝﾍﾟｰﾝ対象金額」)
-- `contract_period` text — 契約期間の月数。値は**数字だけ**(例: "12")、表示名は「契約期間（ヶ月）」(2026-10-02。新規登録・編集で「12ヶ月」と入れても数字だけで保存 `normalizeContractPeriod`)(契約期間の長さ。期間そのものは `start_datetime`(起算日時)〜`contract_end_date`)
+- `contract_period` text — 契約期間の月数。値は**数字だけ**(例: "12")、表示名は「契約期間」で一覧・詳細では値に「ヶ月」を付けて表示(例: 4ヶ月。`formatApplicationUnitValue`)(2026-10-02。新規登録・編集で「12ヶ月」と入れても数字だけで保存 `normalizeContractPeriod`)(契約期間の長さ。期間そのものは `start_datetime`(起算日時)〜`contract_end_date`)
 - `contract_end_date` date nullable — 契約期日(契約期間の終了日。2026-09-18 追加, migration 107。CSV「契約期日」列からも取り込む。field_definitions に登録済みで、オブジェクト管理から一覧/詳細の表示を切り替えられる。初期値は詳細のみ表示)
 - `extra` jsonb default `'{}'::jsonb` — 案件固有(コイン数、レート、ボーナス、配当比率等)
 - `created_at`, `updated_at`, `deleted_at` timestamptz
