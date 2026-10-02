@@ -15,6 +15,8 @@
 --      DB の列と既存の値(約 1.2 万件)は消さずに残す(取り返しがつかないため。不要と決まれば別途 DROP COLUMN する)。
 --   4) 利息・契約期間の表示名に単位を付ける(「利息（%）」「契約期間（ヶ月）」。一覧・詳細・編集の見出しは項目管理の表示名)。
 --      契約期間の値は数字だけにそろえる(既存 1,393 件は数字だけ。新規登録フォームから入った「8ヶ月」1 件だけを直す)。
+--   5) 起算日時を「起算日」にし、日付だけで表示する(項目の型を date に。値は timestamptz のまま、表示は日本時間の日付。
+--      編集・新規登録は日付だけ入力し、日本時間のその日の 0 時で保存する)。
 -- ============================================================================
 
 -- 1) ステータス
@@ -95,3 +97,7 @@ UPDATE public.field_definitions SET label = '契約期間（ヶ月）', updated_
 UPDATE public.applications
    SET contract_period = substring(contract_period FROM '^([0-9]+(?:\.[0-9]+)?)')
  WHERE contract_period ~ '^[0-9]+(\.[0-9]+)?\s*(ヶ月|か月|カ月|ケ月|ヵ月|月)$';
+
+-- 5) 起算日時 → 起算日(表示は日本時間の日付だけ)
+UPDATE public.field_definitions SET label = '起算日', data_type = 'date', updated_at = now()
+ WHERE object_id = 'applications' AND field_name = 'start_datetime';

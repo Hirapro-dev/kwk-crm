@@ -379,7 +379,7 @@ const APP_COLUMNS = (alias: string): AllowedColumnDef[] => [
   },
   {
     source: `${alias}.start_datetime`,
-    label: '起算日時',
+    label: '起算日',
     dataType: 'datetime',
     filterable: true,
     sortable: true,

@@ -3,7 +3,7 @@
  * 画面の入力(すべて文字列)を、DB 列のホワイトリストと型に従って更新内容に変換する。サーバー依存なし。
  */
 
-import { normalizeContractPeriod } from './application_create_schema';
+import { normalizeContractPeriod, startDateToTimestamp } from './application_create_schema';
 import { ALL_APP_STATUSES, INTEREST_TYPES } from './applications_constants';
 
 type ColType =
@@ -13,7 +13,7 @@ type ColType =
   | 'interestType'
   | 'ref'
   | 'date'
-  | 'datetime'
+  | 'jstDate'
   | 'number';
 
 /** 編集できる DB 列と型。id / inquiry_id / 取込時の原文(*_name_raw)/ extra は含めない(extra は別扱い) */
@@ -30,7 +30,8 @@ export const EDITABLE_APPLICATION_COLUMNS: Readonly<Record<string, ColType>> = {
   withdrawal_date: 'date',
   transfer_date: 'date',
   contract_end_date: 'date',
-  start_datetime: 'datetime',
+  // 起算日(2026-10-02 に時刻の入力をやめた。新規登録と同じく日本時間のその日の 0 時で保存)
+  start_datetime: 'jstDate',
   scheduled_amount: 'number',
   payment_amount: 'number',
   crypto_excluded_amount: 'number',
@@ -57,7 +58,7 @@ export function toJstDateTimeLocal(v: unknown): string {
 /**
  * 画面の入力を更新内容にする。ホワイトリスト外の列は無視する。
  * - 空文字は null(ただし案件・会員・ステータスは必須)
- * - 数値はカンマ・空白を除いて数値にする / 日付は YYYY-MM-DD / 起算日時は日本時間として UTC の ISO に
+ * - 数値はカンマ・空白を除いて数値にする / 日付は YYYY-MM-DD / 起算日は日本時間のその日の 0 時を UTC の ISO に
  * - ステータス・利息種別は選択肢の値だけ
  */
 export function buildApplicationPatch(
@@ -106,11 +107,10 @@ export function buildApplicationPatch(
         patch[key] = v;
         break;
       }
-      case 'datetime': {
-        const m = v.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
-        const d = m ? new Date(`${v}:00+09:00`) : null;
-        if (!d || Number.isNaN(d.getTime())) return { error: `日時の形式が不正です(${v})` };
-        patch[key] = d.toISOString();
+      case 'jstDate': {
+        const ts = /^\d{4}-\d{2}-\d{2}$/.test(v) ? startDateToTimestamp(v) : null;
+        if (!ts) return { error: `日付の形式が不正です(${v})` };
+        patch[key] = ts;
         break;
       }
       default:

@@ -6,11 +6,11 @@ import { describe, expect, it } from 'vitest';
  * 意図: 画面の文字列入力を、許可した列だけ・正しい型で DB に渡す。不正な値は DB に送る前に止める。
  */
 describe('buildApplicationPatch', () => {
-  it('数値はカンマを除き、日付はそのまま、起算日時は日本時間として UTC にする', () => {
+  it('数値はカンマを除き、日付はそのまま、起算日は日本時間のその日の 0 時を UTC にする', () => {
     const r = buildApplicationPatch({
       payment_amount: '1,000,000',
       payment_date: '2026-09-30',
-      start_datetime: '2026-10-01T09:00',
+      start_datetime: '2026-10-01',
       status: '完了',
       // 区分(flow_type)は 2026-10-02 に項目から外したので無視される
       flow_type: '入金',
@@ -20,7 +20,7 @@ describe('buildApplicationPatch', () => {
       patch: {
         payment_amount: 1000000,
         payment_date: '2026-09-30',
-        start_datetime: '2026-10-01T00:00:00.000Z',
+        start_datetime: '2026-09-30T15:00:00.000Z',
         status: '完了',
         transfer_to: '口座A',
       },

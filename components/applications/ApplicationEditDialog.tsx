@@ -23,7 +23,7 @@ import { useState, useTransition } from 'react';
  * 申込詳細の編集ダイアログ(CLAUDE.md §8.1 `/applications/[id]`。admin のみ。2026-10-01)。
  * 問合せの編集(InquiryEditDialog)と同じく、項目管理(/settings/objects/applications)の「詳細」表示 ON の項目を
  * セクション順に並べる。DB 列はホワイトリスト(EDITABLE_APPLICATION_COLUMNS)、可変項目(extra)は定義済みキー。
- * 案件・担当・申込獲得者は選択式、ステータス・入金/移動は選択肢、起算日時は日本時間で入力する。
+ * 案件・担当・申込獲得者は選択式、ステータス・利息種別は選択肢、起算日は日付だけ入力する(日本時間の 0 時で保存)。
  */
 interface Props {
   application: Record<string, unknown> & { id: string; extra?: Record<string, unknown> | null };
@@ -34,7 +34,8 @@ interface Props {
 
 function initialValue(f: FieldDefinition, raw: unknown): string {
   const type = EDITABLE_APPLICATION_COLUMNS[f.field_name];
-  if (type === 'datetime') return toJstDateTimeLocal(raw);
+  // 起算日: 日本時間の日付(UTC のまま先頭 10 文字を取ると前日になるため)
+  if (type === 'jstDate') return toJstDateTimeLocal(raw).slice(0, 10);
   if (type === 'date' || f.data_type === 'date') return raw ? String(raw).slice(0, 10) : '';
   return raw == null ? '' : String(raw);
 }
@@ -173,10 +174,7 @@ export function ApplicationEditDialog({ application, detailFields, projects, use
                   const select = selectFor(f, v);
                   return (
                     <div key={f.field_name} className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        {label}
-                        {type === 'datetime' && '(日本時間)'}
-                      </Label>
+                      <Label className="text-xs text-muted-foreground">{label}</Label>
                       {select ??
                         (!f.is_in_db && (f.field_name === '備考' || v.length > 60) ? (
                           <Textarea
@@ -187,11 +185,9 @@ export function ApplicationEditDialog({ application, detailFields, projects, use
                         ) : (
                           <Input
                             type={
-                              type === 'datetime'
-                                ? 'datetime-local'
-                                : type === 'date' || f.data_type === 'date'
-                                  ? 'date'
-                                  : 'text'
+                              type === 'date' || type === 'jstDate' || f.data_type === 'date'
+                                ? 'date'
+                                : 'text'
                             }
                             inputMode={type === 'number' ? 'decimal' : undefined}
                             value={v}
