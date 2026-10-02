@@ -2,11 +2,13 @@ import { UserAvatar } from '@/components/users/UserAvatar';
 import type { AppUser } from '@/lib/domain/types';
 import { ExternalLink, ListChecks, Menu } from 'lucide-react';
 import Link from 'next/link';
+import { TaskHeaderSearch } from './TaskHeaderSearch';
 import { TaskSettingsMenu } from './TaskSettingsMenu';
 
 /**
  * タスク管理(/task)専用の黒ヘッダー(仕様書 §8.1)。メーラーの MailerTopbar と同じ構成。
  * 右の歯車からログアウト(全ロール)と CRM の設定(admin)。左端のメニューボタンで左メニューを開閉(TaskShell)。
+ * 中央に検索欄(TaskHeaderSearch。2026-10-02)。
  */
 export function TaskTopbar({
   me,
@@ -36,7 +38,10 @@ export function TaskTopbar({
             ひらプロタスク
           </Link>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex flex-1 justify-end md:justify-center">
+          <TaskHeaderSearch />
+        </div>
+        <div className="flex items-center gap-2">
           <a
             href="/"
             target="_blank"
