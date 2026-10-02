@@ -336,13 +336,6 @@ const APP_COLUMNS = (alias: string): AllowedColumnDef[] => [
     groupable: true,
   },
   {
-    source: `${alias}.flow_type`,
-    label: '入金/移動',
-    dataType: 'enum',
-    filterable: true,
-    groupable: true,
-  },
-  {
     source: `${alias}.owner_id`,
     label: '申込担当ID',
     dataType: 'text',
@@ -478,7 +471,7 @@ const APP_COLUMNS = (alias: string): AllowedColumnDef[] => [
   },
   {
     source: `${alias}.contract_period`,
-    label: '契約期間',
+    label: '契約期間（ヶ月）',
     dataType: 'text',
     filterable: true,
     groupable: true,

@@ -14,7 +14,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { updateApplication } from '@/lib/domain/application_actions';
 import { EDITABLE_APPLICATION_COLUMNS, toJstDateTimeLocal } from '@/lib/domain/application_edit';
-import { APP_STATUSES, FLOW_TYPES, INTEREST_TYPES } from '@/lib/domain/applications_constants';
+import { APP_STATUSES, INTEREST_TYPES } from '@/lib/domain/applications_constants';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
@@ -119,6 +119,8 @@ export function ApplicationEditDialog({ application, detailFields, projects, use
     if (key === 'status')
       return (
         <Select value={v} onChange={onChange}>
+          {/* 過去の値(完了・未購入・失効)は今の値のときだけ出す。新しく選べるのは APP_STATUSES だけ */}
+          {v && !(APP_STATUSES as string[]).includes(v) && <option value={v}>{v}</option>}
           {APP_STATUSES.map((s) => (
             <option key={s} value={s}>
               {s}
@@ -131,17 +133,6 @@ export function ApplicationEditDialog({ application, detailFields, projects, use
         <Select value={v} onChange={onChange}>
           <option value="">(未設定)</option>
           {INTEREST_TYPES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
-      );
-    if (key === 'flow_type')
-      return (
-        <Select value={v} onChange={onChange}>
-          <option value="">(未設定)</option>
-          {FLOW_TYPES.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>

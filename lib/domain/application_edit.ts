@@ -3,9 +3,18 @@
  * 画面の入力(すべて文字列)を、DB 列のホワイトリストと型に従って更新内容に変換する。サーバー依存なし。
  */
 
-import { APP_STATUSES, FLOW_TYPES, INTEREST_TYPES } from './applications_constants';
+import { normalizeContractPeriod } from './application_create_schema';
+import { ALL_APP_STATUSES, INTEREST_TYPES } from './applications_constants';
 
-type ColType = 'text' | 'status' | 'flow' | 'interestType' | 'ref' | 'date' | 'datetime' | 'number';
+type ColType =
+  | 'text'
+  | 'months'
+  | 'status'
+  | 'interestType'
+  | 'ref'
+  | 'date'
+  | 'datetime'
+  | 'number';
 
 /** 編集できる DB 列と型。id / inquiry_id / 取込時の原文(*_name_raw)/ extra は含めない(extra は別扱い) */
 export const EDITABLE_APPLICATION_COLUMNS: Readonly<Record<string, ColType>> = {
@@ -14,7 +23,6 @@ export const EDITABLE_APPLICATION_COLUMNS: Readonly<Record<string, ColType>> = {
   owner_id: 'ref',
   acquirer_id: 'ref',
   status: 'status',
-  flow_type: 'flow',
   application_date: 'date',
   contract_sent_date: 'date',
   scheduled_payment_date: 'date',
@@ -33,7 +41,7 @@ export const EDITABLE_APPLICATION_COLUMNS: Readonly<Record<string, ColType>> = {
   transfer_amount: 'number',
   campaign_target_amount: 'number',
   start_month: 'text',
-  contract_period: 'text',
+  contract_period: 'months',
   transfer_to: 'text',
   transfer_from: 'text',
 };
@@ -50,7 +58,7 @@ export function toJstDateTimeLocal(v: unknown): string {
  * 画面の入力を更新内容にする。ホワイトリスト外の列は無視する。
  * - 空文字は null(ただし案件・会員・ステータスは必須)
  * - 数値はカンマ・空白を除いて数値にする / 日付は YYYY-MM-DD / 起算日時は日本時間として UTC の ISO に
- * - ステータス・区分・利息種別は選択肢の値だけ
+ * - ステータス・利息種別は選択肢の値だけ
  */
 export function buildApplicationPatch(
   form: Record<string, string | null | undefined>,
@@ -69,18 +77,22 @@ export function buildApplicationPatch(
     }
     switch (type) {
       case 'status':
-        if (!(APP_STATUSES as string[]).includes(v)) return { error: `ステータスが不正です: ${v}` };
-        patch[key] = v;
-        break;
-      case 'flow':
-        if (!(FLOW_TYPES as string[]).includes(v))
-          return { error: `入金/移動の区分が不正です: ${v}` };
+        // 過去の値(完了・未購入・失効)の申込を、ステータスを変えずに保存できるよう全値で検証する。
+        // 画面の選択肢は今の値 + 新しい選択肢だけ(ApplicationEditDialog)
+        if (!(ALL_APP_STATUSES as string[]).includes(v))
+          return { error: `ステータスが不正です: ${v}` };
         patch[key] = v;
         break;
       case 'interestType':
         if (!(INTEREST_TYPES as string[]).includes(v)) return { error: `利息種別が不正です: ${v}` };
         patch[key] = v;
         break;
+      case 'months': {
+        const n = normalizeContractPeriod(v);
+        if (!n) return { error: `契約期間は月数(数字)で入力してください(${v})` };
+        patch[key] = n;
+        break;
+      }
       case 'number': {
         const n = Number(v.replace(/[,\s]/g, ''));
         if (!Number.isFinite(n)) return { error: `数値を入力してください(${v})` };

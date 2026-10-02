@@ -12,7 +12,8 @@ describe('buildApplicationPatch', () => {
       payment_date: '2026-09-30',
       start_datetime: '2026-10-01T09:00',
       status: '完了',
-      flow_type: '',
+      // 区分(flow_type)は 2026-10-02 に項目から外したので無視される
+      flow_type: '入金',
       transfer_to: ' 口座A ',
     });
     expect(r).toEqual({
@@ -21,7 +22,6 @@ describe('buildApplicationPatch', () => {
         payment_date: '2026-09-30',
         start_datetime: '2026-10-01T00:00:00.000Z',
         status: '完了',
-        flow_type: null,
         transfer_to: '口座A',
       },
     });
@@ -34,6 +34,15 @@ describe('buildApplicationPatch', () => {
       interest: '15',
     });
     expect(r).toEqual({ patch: { interest: 15 } });
+  });
+  it('過去のステータス(完了など)はそのまま保存でき、契約期間は数字だけにする', () => {
+    // 過去の申込は値を変えずに残す(ユーザー決定)。編集で他の項目だけ直しても保存できること
+    expect(buildApplicationPatch({ status: '完了', contract_period: '6ヶ月' })).toEqual({
+      patch: { status: '完了', contract_period: '6' },
+    });
+    expect(buildApplicationPatch({ contract_period: '半年' })).toEqual({
+      error: '契約期間は月数(数字)で入力してください(半年)',
+    });
   });
   it('利息種別は 月利 / 年利 / 契約期間内 だけ。空は未設定(null)', () => {
     // 利息(%)が何の期間あたりの率かを表すため、自由入力の値は DB の CHECK に当たる前に止める(migration 121)

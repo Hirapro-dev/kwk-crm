@@ -55,10 +55,6 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
             value: app.status ? <Badge>{app.status}</Badge> : '-',
           },
           {
-            label: '入金/移動',
-            value: app.flow_type ? <Badge variant="outline">{app.flow_type}</Badge> : '-',
-          },
-          {
             label: '申込日',
             value: formatDate(app.application_date) || '-',
           },

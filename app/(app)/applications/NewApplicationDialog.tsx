@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { createApplication } from '@/lib/domain/application_actions';
-import { APP_STATUSES, FLOW_TYPES, INTEREST_TYPES } from '@/lib/domain/applications_constants';
+import { APP_STATUSES, INTEREST_TYPES } from '@/lib/domain/applications_constants';
 import { type MemberBrief, searchMembersForInquiry } from '@/lib/domain/inquiry_lead_actions';
 import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -23,7 +23,7 @@ import { useEffect, useState, useTransition } from 'react';
 /**
  * 申込一覧の「新規登録」ダイアログ(CLAUDE.md §5.6 / §8.1)。
  * 会員は検索して選ぶ(必須)。案件・申込日・ステータスは必須、それ以外は任意。
- * 項目は 案件 / 申込日 / ステータス / 区分 / 申込獲得者 / 契約書送付日 / 利息 / 起算日時 / 契約期日 / 契約期間(●ヶ月) / 入金日 / 入金額
+ * 項目は 案件 / 申込日 / ステータス / 申込獲得者 / 契約書送付日 / 利息種別 / 利息 / 起算日 / 契約期日 / 契約期間(ヶ月) / 入金日 / 入金額 / 備考
  * (2026-09-18: 担当・入金予定日・入金予定額を外し、契約書送付日・利息(interest。既存の円金利 yen_interest とは別)・起算日時・契約期日を追加。担当は登録者を既定にする)。
  * 登録後は作成した申込の詳細へ移動する。
  */
@@ -54,7 +54,6 @@ export function NewApplicationDialog({ projects, users }: Props) {
   const [projectId, setProjectId] = useState('');
   const [applicationDate, setApplicationDate] = useState(todayJst);
   const [status, setStatus] = useState<string>('対応中');
-  const [flowType, setFlowType] = useState('');
   const [acquirerId, setAcquirerId] = useState('');
   const [contractSentDate, setContractSentDate] = useState('');
   const [interestType, setInterestType] = useState('');
@@ -91,7 +90,6 @@ export function NewApplicationDialog({ projects, users }: Props) {
     setProjectId('');
     setApplicationDate(todayJst());
     setStatus('対応中');
-    setFlowType('');
     setAcquirerId('');
     setContractSentDate('');
     setInterestType('');
@@ -137,7 +135,6 @@ export function NewApplicationDialog({ projects, users }: Props) {
         projectId,
         applicationDate,
         status,
-        flowType: flowType || null,
         acquirerId: acquirerId || null,
         contractSentDate: contractSentDate || null,
         interestType: interestType || null,
@@ -264,17 +261,6 @@ export function NewApplicationDialog({ projects, users }: Props) {
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">区分</Label>
-                <Select value={flowType} onChange={(e) => setFlowType(e.target.value)}>
-                  <option value="">未設定</option>
-                  {FLOW_TYPES.map((f) => (
-                    <option key={f} value={f}>
-                      {f}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">申込獲得者</Label>
                 <Select value={acquirerId} onChange={(e) => setAcquirerId(e.target.value)}>
                   <option value="">未設定</option>
@@ -330,11 +316,11 @@ export function NewApplicationDialog({ projects, users }: Props) {
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">契約期間(●ヶ月)</Label>
+                <Label className="text-xs text-muted-foreground">契約期間(ヶ月)</Label>
                 <Input
                   value={contractPeriod}
                   onChange={(e) => setContractPeriod(e.target.value)}
-                  placeholder="例: 12ヶ月"
+                  placeholder="例: 12"
                   maxLength={50}
                 />
               </div>

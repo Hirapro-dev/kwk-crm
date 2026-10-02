@@ -1,11 +1,11 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { APP_STATUSES } from '@/lib/domain/applications_constants';
+import { ALL_APP_STATUSES } from '@/lib/domain/applications_constants';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useTransition } from 'react';
 
 export function ApplicationsFilterBar({
   initialQ,
@@ -62,7 +62,8 @@ export function ApplicationsFilterBar({
       </Select>
       <Select className="w-36" value={status} onChange={(e) => setStatus(e.target.value)}>
         <option value="">ステータス: すべて</option>
-        {APP_STATUSES.map((s) => (
+        {/* 過去の値(完了・未購入・失効)の申込も絞り込めるよう全値を出す */}
+        {ALL_APP_STATUSES.map((s) => (
           <option key={s} value={s}>
             {s}
           </option>

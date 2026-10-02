@@ -11,6 +11,29 @@ const keys = new Map([
 ]);
 
 describe('computeMemberAmounts', () => {
+  it('ステータス「入金」は旧名「完了」と同じく入金済みとして数える(2026-10-02 改名。過去の申込は「完了」のまま)', () => {
+    const out = computeMemberAmounts(
+      [
+        {
+          project_id: 'T-1',
+          status: '入金',
+          payment_amount: 1000000,
+          withdrawal_amount: null,
+          transfer_amount: 200000,
+        },
+        {
+          project_id: 'T-1',
+          status: '完了',
+          payment_amount: 500000,
+          withdrawal_amount: null,
+          transfer_amount: null,
+        },
+      ],
+      keys,
+      {},
+    );
+    expect(out).toEqual({ ASEC利用額: '1700000', 累計入金額: '1700000' });
+  });
   it('利用額 = 完了の入金額 + 資金移動額、出金額 = 出金の出金額、累計入金額 = 入金額 + 出金額 + 完了の資金移動額', () => {
     const out = computeMemberAmounts(
       [
