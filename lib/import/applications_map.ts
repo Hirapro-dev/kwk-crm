@@ -18,7 +18,7 @@
 import { coerceValue, isCoerceErr } from './coerce';
 import type { ImportFieldType } from './schema';
 
-const ALLOWED_STATUS = new Set(['対応中', '未購入', '完了', '出金', '資金移動', '失効']);
+const ALLOWED_STATUS = new Set(['対応中', '入金', '未購入', '完了', '出金', '資金移動', '失効']);
 const ALLOWED_FLOW = new Set(['入金', '出金', '資金移動', 'W']);
 
 const DIRECT_FIELDS: Array<{ header: string; field: string; type: ImportFieldType }> = [

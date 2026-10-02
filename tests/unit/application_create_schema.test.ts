@@ -1,5 +1,6 @@
 import {
   CreateApplicationSchema,
+  normalizeContractPeriod,
   startDateToTimestamp,
 } from '@/lib/domain/application_create_schema';
 import { describe, expect, it } from 'vitest';
@@ -23,6 +24,24 @@ describe('CreateApplicationSchema', () => {
     const r = CreateApplicationSchema.safeParse({ ...base, projectId: 'NaN' });
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error.issues[0]?.message).toBe('案件を選択してください');
+  });
+  it('ステータスは 対応中 / 入金 / 出金 / 資金移動 だけ。過去の値(完了・未購入・失効)は新規では選べない', () => {
+    for (const st of ['対応中', '入金', '出金', '資金移動']) {
+      expect(CreateApplicationSchema.safeParse({ ...base, status: st }).success).toBe(true);
+    }
+    for (const st of ['完了', '未購入', '失効']) {
+      expect(CreateApplicationSchema.safeParse({ ...base, status: st }).success).toBe(false);
+    }
+  });
+  it('契約期間は月数。「8ヶ月」「８か月」も数字だけにする(表示名が「契約期間（ヶ月）」のため)', () => {
+    expect(normalizeContractPeriod('8ヶ月')).toBe('8');
+    expect(normalizeContractPeriod('８か月')).toBe('8');
+    expect(normalizeContractPeriod(' 12 ')).toBe('12');
+    expect(normalizeContractPeriod('')).toBeNull();
+    expect(normalizeContractPeriod('半年')).toBeUndefined();
+    expect(CreateApplicationSchema.safeParse({ ...base, contractPeriod: '半年' }).success).toBe(
+      false,
+    );
   });
   it('利息種別は選択肢の 3 つか未設定だけ', () => {
     for (const t of ['月利', '年利', '契約期間内', '', null]) {

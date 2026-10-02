@@ -1,10 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 
-export type AppStatus = '対応中' | '未購入' | '完了' | '出金' | '資金移動' | '失効';
-export type FlowType = '入金' | '出金' | '資金移動' | 'W';
-
-export const APP_STATUSES: AppStatus[] = ['対応中', '未購入', '完了', '出金', '資金移動', '失効'];
-export const FLOW_TYPES: FlowType[] = ['入金', '出金', '資金移動', 'W'];
+import type { AppStatus } from './applications_constants';
+export { ALL_APP_STATUSES, APP_STATUSES, type AppStatus } from './applications_constants';
 
 export interface ApplicationListItem {
   id: string;
@@ -12,7 +9,6 @@ export interface ApplicationListItem {
   project_id: number;
   application_date: string;
   status: AppStatus | null;
-  flow_type: FlowType | null;
   payment_amount: number | null;
   payment_date: string | null;
   scheduled_payment_date: string | null;
@@ -98,7 +94,6 @@ const APPLICATION_SORTABLE = new Set<string>([
   'project_id',
   'application_date',
   'status',
-  'flow_type',
   'payment_amount',
   'payment_date',
   'scheduled_payment_date',
@@ -130,7 +125,7 @@ export async function listApplications(
     .from('applications')
     .select(
       `
-        id, member_id, project_id, application_date, status, flow_type,
+        id, member_id, project_id, application_date, status,
         payment_amount, payment_date, scheduled_payment_date, scheduled_amount,
         withdrawal_amount, withdrawal_date, transfer_amount, transfer_date, transfer_to,
         crypto_excluded_amount, yen_interest, interest_type, interest, transfer_from, campaign_target_amount,
@@ -178,7 +173,7 @@ export async function getApplication(id: string): Promise<Application | null> {
     .from('applications')
     .select(
       `
-        id, inquiry_id, member_id, project_id, application_date, status, flow_type,
+        id, inquiry_id, member_id, project_id, application_date, status,
         owner_id, owner_name_raw, acquirer_id, acquirer_name_raw,
         contract_sent_date, start_month, start_datetime,
         scheduled_payment_date, scheduled_amount,

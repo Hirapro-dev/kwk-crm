@@ -59,13 +59,6 @@ export function renderApplicationHighlightFieldValue(
       <span className="text-muted-foreground">-</span>
     );
   }
-  if (field_name === 'flow_type') {
-    return app.flow_type ? (
-      <Badge variant="outline">{app.flow_type}</Badge>
-    ) : (
-      <span className="text-muted-foreground">-</span>
-    );
-  }
 
   // --- data_type によるジェネリックレンダリング(extra 列も対応) ---
   const raw = getRaw(app, field);

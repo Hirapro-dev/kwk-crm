@@ -3,9 +3,13 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { CreateApplicationSchema, startDateToTimestamp } from './application_create_schema';
+import {
+  CreateApplicationSchema,
+  normalizeContractPeriod,
+  startDateToTimestamp,
+} from './application_create_schema';
 import { buildApplicationPatch } from './application_edit';
-import { APP_STATUSES, FLOW_TYPES } from './applications';
+import { ALL_APP_STATUSES } from './applications';
 import { getCurrentUser } from './auth';
 import { mergeInquiryExtra } from './inquiry_extra_edit';
 import { getVisibleFields } from './object_metadata';
@@ -23,8 +27,7 @@ const APPLICATION_ID_RE = /^M-\d{9}$/;
 
 const UpdateStatusSchema = z.object({
   application_id: z.string().regex(APPLICATION_ID_RE),
-  status: z.enum(APP_STATUSES as [string, ...string[]]).optional(),
-  flow_type: z.enum(FLOW_TYPES as [string, ...string[]]).optional(),
+  status: z.enum(ALL_APP_STATUSES as [string, ...string[]]).optional(),
 });
 
 export interface UpdateStatusResult {
@@ -35,7 +38,6 @@ export interface UpdateStatusResult {
 export async function updateApplicationStatus(input: {
   application_id: string;
   status?: string;
-  flow_type?: string;
 }): Promise<UpdateStatusResult> {
   const parsed = UpdateStatusSchema.safeParse(input);
   if (!parsed.success) {
@@ -49,7 +51,6 @@ export async function updateApplicationStatus(input: {
   const supabase = await createClient();
   const update: Record<string, unknown> = {};
   if (parsed.data.status !== undefined) update.status = parsed.data.status;
-  if (parsed.data.flow_type !== undefined) update.flow_type = parsed.data.flow_type;
   if (Object.keys(update).length === 0) {
     return { ok: false, error: '更新する項目がありません' };
   }
@@ -118,7 +119,6 @@ export async function createApplication(
     project_id: d.projectId,
     application_date: d.applicationDate,
     status: d.status,
-    flow_type: d.flowType || null,
     owner_id: me.id,
     acquirer_id: d.acquirerId || null,
     contract_sent_date: d.contractSentDate || null,
@@ -129,7 +129,7 @@ export async function createApplication(
     contract_end_date: d.contractEndDate || null,
     payment_date: d.paymentDate || null,
     payment_amount: d.paymentAmount ?? null,
-    contract_period: d.contractPeriod?.trim() || null,
+    contract_period: normalizeContractPeriod(d.contractPeriod) ?? null,
     // 備考は可変項目「備考」に入れる(項目管理に登録済み。2026-10-01)
     extra: d.remarks?.trim() ? { 備考: d.remarks.trim() } : {},
   });

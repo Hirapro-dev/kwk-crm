@@ -2,9 +2,10 @@
  * 会員の案件別 利用額・出金額と累計入金額を、申込から計算する純粋関数(CLAUDE.md §5.4。2026-10-01)。
  * DB 側の recompute_member_amounts(migration 119)と同じ式。DB の結果をこの関数で照合する。
  *
- * - <キー>利用額 = ステータス「完了」の 入金額 + 資金移動額
+ * - <キー>利用額 = ステータス「入金」(旧名「完了」)の 入金額 + 資金移動額
  * - <キー>出金額 = ステータス「出金」の 出金額
- * - 累計入金額   = 全申込の 入金額 + 出金額 + 「完了」の資金移動額
+ * - 累計入金額   = 全申込の 入金額 + 出金額 + 「入金」(旧名「完了」)の資金移動額
+ * 2026-10-02: ステータス「完了」を「入金」に改名(過去の申込は「完了」のまま残す)。両方を入金済みとして数える(migration 122)。
  * - 既にあるキー(合計系を除く)で計算結果が 0 のものは "0"。無いキーは 0 なら作らない。
  */
 
@@ -15,6 +16,12 @@ export interface AppForAmount {
   withdrawal_amount: number | string | null;
   transfer_amount: number | string | null;
 }
+
+import { PAID_APP_STATUSES } from './applications_constants';
+
+/** 入金済み(利用額に数える)ステータスか。「完了」は「入金」の旧名 */
+const isPaid = (status: string | null): boolean =>
+  status !== null && (PAID_APP_STATUSES as string[]).includes(status);
 
 const num = (v: unknown): number => {
   if (v === null || v === undefined || v === '') return 0;
@@ -49,9 +56,10 @@ export function computeMemberAmounts(
     const pay = num(a.payment_amount);
     const wd = num(a.withdrawal_amount);
     const tr = num(a.transfer_amount);
-    total += pay + wd + (a.status === '完了' ? tr : 0);
+    const paid = isPaid(a.status);
+    total += pay + wd + (paid ? tr : 0);
     if (!key) continue;
-    if (a.status === '完了') usage.set(key, (usage.get(key) ?? 0) + pay + tr);
+    if (paid) usage.set(key, (usage.get(key) ?? 0) + pay + tr);
     if (a.status === '出金') withdrawal.set(key, (withdrawal.get(key) ?? 0) + wd);
   }
   const out: Record<string, unknown> = { ...(currentExtra ?? {}) };

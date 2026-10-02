@@ -29,6 +29,7 @@ interface Props {
 const STATUS_VARIANT: Record<AppStatus, 'default' | 'secondary' | 'outline' | 'success'> = {
   対応中: 'default',
   未購入: 'outline',
+  入金: 'success',
   完了: 'success',
   出金: 'secondary',
   資金移動: 'secondary',
