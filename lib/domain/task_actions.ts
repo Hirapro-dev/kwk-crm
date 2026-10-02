@@ -595,3 +595,76 @@ export async function deleteTaskAttachment(id: number, taskId: number): Promise<
   revalidatePath(`/task/${taskId}`);
   return {};
 }
+
+/** ヘッダー検索の候補 1 件(TaskHeaderSearch) */
+export interface TaskQuickSearchItem {
+  kind: 'project' | 'task';
+  href: string;
+  title: string;
+  /** 2 行目(タスクはプロジェクト名・期日・完了) */
+  sub: string | null;
+  completed: boolean;
+}
+
+/**
+ * タスク管理のヘッダー検索の候補(2026-10-02)。プロジェクト名・タスク名の部分一致で、プロジェクト 5 件 + タスク 8 件まで。
+ * 閲覧範囲は RLS(can_view_task_project)で絞られる。タスクは未完了を先に、更新の新しい順(検索ページ searchTasks と同じ)。
+ */
+export async function quickSearchTasks(q: string): Promise<TaskQuickSearchItem[]> {
+  const term = q
+    .trim()
+    .replace(/[%_,()]/g, ' ')
+    .trim();
+  if (!term) return [];
+  const supabase = await createClient();
+  const [projects, tasks] = await Promise.all([
+    supabase
+      .from('task_projects')
+      .select('id, name')
+      .ilike('name', `%${term}%`)
+      .is('deleted_at', null)
+      .eq('is_archived', false)
+      .order('name', { ascending: true })
+      .limit(5),
+    supabase
+      .from('tasks')
+      .select('id, name, due_date, completed_at, project:task_projects!tasks_project_id_fkey(name)')
+      .ilike('name', `%${term}%`)
+      .is('deleted_at', null)
+      .order('completed_at', { ascending: true, nullsFirst: true })
+      .order('updated_at', { ascending: false })
+      .limit(8),
+  ]);
+  const items: TaskQuickSearchItem[] = [];
+  for (const p of (projects.data ?? []) as Array<{ id: number; name: string }>) {
+    items.push({
+      kind: 'project',
+      href: `/task/projects/${p.id}`,
+      title: p.name,
+      sub: null,
+      completed: false,
+    });
+  }
+  type Row = {
+    id: number;
+    name: string;
+    due_date: string | null;
+    completed_at: string | null;
+    project: { name: string } | null;
+  };
+  for (const t of (tasks.data ?? []) as unknown as Row[]) {
+    const parts = [
+      t.project?.name ?? null,
+      t.due_date ? `期日 ${t.due_date.replace(/-/g, '/')}` : null,
+      t.completed_at ? '完了' : null,
+    ].filter(Boolean);
+    items.push({
+      kind: 'task',
+      href: `/task/${t.id}`,
+      title: t.name,
+      sub: parts.length > 0 ? parts.join(' · ') : null,
+      completed: !!t.completed_at,
+    });
+  }
+  return items;
+}
