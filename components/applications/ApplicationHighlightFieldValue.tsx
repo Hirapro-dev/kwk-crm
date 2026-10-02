@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import { formatApplicationUnitValue } from '@/lib/domain/application_units';
 import type { Application } from '@/lib/domain/applications';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import { formatDate } from '@/lib/utils/date';
@@ -17,6 +18,10 @@ export function renderApplicationHighlightFieldValue(
   app: Application,
 ): ReactNode {
   const { field_name, data_type } = field;
+
+  // 利息は %、契約期間は ヶ月 を値に付ける(2026-10-02)
+  const withUnit = formatApplicationUnitValue(field_name, getRaw(app, field));
+  if (withUnit !== null) return <span>{withUnit}</span>;
 
   // 案件: project_id → 案件名
   if (field_name === 'project_id') {

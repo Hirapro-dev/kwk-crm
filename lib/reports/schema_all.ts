@@ -471,7 +471,7 @@ const APP_COLUMNS = (alias: string): AllowedColumnDef[] => [
   },
   {
     source: `${alias}.contract_period`,
-    label: '契約期間（ヶ月）',
+    label: '契約期間',
     dataType: 'text',
     filterable: true,
     groupable: true,
