@@ -24,6 +24,14 @@ describe('CreateApplicationSchema', () => {
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error.issues[0]?.message).toBe('案件を選択してください');
   });
+  it('利息種別は選択肢の 3 つか未設定だけ', () => {
+    for (const t of ['月利', '年利', '契約期間内', '', null]) {
+      expect(CreateApplicationSchema.safeParse({ ...base, interestType: t }).success).toBe(true);
+    }
+    expect(CreateApplicationSchema.safeParse({ ...base, interestType: '日利' }).success).toBe(
+      false,
+    );
+  });
   it('起算日は日付だけ、備考は 2,000 文字まで', () => {
     expect(
       CreateApplicationSchema.safeParse({ ...base, startDate: '2026-09-30', remarks: '備考です' })

@@ -14,7 +14,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { updateApplication } from '@/lib/domain/application_actions';
 import { EDITABLE_APPLICATION_COLUMNS, toJstDateTimeLocal } from '@/lib/domain/application_edit';
-import { APP_STATUSES, FLOW_TYPES } from '@/lib/domain/applications_constants';
+import { APP_STATUSES, FLOW_TYPES, INTEREST_TYPES } from '@/lib/domain/applications_constants';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
@@ -120,6 +120,17 @@ export function ApplicationEditDialog({ application, detailFields, projects, use
       return (
         <Select value={v} onChange={onChange}>
           {APP_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </Select>
+      );
+    if (key === 'interest_type')
+      return (
+        <Select value={v} onChange={onChange}>
+          <option value="">(未設定)</option>
+          {INTEREST_TYPES.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>

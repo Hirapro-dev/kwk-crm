@@ -122,6 +122,7 @@ export async function createApplication(
     owner_id: me.id,
     acquirer_id: d.acquirerId || null,
     contract_sent_date: d.contractSentDate || null,
+    interest_type: d.interestType || null,
     interest: d.interest ?? null,
     // 起算日は日付だけ入力(2026-10-01)。日本時間のその日 0 時として保存する
     start_datetime: startDateToTimestamp(d.startDate),
