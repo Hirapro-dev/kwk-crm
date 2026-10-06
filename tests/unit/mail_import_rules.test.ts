@@ -103,6 +103,27 @@ describe('parseMailBody', () => {
     expect(p.labels.回答日時).toBe('2026/9/22 22:53:47');
   });
 
+  // 意図: 値が空の項目(「郵便番号:」「住所:」)の次に普通のラベル行が続くとき、それを空の項目の値に吸い込まない。
+  // 特別レポート申込の通知メールで電話番号が取れていなかった(2026-10-07)
+  it('値が空の「ラベル:」の次が普通のラベル行なら、まとめずにそれぞれのラベルとして読む', () => {
+    const body = [
+      '【特別レポート申込】本人確認完了（クオリプス）',
+      '',
+      '完了日時: 2026/10/7 8:07:53',
+      'お名前: 山田 花子',
+      'メールアドレス: a@example.com',
+      '郵便番号:',
+      '住所:',
+      '電話番号: 09000000000',
+      '※2〜3日以内にレポートを送付してください。',
+    ].join('\n');
+    const p = parseMailBody(body, null);
+    expect(p.labels.電話番号).toBe('09000000000');
+    expect(p.labels.郵便番号).toBeUndefined();
+    expect(p.labels.住所).toBeUndefined();
+    expect(p.labels.お名前).toBe('山田 花子');
+  });
+
   it('「ラベル:」の後に行が無ければラベルにしない', () => {
     expect(parseMailBody('銘柄詳細:\n\n※以上', null).labels.銘柄詳細).toBeUndefined();
   });
