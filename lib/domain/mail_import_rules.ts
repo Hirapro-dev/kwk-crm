@@ -117,6 +117,19 @@ const EMPTY_LABEL_LINE = /^([^:：]{1,40}?)\s*[:：]\s*$/;
 /** 複数行の値の先頭にある見出し行(「▼リクエストいただいた銘柄」など)は値に含めない */
 const HEADING_LINE = /^[▼▽■□◆◇●○★☆]/;
 
+/**
+ * 普通の「ラベル: 値」/「ラベル:」の行か(ラベルに空白を含まず、番号付きの明細ではない)。
+ * 「ラベル:」だけの行の後ろをまとめるとき、ここで止める(2026-10-07)。
+ * 例: 「郵便番号:」「住所:」(値が空)の次に「電話番号: 0901…」が続くメールで、電話番号まで郵便番号の値に
+ * 吸い込んでいた。まとめたいのは「1. xels　保有数量: 1000」のような明細の行(ラベル部分に空白を含む・番号付き)だけ。
+ */
+function isPlainLabelLine(line: string): boolean {
+  const m = line.match(LABEL_LINE) ?? line.match(EMPTY_LABEL_LINE);
+  if (!m) return false;
+  const label = (m[1] ?? '').trim();
+  return label !== '' && !/[\s\u3000]/.test(label) && !/^[0-9０-９]+[.．、)）]/.test(label);
+}
+
 /** 本文(テキスト。無ければ HTML をテキスト化)を行とラベルの辞書にする */
 /** 本文のテキスト(テキスト版があればそれ、無ければ HTML 版をテキスト化。どちらも無ければ空文字) */
 export function mailBodyText(
@@ -150,14 +163,15 @@ export function parseMailBody(
       continue;
     }
     // 「ラベル:」だけの行は、次の空行までの行をまとめて値にする(複数行の項目。2026-09-23)。
-    // 先頭の見出し行(▼ など)は除き、取り込んだ行は個別のラベルとしては扱わない
+    // 先頭の見出し行(▼ など)は除き、取り込んだ行は個別のラベルとしては扱わない。
+    // 普通のラベル行(isPlainLabelLine)が来たらそこで止める(値が空の項目の後ろのラベルを吸い込まない。2026-10-07)
     const e = line.match(EMPTY_LABEL_LINE);
     if (!e) continue;
     const block: string[] = [];
     let j = i + 1;
     for (; j < rawLines.length; j++) {
       const l = rawLines[j] ?? '';
-      if (l === '') break;
+      if (l === '' || isPlainLabelLine(l)) break;
       if (block.length === 0 && HEADING_LINE.test(l)) continue;
       block.push(l);
     }
