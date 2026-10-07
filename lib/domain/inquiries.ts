@@ -11,7 +11,14 @@ export interface InquiryListItem {
   registered_at: string;
   created_at: string;
   form: { id: number; name: string; category: string | null } | null;
-  member: { id: string; name: string } | null;
+  /** 詳細(getInquiry)では会員の電話・メール・住所も読む(会員情報カード。2026-10-07) */
+  member: {
+    id: string;
+    name: string;
+    phone1?: string | null;
+    email1?: string | null;
+    address?: string | null;
+  } | null;
   /** 広告ID(新規会員登録の既定値・一覧の媒体名併記に使う。§5.18) */
   ad_id?: string | null;
   /** 郵便番号・住所(一覧でも取得済み。新規会員登録の初期値に使う。2026-09-17) */
@@ -135,7 +142,7 @@ export async function getInquiry(id: string): Promise<Inquiry | null> {
         id, form_id, member_id, name, name_kana, email, phone,
         postal_code, address, ad_id, extra, registered_at, created_at,
         form:forms!inquiries_form_id_fkey(id, name, category),
-        member:members!inquiries_member_id_fkey(id, name),
+        member:members!inquiries_member_id_fkey(id, name, phone1, email1, address),
         source_mail_message_id, member_match`,
     )
     .eq('id', id)

@@ -9,6 +9,7 @@ import { ApplicationEditDialog } from '@/components/applications/ApplicationEdit
 import { renderApplicationHighlightFieldValue } from '@/components/applications/ApplicationHighlightFieldValue';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
 import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
+import { LinkedMemberCard } from '@/components/members/LinkedMemberCard';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -100,6 +101,9 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           </>
         }
       />
+
+      {/* 紐付いた会員の 会員ID / 氏名 / 電話 / メール / 住所(会員側の値) */}
+      <LinkedMemberCard member={app.member} />
 
       {/*
         申込詳細は1カード4カラムでフラットに並べる。

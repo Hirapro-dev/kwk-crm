@@ -35,7 +35,14 @@ export interface ApplicationListItem {
   acquirer_name_raw: string | null;
   inquiry_id: string | null;
   extra: Record<string, unknown> | null;
-  member: { id: string; name: string } | null;
+  /** 詳細(getApplication)では会員の電話・メール・住所も読む(会員情報カード。2026-10-07) */
+  member: {
+    id: string;
+    name: string;
+    phone1?: string | null;
+    email1?: string | null;
+    address?: string | null;
+  } | null;
   project: { id: number; name: string } | null;
   owner: { id: string; full_name: string | null } | null;
   acquirer: { id: string; full_name: string | null } | null;
@@ -181,7 +188,7 @@ export async function getApplication(id: string): Promise<Application | null> {
         withdrawal_amount, withdrawal_date,
         transfer_date, transfer_amount, transfer_to, transfer_from, campaign_target_amount,
         contract_period, contract_end_date, extra, created_at, updated_at,
-        member:members!applications_member_id_fkey(id, name),
+        member:members!applications_member_id_fkey(id, name, phone1, email1, address),
         project:projects!applications_project_id_fkey(id, name),
         owner:users!applications_owner_id_fkey(id, full_name),
         acquirer:users!applications_acquirer_id_fkey(id, full_name)
