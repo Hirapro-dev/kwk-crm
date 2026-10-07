@@ -32,7 +32,7 @@ export function joinContacts(values: ReadonlyArray<string | null | undefined>): 
 
 /**
  * 問合せ・申込の詳細に出す「会員情報」カード(2026-10-07)。会員に紐付いているレコードだけに出す。
- * 値は会員(members)から読むので、会員側を直せばここにも反映される。会員ID・氏名は会員詳細へのリンク。
+ * 値は会員(members)から読むので、会員側を直せばここにも反映される。会員ID は会員詳細へのリンク。
  */
 export function LinkedMemberCard({ member }: { member: LinkedMember | null | undefined }) {
   if (!member) return null;
@@ -43,7 +43,8 @@ export function LinkedMemberCard({ member }: { member: LinkedMember | null | und
   );
   const rows: Array<{ label: string; value: ReactNode }> = [
     { label: '会員ID', value: memberLink(member.id) },
-    { label: '会員氏名', value: member.name ? memberLink(member.name) : '-' },
+    // 氏名はリンクにしない(会員ID だけで会員詳細へ移れるため。2026-10-07 ユーザー指定)
+    { label: '会員氏名', value: member.name || '-' },
     {
       label: '電話番号',
       value: joinContacts([member.phone1, member.phone2, member.phone3]) || '-',
