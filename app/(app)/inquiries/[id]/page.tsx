@@ -9,6 +9,7 @@ import { InquiryEditDialog } from '@/components/inquiries/InquiryEditDialog';
 import { renderInquiryHighlightFieldValue } from '@/components/inquiries/InquiryHighlightFieldValue';
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
 import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
+import { LinkedMemberCard } from '@/components/members/LinkedMemberCard';
 import { DynamicDetailFields } from '@/components/objects/DynamicDetailFields';
 import { RemarksEditor } from '@/components/objects/RemarksEditor';
 import { Badge } from '@/components/ui/badge';
@@ -104,6 +105,9 @@ export default async function InquiryDetailPage({ params }: PageProps) {
           </>
         }
       />
+
+      {/* 紐付いた会員の 会員ID / 氏名 / 電話 / メール / 住所(会員側の値)。会員化済みのときだけ出す */}
+      <LinkedMemberCard member={inquiry.member} />
 
       {/* 基本情報(フルワイド)。氏名/会員IDは会員が紐付いていれば会員詳細へのリンクにする。 */}
       <Card>
