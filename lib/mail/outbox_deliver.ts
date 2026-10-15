@@ -199,7 +199,11 @@ export async function deliverOutboxItem(
   return { ok: true, threadId };
 }
 
-/** 承認済みで予約日時を過ぎたものを送る(定期実行)。1 回の上限件数まで */
+/**
+ * 承認済みで送る時刻になったものを送る(定期実行)。1 回の上限件数まで。
+ * 予約なし(scheduled_at が NULL)の承認済みも拾う: 通常は承認の操作でその場で送るが、
+ * そこで送れずに承認済みのまま残った場合(送信基盤の未設定・処理の中断など)の取りこぼしを防ぐ。
+ */
 export async function deliverDueOutbox(
   admin: AdminClient,
   cfg: MailAwsConfig,
@@ -210,8 +214,8 @@ export async function deliverDueOutbox(
     .from('mail_outbox')
     .select('id')
     .eq('status', 'approved')
-    .lte('scheduled_at', now.toISOString())
-    .order('scheduled_at', { ascending: true })
+    .or(`scheduled_at.is.null,scheduled_at.lte.${now.toISOString()}`)
+    .order('scheduled_at', { ascending: true, nullsFirst: true })
     .limit(limit);
   if (error) throw new Error(`送信予約の取得に失敗: ${error.message}`);
   let sent = 0;
