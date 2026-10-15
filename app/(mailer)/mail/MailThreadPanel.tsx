@@ -20,6 +20,8 @@ import {
 } from '@/lib/domain/mail';
 import { splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { findMatchingRule } from '@/lib/domain/mail_import_rules';
+import { MAIL_OUTBOX_STATUS_LABELS } from '@/lib/domain/mail_outbox';
+import { listThreadOutbox } from '@/lib/domain/mail_outbox_queries';
 import { buildQuotedBody } from '@/lib/domain/mail_text';
 import { listFieldDefinitions } from '@/lib/domain/object_metadata';
 import { listAllUsers } from '@/lib/domain/users_admin';
@@ -56,12 +58,14 @@ function formatBytes(n: number | null): string {
 }
 
 export async function MailThreadPanel({ threadId, embedded, showReply = true }: Props) {
-  const [thread, me, users, allBoxes, allSignatures] = await Promise.all([
+  const [thread, me, users, allBoxes, allSignatures, outbox] = await Promise.all([
     getMailThread(threadId),
     getCurrentUser(),
     listAllUsers({ activeOnly: true }),
     listMailBoxes(),
     listMailSignatures(),
+    // このスレッドの送信待ち(承認待ち・予約中など。migration 124)
+    listThreadOutbox(threadId),
   ]);
 
   if (!thread) {
@@ -277,6 +281,30 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
           inquiryId={lastInbound.inquiry_id ?? null}
           lpEntryId={lastInbound.lp_entry_id ?? null}
         />
+      )}
+
+      {outbox.length > 0 && (
+        <Card className="overflow-hidden border-amber-300 p-0 shadow-sm">
+          <CardHeader className="border-b bg-amber-50 py-2">
+            <CardTitle className="text-sm">送信待ちの返信({outbox.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 p-2">
+            {outbox.map((o) => (
+              <div key={o.id} className="flex flex-wrap items-center gap-2 text-xs">
+                <Badge variant="outline">{MAIL_OUTBOX_STATUS_LABELS[o.status]}</Badge>
+                <span className="text-muted-foreground">
+                  {o.scheduled_at ? `${formatDateTime(o.scheduled_at)} に予約` : '承認後すぐ送信'}
+                </span>
+                <span className="text-muted-foreground">
+                  作成 {o.creator?.full_name ?? ''} {formatDateTime(o.created_at)}
+                </span>
+                <Link href={`/mail/outbox/${o.id}`} className="sf-link">
+                  内容を確認
+                </Link>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       {canEdit && showReply && (

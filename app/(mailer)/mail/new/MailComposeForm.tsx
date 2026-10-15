@@ -14,6 +14,7 @@ import {
 import { composeOutgoingBody } from '@/lib/domain/mail_text';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
+import { ScheduleField } from '../ScheduleField';
 
 export interface ComposeBoxOption {
   id: number;
@@ -26,7 +27,8 @@ export interface ComposeBoxOption {
 }
 
 /**
- * 新規メール作成フォーム(M2)。送信後は作成されたスレッドへ遷移する。
+ * 新規メール作成フォーム(M2)。送信ボタンではすぐに送らず「承認待ち」にし(migration 124)、
+ * 作成した送信待ちメールの画面へ遷移する。送信日時を指定すると承認後その日時に送る。
  * 署名は返信フォームと同じく署名マスタからプルダウンで選び(既定は送信元の受信箱の既定署名)、本文の下に見える形で付けて送る。
  */
 export function MailComposeForm({
@@ -54,6 +56,7 @@ export function MailComposeForm({
     defaultSignatureValue(firstSendable?.default_signature_id, signatures),
   );
   const [signatureTouched, setSignatureTouched] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const signatureText = signatureBodyOf(signatureId, signatures);
@@ -76,12 +79,13 @@ export function MailComposeForm({
         subject,
         body: composeOutgoingBody({ text, signature: signatureText }),
         fromName,
+        scheduledAt,
       });
       if (r.error) {
         setError(r.error);
         return;
       }
-      if (r.threadId) router.push(`/mail/${r.threadId}`);
+      if (r.outboxId) router.push(`/mail/outbox/${r.outboxId}`);
     });
   };
 
@@ -206,13 +210,14 @@ export function MailComposeForm({
           </pre>
         )}
       </div>
+      <ScheduleField value={scheduledAt} onChange={setScheduledAt} disabled={pending} />
       <div className="flex items-center gap-2">
         <Button
           type="submit"
           size="sm"
           disabled={pending || !to.trim() || !subject.trim() || !text.trim()}
         >
-          {pending ? '送信中…' : '送信'}
+          {pending ? '保存中…' : '送信の承認を依頼'}
         </Button>
         {error && <span className="text-xs text-red-600">{error}</span>}
       </div>

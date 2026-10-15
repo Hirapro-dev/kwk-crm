@@ -29,6 +29,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Send,
   Trash2,
   X,
 } from 'lucide-react';
@@ -55,6 +56,8 @@ interface Props {
   unsortedFolder: { pendingCount: number; unreadCount: number } | null;
   /** 「取込候補」(旧「メール to リード」宛先を含むメール。migration 82)の件数 */
   candidateFolder: { pendingCount: number; unreadCount: number };
+  /** 「送信待ち」(承認待ち・送信予約。migration 124)の承認待ち件数 */
+  outboxPendingCount: number;
   /** 自分がピン留めした受信箱(ピン留めした順。migration 84) */
   pinned: MailFolderItem[];
   /** 自分のマイフォルダ(migration 92)。受信箱をドラッグ&ドロップで整理する */
@@ -166,6 +169,7 @@ function FolderTree({
   total,
   unsortedFolder,
   candidateFolder,
+  outboxPendingCount,
   pinned,
   folders,
   onNavigate,
@@ -291,6 +295,17 @@ function FolderTree({
         <Import className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
         <span className="truncate">取込候補</span>
         <CountBadge n={candidateFolder.pendingCount} strong />
+      </Link>
+
+      <Link
+        href="/mail/outbox"
+        onClick={onNavigate}
+        className={itemClass(pathname.startsWith('/mail/outbox'))}
+        title="承認待ち・送信予約のメール。承認者(admin / manager)が承認したときに送信されます"
+      >
+        <Send className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
+        <span className="truncate">送信待ち</span>
+        <CountBadge n={outboxPendingCount} strong />
       </Link>
 
       {unsortedFolder && (

@@ -1,15 +1,17 @@
 'use server';
 
 /**
- * メール送信(返信・新規)の Server Actions。CLAUDE.md §5.15 M2。
+ * メール送信(返信・新規)の Server Actions。CLAUDE.md §5.15 M2 /「送信の承認・送信予約」(migration 124)。
  *
- * - 送信は SES。From は受信箱(mail_boxes)の公開アドレス
- * - 送信できるのは SES でドメイン検証済みの受信箱だけ(未検証は「受信専用」)
- * - 返信は直近の受信メールの差出人へ。In-Reply-To / References を付けて顧客側でもスレッド化
+ * 2026-10-15 から、送信ボタンではすぐに送らず「承認待ち」(mail_outbox)にする(対象は全メール)。
+ * 承認者(admin / manager)が承認したときに送る。送信日時を指定すると、承認後その日時に送る(送信予約)。
+ * 承認・差し戻し・取消・修正は mail_outbox_actions.ts。実際の送信は lib/mail/outbox_deliver.ts。
+ *
+ * - From は受信箱(mail_boxes)の公開アドレス。送れるのは SES でドメイン検証済みの受信箱だけ(未検証は「受信専用」)
+ * - 返信は直近の受信メールの差出人へ。In-Reply-To / References は申請時に決めて保存する
  * - 送信元はスレッドの受信箱が既定。フォームで送信可能な別の受信箱を選ぶこともできる(スレッドの受信箱は変えない)
  * - 署名・引用はフォーム側で本文に含めて送る(画面で見えるもの = 送るもの)。ここでは付け足さない
- * - 送信後は mail_messages(direction=out)に保存し、スレッドを「対応中」にする
- * - 権限: viewer は不可(RLS と二重)。本文・アドレスはログに出さない(§12.4)
+ * - 権限: viewer は不可。本文・アドレスはログに出さない(§12.4)
  */
 
 import { getCurrentUser } from '@/lib/domain/auth';
@@ -20,38 +22,23 @@ import {
   buildReplySubject,
   parseAddressList,
   sanitizeDisplayName,
-  sesMessageIdHeader,
 } from '@/lib/domain/mail_compose';
+import { parseScheduledInput, submittedMessage } from '@/lib/domain/mail_outbox';
 import { getMailAwsConfig } from '@/lib/mail/aws';
-import { describeSesError, domainOf, isDomainSendable, sendViaSes } from '@/lib/mail/ses_send';
-import { createClient } from '@/lib/supabase/server';
+import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
 export interface SendResult {
   error?: string;
-  /** 送信後のスレッドID(新規作成時はここへ遷移する) */
-  threadId?: string;
+  /** 作成した送信待ちメール(mail_outbox.id) */
+  outboxId?: string;
+  /** 画面に出す案内文 */
+  message?: string;
 }
 
 /** 本文の上限(誤って巨大なテキストを送らないための安全弁) */
 const MAX_BODY_CHARS = 50_000;
-
-async function findMemberIdByEmail(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  address: string,
-): Promise<string | null> {
-  const a = address.trim().toLowerCase();
-  if (!a || /[,()%*"'\\]/.test(a)) return null;
-  const escaped = a.replace(/[%_]/g, '\\$&');
-  const { data } = await supabase
-    .from('members')
-    .select('id')
-    .is('deleted_at', null)
-    .or(`email1.ilike.${escaped},email2.ilike.${escaped},email3.ilike.${escaped}`)
-    .order('id', { ascending: true })
-    .limit(1);
-  return ((data ?? []) as Array<{ id: string }>)[0]?.id ?? null;
-}
 
 function validateBody(body: string): string | null {
   const b = body ?? '';
@@ -61,7 +48,33 @@ function validateBody(body: string): string | null {
   return null;
 }
 
-/** スレッドに返信する */
+interface BoxRow {
+  id: number;
+  address: string;
+  display_name: string | null;
+  is_active: boolean;
+}
+
+/** 送信元の受信箱を確認する(有効で、SES でドメイン検証済み) */
+async function loadSendableBox(boxId: number): Promise<{ box?: BoxRow; error?: string }> {
+  const cfg = getMailAwsConfig();
+  if (!cfg) return { error: '送信基盤(SES)が未設定です' };
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('mail_boxes')
+    .select('id, address, display_name, is_active')
+    .eq('id', boxId)
+    .maybeSingle();
+  const box = data as BoxRow | null;
+  if (!box || !box.is_active) return { error: '送信元の受信箱が見つからないか無効です' };
+  const domain = domainOf(box.address);
+  if (!domain || !(await isDomainSendable(cfg, domain))) {
+    return { error: `${box.address} のドメインは SES で未検証のため送信できません(受信専用)` };
+  }
+  return { box };
+}
+
+/** スレッドへの返信を承認待ちにする */
 export async function replyToMailThread(input: {
   threadId: string;
   body: string;
@@ -70,37 +83,22 @@ export async function replyToMailThread(input: {
   fromName?: string;
   /** 送信元の受信箱。未指定ならスレッドの受信箱 */
   mailBoxId?: number;
+  /** 送信予約(日本時間 "YYYY-MM-DDTHH:mm")。空なら承認したらすぐ送る */
+  scheduledAt?: string;
 }): Promise<SendResult> {
   const me = await getCurrentUser();
   if (me.role === 'viewer') return { error: '閲覧専用ユーザーは送信できません' };
 
   const bodyErr = validateBody(input.body);
   if (bodyErr) return { error: bodyErr };
-
-  const cfg = getMailAwsConfig();
-  if (!cfg) return { error: '送信基盤(SES)が未設定です' };
+  const schedule = parseScheduledInput(input.scheduledAt, new Date());
+  if (schedule.error) return { error: schedule.error };
 
   const thread = await getMailThread(input.threadId);
   if (!thread) return { error: 'スレッドが見つかりません' };
 
-  // 送信元: 指定があればその受信箱、無ければスレッドの受信箱
-  let box = thread.mail_box;
-  if (input.mailBoxId !== undefined && input.mailBoxId !== thread.mail_box_id) {
-    const supabaseForBox = await createClient();
-    const { data: other } = await supabaseForBox
-      .from('mail_boxes')
-      .select('id, address, display_name, default_signature_id, is_active')
-      .eq('id', input.mailBoxId)
-      .maybeSingle();
-    box = (other as typeof box) ?? null;
-    if (!box) return { error: '送信元の受信箱が見つかりません' };
-  }
-  if (!box || !box.is_active) return { error: 'この受信箱は無効です' };
-
-  const domain = domainOf(box.address);
-  if (!domain || !(await isDomainSendable(cfg, domain))) {
-    return { error: `${box.address} のドメインは SES で未検証のため送信できません(受信専用)` };
-  }
+  const { box, error: boxErr } = await loadSendableBox(input.mailBoxId ?? thread.mail_box_id);
+  if (!box) return { error: boxErr };
 
   // 返信先 = 直近の受信メールの差出人。無ければ直近のメッセージ
   const inbound = [...thread.messages].reverse().find((m) => m.direction === 'in');
@@ -115,64 +113,37 @@ export async function replyToMailThread(input: {
     return { error: `宛先が多すぎます(${MAX_RECIPIENTS} 件まで)` };
   }
 
-  const subject = buildReplySubject(thread.subject ?? parent.subject);
   const headers = buildReplyHeaders(parent);
-  const text = `${input.body.replace(/\s+$/, '')}\n`;
-  // 差出人表示名: フォームで指定があればそれ、無指定なら受信箱の既定値
   const fromName =
     input.fromName !== undefined ? sanitizeDisplayName(input.fromName) : box.display_name;
 
-  let sesMessageId: string;
-  try {
-    sesMessageId = await sendViaSes(cfg, {
-      fromAddress: box.address,
-      fromName,
-      to,
-      cc: cc.addresses,
-      subject,
-      text,
-      headers: { 'In-Reply-To': headers.inReplyTo, References: headers.references },
-    });
-  } catch (e) {
-    return { error: describeSesError(e) };
-  }
+  const admin = createServiceRoleClient();
+  const { data, error } = await admin
+    .from('mail_outbox')
+    .insert({
+      kind: 'reply',
+      thread_id: thread.id,
+      mail_box_id: box.id,
+      from_name: fromName,
+      to_addresses: to,
+      cc_addresses: cc.addresses,
+      subject: buildReplySubject(thread.subject ?? parent.subject),
+      text_body: `${input.body.replace(/\s+$/, '')}\n`,
+      in_reply_to: headers.inReplyTo,
+      references_header: headers.references,
+      scheduled_at: schedule.at,
+      status: 'pending',
+      created_by: me.id,
+    })
+    .select('id')
+    .single();
+  if (error || !data) return { error: `承認依頼の保存に失敗しました: ${error?.message ?? ''}` };
 
-  const supabase = await createClient();
-  const now = new Date().toISOString();
-  const { error: mErr } = await supabase.from('mail_messages').insert({
-    thread_id: thread.id,
-    direction: 'out',
-    message_id: sesMessageIdHeader(sesMessageId, cfg.region),
-    in_reply_to: headers.inReplyTo,
-    references_header: headers.references,
-    from_address: box.address,
-    from_name: fromName,
-    to_addresses: to,
-    cc_addresses: cc.addresses,
-    subject,
-    text_body: text,
-    html_body: null,
-    sent_at: now,
-    provider_message_id: sesMessageId,
-    delivery_status: 'queued',
-    sender_user_id: me.id,
-    source: 'ses',
-  });
-  if (mErr) {
-    // 送信自体は成功している。履歴が残らなかったことを利用者に伝える
-    return { error: `送信は完了しましたが履歴の保存に失敗しました: ${mErr.message}` };
-  }
-  await supabase
-    .from('mail_threads')
-    .update({ status: '対応中', last_direction: 'out', last_message_at: now, is_read: true })
-    .eq('id', thread.id);
-
-  revalidatePath('/mail');
-  revalidatePath(`/mail/${thread.id}`);
-  return { threadId: thread.id };
+  revalidatePath('/mail', 'layout');
+  return { outboxId: (data as { id: string }).id, message: submittedMessage(schedule.at) };
 }
 
-/** 新規スレッドを作って送信する */
+/** 新規メールを承認待ちにする(スレッドは送信したときに作る) */
 export async function createMailThreadAndSend(input: {
   mailBoxId: number;
   to: string;
@@ -181,6 +152,8 @@ export async function createMailThreadAndSend(input: {
   body: string;
   /** 差出人表示名の上書き。未指定(undefined)なら受信箱の既定値を使う */
   fromName?: string;
+  /** 送信予約(日本時間 "YYYY-MM-DDTHH:mm")。空なら承認したらすぐ送る */
+  scheduledAt?: string;
 }): Promise<SendResult> {
   const me = await getCurrentUser();
   if (me.role === 'viewer') return { error: '閲覧専用ユーザーは送信できません' };
@@ -189,6 +162,8 @@ export async function createMailThreadAndSend(input: {
   if (!subject) return { error: '件名を入力してください' };
   const bodyErr = validateBody(input.body);
   if (bodyErr) return { error: bodyErr };
+  const schedule = parseScheduledInput(input.scheduledAt, new Date());
+  if (schedule.error) return { error: schedule.error };
 
   const to = parseAddressList(input.to);
   if (to.error) return { error: to.error };
@@ -199,89 +174,31 @@ export async function createMailThreadAndSend(input: {
     return { error: `宛先が多すぎます(${MAX_RECIPIENTS} 件まで)` };
   }
 
-  const cfg = getMailAwsConfig();
-  if (!cfg) return { error: '送信基盤(SES)が未設定です' };
-
-  const supabase = await createClient();
-  const { data: boxRow } = await supabase
-    .from('mail_boxes')
-    .select('id, address, display_name, default_signature_id, is_active')
-    .eq('id', input.mailBoxId)
-    .maybeSingle();
-  const box = boxRow as {
-    id: number;
-    address: string;
-    display_name: string | null;
-    default_signature_id: number | null;
-    is_active: boolean;
-  } | null;
-  if (!box || !box.is_active) return { error: '受信箱が見つからないか無効です' };
-
-  const domain = domainOf(box.address);
-  if (!domain || !(await isDomainSendable(cfg, domain))) {
-    return { error: `${box.address} のドメインは SES で未検証のため送信できません(受信専用)` };
-  }
-
-  const text = `${input.body.replace(/\s+$/, '')}\n`;
+  const { box, error: boxErr } = await loadSendableBox(input.mailBoxId);
+  if (!box) return { error: boxErr };
   const fromName =
     input.fromName !== undefined ? sanitizeDisplayName(input.fromName) : box.display_name;
-  let sesMessageId: string;
-  try {
-    sesMessageId = await sendViaSes(cfg, {
-      fromAddress: box.address,
-      fromName,
-      to: to.addresses,
-      cc: cc.addresses,
-      subject,
-      text,
-    });
-  } catch (e) {
-    return { error: describeSesError(e) };
-  }
 
-  const now = new Date().toISOString();
-  const memberId = await findMemberIdByEmail(supabase, to.addresses[0] ?? '');
-  const { data: created, error: tErr } = await supabase
-    .from('mail_threads')
+  const admin = createServiceRoleClient();
+  const { data, error } = await admin
+    .from('mail_outbox')
     .insert({
+      kind: 'new',
+      thread_id: null,
       mail_box_id: box.id,
+      from_name: fromName,
+      to_addresses: to.addresses,
+      cc_addresses: cc.addresses,
       subject,
-      member_id: memberId,
-      status: '対応中',
-      category: '通常',
-      assignee_id: me.id,
-      last_message_at: now,
-      last_direction: 'out',
-      is_read: true,
+      text_body: `${input.body.replace(/\s+$/, '')}\n`,
+      scheduled_at: schedule.at,
+      status: 'pending',
+      created_by: me.id,
     })
     .select('id')
     .single();
-  if (tErr || !created) {
-    return { error: `送信は完了しましたが履歴の保存に失敗しました: ${tErr?.message ?? ''}` };
-  }
-  const threadId = (created as { id: string }).id;
+  if (error || !data) return { error: `承認依頼の保存に失敗しました: ${error?.message ?? ''}` };
 
-  const { error: mErr } = await supabase.from('mail_messages').insert({
-    thread_id: threadId,
-    direction: 'out',
-    message_id: sesMessageIdHeader(sesMessageId, cfg.region),
-    from_address: box.address,
-    from_name: fromName,
-    to_addresses: to.addresses,
-    cc_addresses: cc.addresses,
-    subject,
-    text_body: text,
-    html_body: null,
-    sent_at: now,
-    provider_message_id: sesMessageId,
-    delivery_status: 'queued',
-    sender_user_id: me.id,
-    source: 'ses',
-  });
-  if (mErr) {
-    return { error: `送信は完了しましたが履歴の保存に失敗しました: ${mErr.message}`, threadId };
-  }
-
-  revalidatePath('/mail');
-  return { threadId };
+  revalidatePath('/mail', 'layout');
+  return { outboxId: (data as { id: string }).id, message: submittedMessage(schedule.at) };
 }

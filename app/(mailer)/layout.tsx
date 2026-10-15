@@ -23,11 +23,12 @@ import {
   unsortedBoxIds,
   userFolderSections,
 } from '@/lib/domain/mail_folders';
+import { countMailOutboxByStatus } from '@/lib/domain/mail_outbox_queries';
 import { MailFolderSidebar, MailFolderSidebarProvider } from './MailFolderSidebar';
 import { MailerTopbar } from './MailerTopbar';
 
 export default async function MailerLayout({ children }: { children: React.ReactNode }) {
-  const [me, boxes, counts, candidatePending, candidateUnread, pinIds, userFolders] =
+  const [me, boxes, counts, candidatePending, candidateUnread, pinIds, userFolders, outboxCounts] =
     await Promise.all([
       getCurrentUser(),
       listMailBoxes(),
@@ -37,6 +38,8 @@ export default async function MailerLayout({ children }: { children: React.React
       countMailThreads({ importCandidate: true, unreadOnly: true }),
       listMyMailBoxPins(),
       listMyMailUserFolders(),
+      // 「送信待ち」(migration 124)の承認待ち件数
+      countMailOutboxByStatus(),
     ]);
   const candidateFolder = { pendingCount: candidatePending, unreadCount: candidateUnread };
   // 「その他」(未登録アドレス宛。migration 78)はドメイン階層に混ぜず、固定項目として出す
@@ -64,6 +67,7 @@ export default async function MailerLayout({ children }: { children: React.React
             total={total}
             unsortedFolder={unsortedFolder}
             candidateFolder={candidateFolder}
+            outboxPendingCount={outboxCounts.pending ?? 0}
             pinned={pinned}
             folders={folders}
           />
