@@ -1233,6 +1233,10 @@ Supabase RLSで以下を実装:
 1. Supabase Auth (email/password) でログイン
 2. `auth.users.id` を `public.users.id` に一致させる(初回ログイン時にトリガーで `public.users` レコード作成 or 招待型)
 3. JWT に `role` クレームを含める(カスタムクレーム via Edge Function or DB トリガー)
+4. **パスワード**(2026-10-16): 最低 8 文字・最大 72 文字(`lib/domain/password_policy.ts`。再設定画面・プロフィールの変更・管理者の設定で共通)。
+   再設定メールはログイン画面・プロフィールのどちらから送っても、リンクの戻り先は新しいパスワードの入力画面 `/reset-password`
+   (`passwordResetRedirectUrl`)。`/reset-password` はログイン済みでも開ける(middleware の `authRedirectPath`)。
+   Supabase Auth の Redirect URLs に `<サイトURL>/reset-password` の登録が必要
 
 ---
 

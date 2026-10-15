@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
+import { authRedirectPath } from '@/lib/domain/auth_routes';
 import type { Database } from './types';
 
 /**
@@ -38,21 +39,12 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthRoute =
-    request.nextUrl.pathname.startsWith('/login') ||
-    request.nextUrl.pathname.startsWith('/reset-password');
-
-  // 未ログインでアプリ画面にアクセス → /login へ
-  if (!user && !isAuthRoute) {
+  // 未ログインでアプリ画面 → /login、ログイン済みでログイン画面 → /。
+  // /reset-password はログイン済みでも通す(プロフィールから送った再設定メールのリンク用)
+  const redirectTo = authRedirectPath(request.nextUrl.pathname, Boolean(user));
+  if (redirectTo) {
     const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
-  }
-
-  // ログイン済みでログイン画面にアクセス → / へ
-  if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/';
+    url.pathname = redirectTo;
     return NextResponse.redirect(url);
   }
 

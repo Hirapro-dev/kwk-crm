@@ -1,9 +1,17 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from './auth';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MAX_LENGTH_MESSAGE,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_MIN_LENGTH_MESSAGE,
+  passwordResetRedirectUrl,
+} from './password_policy';
 
 /**
  * 自分自身のプロフィール編集 Server Actions。
@@ -98,7 +106,10 @@ export async function updateMyEmail(input: { email: string }): Promise<ActionRes
 const UpdatePasswordSchema = z
   .object({
     current_password: z.string().min(1, '現在のパスワードを入力してください'),
-    new_password: z.string().min(6, '新しいパスワードは6文字以上で入力してください').max(72),
+    new_password: z
+      .string()
+      .min(PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MESSAGE)
+      .max(PASSWORD_MAX_LENGTH, PASSWORD_MAX_LENGTH_MESSAGE),
     confirm_password: z.string(),
   })
   .refine((d) => d.new_password === d.confirm_password, {
@@ -151,11 +162,15 @@ export async function sendMyPasswordResetEmail(): Promise<ActionResult> {
 
   const supabase = await createClient();
 
-  // redirectTo は本番 URL がベスト。とりあえず /login にした
-  // (Supabase Auth の Site URL 設定でもオーバーライドされる)
-  const { error } = await supabase.auth.resetPasswordForEmail(me.email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/login`,
-  });
+  // リンクの戻り先はログイン画面からの再設定と同じ「新しいパスワードの入力画面」(/reset-password)。
+  // 以前は /login に戻していたため、リンクを開いても新しいパスワードを入力できなかった(2026-10-16 修正)。
+  // サイトの URL は NEXT_PUBLIC_SITE_URL、無ければこのリクエストの送信元(Origin)。
+  // どちらも無ければ redirectTo を付けず、Supabase Auth の Site URL に任せる。
+  const origin = process.env.NEXT_PUBLIC_SITE_URL || (await headers()).get('origin');
+  const { error } = await supabase.auth.resetPasswordForEmail(
+    me.email,
+    origin ? { redirectTo: passwordResetRedirectUrl(origin) } : undefined,
+  );
   if (error) {
     return { ok: false, error: `リセットメール送信に失敗: ${error.message}` };
   }

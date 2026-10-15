@@ -1,6 +1,7 @@
 'use client';
 
 import { devLogin } from '@/lib/domain/dev_auth_actions';
+import { passwordResetRedirectUrl } from '@/lib/domain/password_policy';
 import { createClient } from '@/lib/supabase/client';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -81,7 +82,7 @@ export function LoginForm({ devAuth = false }: { devAuth?: boolean }) {
 
     startResetTransition(async () => {
       const supabase = createClient();
-      const redirectTo = `${window.location.origin}/reset-password`;
+      const redirectTo = passwordResetRedirectUrl(window.location.origin);
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo });
       if (error) {
         setResetError('送信に失敗しました。メールアドレスを確認してください。');
