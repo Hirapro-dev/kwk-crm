@@ -88,7 +88,8 @@ export interface Application extends ApplicationListItem {
 
 export interface ApplicationListParams {
   q?: string; // M-ID or member_id 検索
-  projectId?: number;
+  /** 案件ID(T-…。projects.id は text) */
+  projectId?: string;
   status?: AppStatus;
   ownerId?: string;
   memberId?: string;

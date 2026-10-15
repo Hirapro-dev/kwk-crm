@@ -4,7 +4,11 @@
 
 import { PanelFilterBar, PanelHeader } from '@/components/layout/PanelHeader';
 import { Card } from '@/components/ui/card';
-import { APP_STATUSES, type AppStatus, listApplications } from '@/lib/domain/applications';
+import {
+  parseAppStatusFilterParam,
+  parseProjectFilterParam,
+} from '@/lib/domain/application_list_filter';
+import { listApplications } from '@/lib/domain/applications';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
@@ -28,11 +32,9 @@ interface PageProps {
 
 export default async function ApplicationsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const projectId = sp.project ? Number.parseInt(sp.project, 10) : undefined;
-  const status =
-    (sp.status as AppStatus | undefined) && APP_STATUSES.includes(sp.status as AppStatus)
-      ? (sp.status as AppStatus)
-      : undefined;
+  // 案件ID は T- 形式の文字列のまま、ステータスは過去の値も含めて検証する(2026-10-16)
+  const projectId = parseProjectFilterParam(sp.project) ?? undefined;
+  const status = parseAppStatusFilterParam(sp.status);
 
   const [me, result, projects, listFields, users] = await Promise.all([
     getCurrentUser(),
@@ -76,7 +78,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
               initialQ={sp.q ?? ''}
               initialProjectId={sp.project ?? ''}
               initialStatus={sp.status ?? ''}
-              projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+              projects={projects.map((p) => ({ id: String(p.id), name: p.name }))}
             />
           </Suspense>
         </PanelFilterBar>

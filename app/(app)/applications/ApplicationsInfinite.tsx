@@ -18,7 +18,7 @@ interface Props {
   total: number;
   params: {
     q?: string;
-    projectId?: number;
+    projectId?: string;
     status?: string;
     sort?: string;
     dir?: 'asc' | 'desc';

@@ -1,18 +1,14 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useTransition } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/utils/cn';
-import {
-  DATE_PRESET_LABELS,
-  type DatePresetKey,
-  normalizePreset,
-} from '@/lib/utils/date_preset';
+import { DATE_PRESET_LABELS, type DatePresetKey, normalizePreset } from '@/lib/utils/date_preset';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useTransition } from 'react';
 
 interface ProjectOption {
-  id: number;
+  id: string;
   name: string;
 }
 
@@ -80,8 +76,7 @@ export function SummaryFilterBar({
 
   const onFromChange = (v: string) => updateQuery({ preset: 'custom', from: v });
   const onToChange = (v: string) => updateQuery({ preset: 'custom', to: v });
-  const onProjectChange = (v: string) =>
-    updateQuery({ project: v === 'all' ? null : v });
+  const onProjectChange = (v: string) => updateQuery({ project: v === 'all' ? null : v });
   const onActiveChange = (v: 'all' | 'active' | 'inactive') =>
     updateQuery({ active: v === 'all' ? null : v });
 
