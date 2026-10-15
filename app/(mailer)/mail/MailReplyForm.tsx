@@ -14,6 +14,7 @@ import {
 import { composeOutgoingBody } from '@/lib/domain/mail_text';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
+import { ScheduleField } from './ScheduleField';
 
 export interface ReplyBoxOption {
   id: number;
@@ -32,6 +33,7 @@ export interface ReplyBoxOption {
  * - 署名: 署名マスタ(有効なもの)から名前で選ぶ(既定は送信元の受信箱の既定署名)。「署名なし」も可
  * - 引用: 直近の受信メールを最初から入れる(編集可)
  * 送る本文は 本文 → 署名 → 引用 の順に合成し、画面のとおりに送る(サーバーは付け足さない)。
+ * 送信ボタンではすぐに送らず「承認待ち」にする(migration 124)。送信日時を指定すると承認後その日時に送る。
  */
 export function MailReplyForm({
   threadId,
@@ -75,8 +77,9 @@ export function MailReplyForm({
   const [text, setText] = useState('');
   const [quote, setQuote] = useState(initialQuote);
   const [cc, setCc] = useState('');
+  const [scheduledAt, setScheduledAt] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
 
   if (!sendable && !anySendable) {
     return (
@@ -98,7 +101,7 @@ export function MailReplyForm({
 
   const submit = () => {
     setError(null);
-    setSent(false);
+    setSent(null);
     startTransition(async () => {
       const body = composeOutgoingBody({ text, signature: signatureText, quote });
       const r = await replyToMailThread({
@@ -107,6 +110,7 @@ export function MailReplyForm({
         cc,
         fromName,
         mailBoxId: Number(boxId),
+        scheduledAt,
       });
       if (r.error) {
         setError(r.error);
@@ -114,7 +118,8 @@ export function MailReplyForm({
       }
       setText('');
       setCc('');
-      setSent(true);
+      setScheduledAt('');
+      setSent(r.message ?? '承認依頼を出しました');
       router.refresh();
     });
   };
@@ -243,11 +248,13 @@ export function MailReplyForm({
         />
       </div>
 
+      <ScheduleField value={scheduledAt} onChange={setScheduledAt} disabled={pending} />
+
       <div className="flex items-center gap-2">
         <Button type="submit" size="sm" disabled={pending || !text.trim() || !boxId}>
-          {pending ? '送信中…' : '返信を送信'}
+          {pending ? '保存中…' : '返信の承認を依頼'}
         </Button>
-        {sent && <span className="text-xs text-emerald-700">送信しました</span>}
+        {sent && <span className="text-xs text-emerald-700">{sent}</span>}
         {error && <span className="text-xs text-red-600">{error}</span>}
       </div>
     </form>
