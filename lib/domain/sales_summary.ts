@@ -14,7 +14,7 @@
  *   - applications.payment_date を基準にする (inclusive)
  *
  * 案件絞り込み:
- *   - applications.project_id で絞る (全案件 or 単一案件)
+ *   - applications.project_id で絞る (全案件 or 単一案件)。案件ID は T- 形式の文字列(projects.id は text)
  *
  * 仕様書 §5.1 / §5.6 参照。
  */
@@ -41,8 +41,8 @@ export interface SalesSummaryFilter {
   paymentFrom: string | null;
   /** 入金日の終了(YYYY-MM-DD inclusive)。null=制限なし */
   paymentTo: string | null;
-  /** 絞り込み対象の案件ID。null=全案件 */
-  projectId: number | null;
+  /** 絞り込み対象の案件ID(T-…)。null=全案件 */
+  projectId: string | null;
   /** ユーザーの有効/無効フィルター。'all'=全員(デフォルト) */
   activeFilter: 'all' | 'active' | 'inactive';
 }
@@ -68,26 +68,41 @@ export interface SalesSummaryResult {
 export async function getSalesSummary(filter: SalesSummaryFilter): Promise<SalesSummaryResult> {
   const supabase = await createClient();
 
-  // 1) 期間・案件フィルタ付きで applications 取得
-  let q = supabase
-    .from('applications')
-    .select('acquirer_id, acquirer_name_raw, payment_amount')
-    .is('deleted_at', null)
-    .not('payment_amount', 'is', null)
-    .gt('payment_amount', 0);
+  // 1) 期間・案件フィルタ付きで applications 取得。
+  //    PostgREST は 1 回 1,000 行までしか返さないため、id 順に 1,000 件ずつ取り切る
+  //    (以前は 1 回だけ取得しており、期間が「全期間」などで 1,000 件を超えると合計が欠けていた)
+  type AppRow = {
+    acquirer_id: string | null;
+    acquirer_name_raw: string | null;
+    payment_amount: number | null;
+  };
+  const apps: AppRow[] = [];
+  const PAGE = 1000;
+  for (let fromIdx = 0; ; fromIdx += PAGE) {
+    let q = supabase
+      .from('applications')
+      .select('acquirer_id, acquirer_name_raw, payment_amount')
+      .is('deleted_at', null)
+      .not('payment_amount', 'is', null)
+      .gt('payment_amount', 0);
 
-  if (filter.paymentFrom) q = q.gte('payment_date', filter.paymentFrom);
-  if (filter.paymentTo) q = q.lte('payment_date', filter.paymentTo);
-  if (filter.projectId) q = q.eq('project_id', filter.projectId);
+    if (filter.paymentFrom) q = q.gte('payment_date', filter.paymentFrom);
+    if (filter.paymentTo) q = q.lte('payment_date', filter.paymentTo);
+    if (filter.projectId) q = q.eq('project_id', filter.projectId);
 
-  const { data: apps, error: aErr } = await q;
-  if (aErr) throw new Error(`申込集計に失敗: ${aErr.message}`);
+    const { data, error: aErr } = await q
+      .order('id', { ascending: true })
+      .range(fromIdx, fromIdx + PAGE - 1);
+    if (aErr) throw new Error(`申込集計に失敗: ${aErr.message}`);
+    apps.push(...((data ?? []) as AppRow[]));
+    if (!data || data.length < PAGE) break;
+  }
 
   // 2) acquirer_id ごとに集計 (acquirer_name_raw も控えておき、ユーザー未解決時のフォールバックに使う)
   const summaryMap = new Map<string, { sum: number; count: number; nameRaw: string | null }>();
   let grandTotalAmount = 0;
   let grandTotalCount = 0;
-  for (const row of apps ?? []) {
+  for (const row of apps) {
     if (!row.acquirer_id) continue;
     const amt = Number(row.payment_amount ?? 0);
     if (!Number.isFinite(amt) || amt <= 0) continue;
@@ -152,12 +167,16 @@ export async function getSalesSummary(filter: SalesSummaryFilter): Promise<Sales
 /**
  * フィルタ用: 案件マスタ全件(is_active 問わず表示、ただし削除済みは除外)。
  */
-export async function listProjectsForFilter(): Promise<{ id: number; name: string }[]> {
+export async function listProjectsForFilter(): Promise<{ id: string; name: string }[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('projects')
     .select('id, name')
     .order('name', { ascending: true });
   if (error) throw new Error(`案件マスタ取得に失敗: ${error.message}`);
-  return data ?? [];
+  // 案件ID は T- 形式の文字列(生成型が number のままでも文字列にそろえる)
+  return ((data ?? []) as { id: string | number; name: string }[]).map((p) => ({
+    id: String(p.id),
+    name: p.name,
+  }));
 }

@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { getActivitySummaryByOwner } from '@/lib/domain/activity_summary';
+import { parseProjectFilterParam } from '@/lib/domain/application_list_filter';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { getNewCustomerSummary, listInfoAcquiredPoints } from '@/lib/domain/customer_summary';
 import { getFormSummary, listFormsForSummary } from '@/lib/domain/form_summary';
@@ -119,9 +120,8 @@ export default async function SummaryPage({ searchParams }: PageProps) {
 async function PaymentTab({ sp }: { sp: SP }) {
   const preset = sp.preset ? normalizePreset(sp.preset) : 'this_month';
   const range = resolveDateRange(preset, sp.from ?? null, sp.to ?? null);
-  const projectIdRaw = sp.project && sp.project !== 'all' ? sp.project : null;
-  const projectId =
-    projectIdRaw && /^\d+$/.test(projectIdRaw) ? Number.parseInt(projectIdRaw, 10) : null;
+  // 案件ID は T- 形式の文字列。以前は数字の ID だけを受け付けていたため絞り込めなかった(2026-10-16)
+  const projectId = parseProjectFilterParam(sp.project);
 
   const rawActive = sp.active ?? 'all';
   const activeFilter: 'all' | 'active' | 'inactive' =
@@ -153,7 +153,7 @@ async function PaymentTab({ sp }: { sp: SP }) {
             initialPreset={preset}
             initialFrom={sp.from ?? ''}
             initialTo={sp.to ?? ''}
-            initialProject={projectId ? String(projectId) : 'all'}
+            initialProject={projectId ?? 'all'}
             initialActive={activeFilter}
           />
         </Suspense>
