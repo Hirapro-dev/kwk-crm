@@ -3,6 +3,7 @@
 import { EDITABLE_INQUIRY_COLUMNS, mergeInquiryExtra } from '@/lib/domain/inquiry_extra_edit';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { createClient } from '@/lib/supabase/server';
+import { jstInputToIso } from '@/lib/utils/date';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getCurrentUser } from './auth';
@@ -140,14 +141,16 @@ export async function convertInquiryToMember(input: {
     // 画面で指定した項目(空文字は未設定扱い)。広告ID は指定が無ければ問合せの値を使う
     const mf = parsed.data.member_fields ?? {};
     const nz = (v: string | null | undefined) => (v?.trim() ? v.trim() : null);
-    const mailmag = nz(mf.mailmag_registered_at);
+    // 画面の datetime-local(時差なし)は日本時間として解釈する(サーバー = UTC のため)
+    const mailmag = jstInputToIso(mf.mailmag_registered_at);
+    if (mailmag === undefined) return { ok: false, error: 'メルマガ登録日時の形式が不正です' };
     const extraCols = {
       ad_id: nz(mf.ad_id) ?? inquiry.ad_id,
       gender: nz(mf.gender),
       ad_medium: nz(mf.ad_medium),
       info_acquired_points: nz(mf.info_acquired_points),
       info_acquired_date: nz(mf.info_acquired_date),
-      mailmag_registered_at: mailmag ? new Date(mailmag).toISOString() : null,
+      mailmag_registered_at: mailmag,
     };
     const { error: insErr } = await supabase.from('members').insert({
       id: memberId,

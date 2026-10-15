@@ -18,6 +18,7 @@ import { EDITABLE_MEMBER_EXTRA_KEYS } from '@/lib/domain/member_extra_edit';
 import type { SelectOption } from '@/lib/domain/member_gender';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import type { MemberWithOwner } from '@/lib/domain/types';
+import { toJstDateTimeLocal } from '@/lib/utils/date';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
@@ -89,17 +90,12 @@ function toDateInput(value: unknown): string {
   return String(value).slice(0, 10);
 }
 
-/** ISO/タイムスタンプ文字列を input[type=datetime-local] 用の YYYY-MM-DDTHH:mm に変換 */
-function toDateTimeLocal(value: unknown): string {
-  if (!value) return '';
-  return String(value).slice(0, 16);
-}
-
 /** レコード値をフォーム入力用の初期値に変換 */
 function initValue(dataType: FieldDefinition['data_type'], raw: unknown): string | boolean {
   if (dataType === 'boolean') return raw === true;
   if (dataType === 'date') return toDateInput(raw);
-  if (dataType === 'datetime') return toDateTimeLocal(raw);
+  // DB の値は UTC のため、日本時間の壁時計に直して入力欄に入れる(保存時は updateMember が日本時間として解釈)
+  if (dataType === 'datetime') return toJstDateTimeLocal(raw);
   return raw == null ? '' : String(raw);
 }
 

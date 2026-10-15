@@ -3,6 +3,7 @@
 import { getCurrentUser } from '@/lib/domain/auth';
 import { mergeMemberExtra } from '@/lib/domain/member_extra_edit';
 import { createClient } from '@/lib/supabase/server';
+import { jstInputToIso } from '@/lib/utils/date';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -45,6 +46,9 @@ const EDITABLE_MEMBER_COLUMNS = new Set<string>([
   'remarks',
 ]);
 
+/** 日時(timestamptz)の編集可能カラム。画面の入力は日本時間として解釈する */
+const DATETIME_MEMBER_COLUMNS = new Set(['registered_at', 'mailmag_registered_at']);
+
 /**
  * 会員情報を更新する。
  * fields は詳細フィールド由来の任意カラムを受け取るが、EDITABLE_MEMBER_COLUMNS のみ反映する。
@@ -73,7 +77,12 @@ export async function updateMember(input: UpdateMemberInput): Promise<{ error?: 
   const cleaned: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(fields)) {
     if (!EDITABLE_MEMBER_COLUMNS.has(k)) continue; // 許可外カラムは無視
-    if (typeof v === 'string') {
+    if (DATETIME_MEMBER_COLUMNS.has(k) && typeof v === 'string') {
+      // 編集ダイアログの datetime-local(時差なし)は日本時間として解釈する(サーバー = UTC のため)
+      const iso = jstInputToIso(v);
+      if (iso === undefined) return { error: `${k} の日時の形式が不正です` };
+      cleaned[k] = iso;
+    } else if (typeof v === 'string') {
       cleaned[k] = v.trim() === '' ? null : v.trim();
     } else {
       cleaned[k] = v;
@@ -282,9 +291,9 @@ export async function createMember(input: CreateMemberInput): Promise<CreateMemb
   if (infoDate && !/^\d{4}-\d{2}-\d{2}$/.test(infoDate)) {
     return { ok: false, error: '顧客情報取得日は YYYY-MM-DD 形式で指定してください' };
   }
-  const mailmag = nz(input.mailmag_registered_at, 40);
-  const mailmagIso = mailmag ? new Date(mailmag) : null;
-  if (mailmagIso && Number.isNaN(mailmagIso.getTime())) {
+  // 画面の datetime-local(時差なし)は日本時間として解釈する(サーバー = UTC のため)
+  const mailmagIso = jstInputToIso(nz(input.mailmag_registered_at, 40));
+  if (mailmagIso === undefined) {
     return { ok: false, error: 'メルマガ登録日時の形式が不正です' };
   }
 
@@ -330,7 +339,7 @@ export async function createMember(input: CreateMemberInput): Promise<CreateMemb
     ad_medium: nz(input.ad_medium),
     info_acquired_points: nz(input.info_acquired_points),
     info_acquired_date: infoDate,
-    mailmag_registered_at: mailmagIso ? mailmagIso.toISOString() : null,
+    mailmag_registered_at: mailmagIso,
     owner_id: ownerId,
     registered_at: new Date().toISOString(),
   });

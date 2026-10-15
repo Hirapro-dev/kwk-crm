@@ -6,6 +6,7 @@
  * - Excel: xlsx ライブラリ、ヘッダ太字、数値カンマ区切り
  */
 
+import { formatJstDateTimeHm, toJstExcelSerial } from '@/lib/utils/date';
 import * as XLSX from 'xlsx';
 import type { ReportResult } from './execute_v2';
 
@@ -22,12 +23,10 @@ function formatValue(v: unknown): string {
   if (v === null || v === undefined) return '';
   if (typeof v === 'string') {
     // ISO 日時を YYYY/MM/DD HH:mm に整形(仕様書 §9.11)
+    // サーバー(Vercel = UTC)の時刻帯ではなく日本時間で整形する
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) {
-      const d = new Date(v);
-      if (!Number.isNaN(d.getTime())) {
-        const pad = (n: number) => n.toString().padStart(2, '0');
-        return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      }
+      const s = formatJstDateTimeHm(v);
+      if (s) return s;
     }
     if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
       return v.replace(/-/g, '/');
@@ -63,21 +62,31 @@ export function toXlsx(result: ReportResult, sheetName = 'Report'): Uint8Array {
 
   // 2次元配列に変換
   const matrix: unknown[][] = [headers];
+  // 日時セルの位置(行, 列)。後で日時の表示書式を付ける
+  const dateCells: Array<[number, number]> = [];
   for (const row of result.rows) {
+    const r = matrix.length;
     matrix.push(
-      aliases.map((a) => {
+      aliases.map((a, c) => {
         const v = row[a];
-        // ISO 日時 → JS Date(セル書式は別途指定)
+        // ISO 日時 → 日本時間の Excel シリアル値(Date を渡すとサーバーの時刻帯 = UTC で書かれるため)
         if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) {
-          const d = new Date(v);
-          if (!Number.isNaN(d.getTime())) return d;
+          const serial = toJstExcelSerial(v);
+          if (serial !== null) {
+            dateCells.push([r, c]);
+            return serial;
+          }
         }
         return v ?? '';
       }),
     );
   }
 
-  const ws = XLSX.utils.aoa_to_sheet(matrix, { cellDates: true });
+  const ws = XLSX.utils.aoa_to_sheet(matrix);
+  for (const [r, c] of dateCells) {
+    const cell = ws[XLSX.utils.encode_cell({ r, c })];
+    if (cell) cell.z = 'yyyy/mm/dd hh:mm';
+  }
 
   // 列幅
   ws['!cols'] = headers.map((h) => ({ wch: Math.max(10, Math.min(40, h.length + 2)) }));

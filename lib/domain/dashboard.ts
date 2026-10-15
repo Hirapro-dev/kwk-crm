@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { jstDayStartIso, jstMonthRangeYmd, jstMonthStartIso } from '@/lib/utils/date';
 import type { ActivityListItem } from './types';
 
 /**
@@ -26,19 +27,6 @@ export interface ProtectExpiringMember {
   address: string | null;
   protect_expires_at: string;
   protect_by_user: { id: string; full_name: string | null } | null;
-}
-
-function todayStartIso(): string {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
-}
-
-function monthStartIso(): string {
-  const d = new Date();
-  d.setDate(1);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
 }
 
 /**
@@ -70,17 +58,14 @@ export async function getSameNameUserIds(
 
 export async function getMyDashboardStats(userId: string): Promise<DashboardStats> {
   const supabase = await createClient();
-  const today = todayStartIso();
-  const monthStart = monthStartIso();
-  const now = new Date().toISOString();
+  // 「今日」「今月」の境目は日本時間(サーバー = UTC の setHours だと日本時間 9 時区切りになる)
+  const nowDate = new Date();
+  const today = jstDayStartIso(nowDate);
+  const monthStart = jstMonthStartIso(nowDate);
+  const monthDays = jstMonthRangeYmd(nowDate);
+  const now = nowDate.toISOString();
   // 同名アカウント(有効/無効)に残る保持分も自分の一人分として合算する
   const protectIds = await getSameNameUserIds(supabase, userId);
-
-  const monthEnd = new Date();
-  monthEnd.setMonth(monthEnd.getMonth() + 1);
-  monthEnd.setDate(1);
-  monthEnd.setHours(0, 0, 0, 0);
-  const monthEndIso = monthEnd.toISOString();
 
   const [todayCount, monthCount, protectCount, monthPaymentRows] = await Promise.all([
     // 今日の対応件数
@@ -113,8 +98,8 @@ export async function getMyDashboardStats(userId: string): Promise<DashboardStat
       .eq('acquirer_id', userId)
       .not('payment_amount', 'is', null)
       .gt('payment_amount', 0)
-      .gte('payment_date', monthStart.slice(0, 10))
-      .lt('payment_date', monthEndIso.slice(0, 10)),
+      .gte('payment_date', monthDays.from)
+      .lt('payment_date', monthDays.toExclusive),
   ]);
 
   const paymentRows = (monthPaymentRows.data ?? []) as { payment_amount: number | null }[];
