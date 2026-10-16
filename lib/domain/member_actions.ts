@@ -2,6 +2,7 @@
 
 import { getCurrentUser } from '@/lib/domain/auth';
 import { mergeMemberExtra } from '@/lib/domain/member_extra_edit';
+import { resolveNewMemberOwner } from '@/lib/domain/member_owner';
 import { createClient } from '@/lib/supabase/server';
 import { jstInputToIso } from '@/lib/utils/date';
 import { revalidatePath } from 'next/cache';
@@ -258,7 +259,7 @@ export interface CreateMemberInput {
   info_acquired_points?: string | null;
   info_acquired_date?: string | null;
   mailmag_registered_at?: string | null;
-  /** 担当(users.id)。未指定なら実行者 */
+  /** 担当(users.id)。null / 空文字 = 未設定(空のまま)。undefined(項目なし)なら実行者 */
   owner_id?: string | null;
   allowDuplicate?: boolean;
 }
@@ -325,7 +326,8 @@ export async function createMember(input: CreateMemberInput): Promise<CreateMemb
     return { ok: false, error: `会員IDの採番に失敗しました: ${idErr?.message ?? ''}` };
   }
 
-  const ownerId = nz(input.owner_id, 64) ?? me.id;
+  // 「未設定」を選んだときは空のまま(項目を送ってこない呼び出しだけ実行者にする)
+  const ownerId = resolveNewMemberOwner(input.owner_id, me.id);
   const { error } = await supabase.from('members').insert({
     id: newId,
     name,
