@@ -18,6 +18,7 @@ import {
   canEditOutbox,
   canRejectOutbox,
   canRetryOutbox,
+  canSendOwnNow,
   isDueNow,
   parseScheduledInput,
 } from '@/lib/domain/mail_outbox';
@@ -105,6 +106,42 @@ export async function approveMailOutbox(id: string): Promise<OutboxActionResult>
   revalidate(item, r.threadId);
   if (!r.ok) return { error: `承認しましたが送信に失敗しました: ${r.error ?? ''}` };
   return { message: '承認して送信しました', threadId: r.threadId };
+}
+
+/**
+ * 承認待ちの自分のメールを、承認者本人がそのまま送る(2026-10-16)。承認者(本人)を記録して承認済みにし、
+ * 予約が無ければその場で送る(予約ありは定期実行が送る)。
+ */
+export async function sendOwnMailOutboxNow(id: string): Promise<OutboxActionResult> {
+  const me = await getCurrentUser();
+  const item = await loadCore(id);
+  if (!item) return { error: '送信待ちのメールが見つかりません' };
+  if (!canSendOwnNow(me, item)) {
+    return { error: 'そのまま送信できるのは、承認者が自分で作成した承認待ちのメールだけです' };
+  }
+  const admin = createServiceRoleClient();
+  const { data: updated, error } = await admin
+    .from('mail_outbox')
+    .update({ status: 'approved', approved_by: me.id, approved_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('status', 'pending')
+    .select('id');
+  if (error) return { error: `送信に失敗しました: ${error.message}` };
+  if ((updated ?? []).length === 0) return { error: 'このメールは既に処理されています' };
+
+  if (!isDueNow(item.scheduled_at, new Date())) {
+    revalidate(item);
+    return { message: '送信を予約しました。指定の日時に送信されます' };
+  }
+  const cfg = getMailAwsConfig();
+  if (!cfg) {
+    revalidate(item);
+    return { error: '送信基盤(SES)が未設定のため送信できません(予約中に残っています)' };
+  }
+  const r = await deliverOutboxItem(admin, cfg, id);
+  revalidate(item, r.threadId);
+  if (!r.ok) return { error: `送信に失敗しました: ${r.error ?? ''}` };
+  return { message: '送信しました', threadId: r.threadId };
 }
 
 /** 差し戻し(理由は必須)。作成者が修正して出し直すか、取り消す */

@@ -99,7 +99,12 @@ export const ROLE_PERMISSION_TABLE: PermissionSection[] = [
       {
         action: '返信・新規作成(承認依頼)',
         marks: WRITERS,
-        note: 'すぐには送らず「承認待ち」になる。送信元は SES 認証済みドメインのアドレスだけ',
+        note: '送信前に確認画面が出る。営業・サポートは「承認待ち」になる。送信元は SES 認証済みドメインのアドレスだけ',
+      },
+      {
+        action: '承認せずにそのまま送信',
+        marks: MAIL_APPROVERS,
+        note: '送るときに「承認を依頼する / そのまま送信する」を選べる。承認待ちの自分のメールもそのまま送信できる',
       },
       {
         action: '送信の承認・差し戻し',
