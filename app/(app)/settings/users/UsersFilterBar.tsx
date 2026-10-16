@@ -1,10 +1,10 @@
 'use client';
 
+import { Select } from '@/components/ui/select';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTransition } from 'react';
-import { Select } from '@/components/ui/select';
 
-const ROLES = ['admin', 'manager', 'sales', 'viewer'] as const;
+const ROLES = ['admin', 'manager', 'sales', 'support', 'viewer'] as const;
 
 /**
  * ユーザー一覧のフィルター(表示=有効のみ/すべて, 権限)。
@@ -41,11 +41,7 @@ export function UsersFilterBar({
         <option value="active">有効のみ</option>
         <option value="all">すべて</option>
       </Select>
-      <Select
-        className="w-40"
-        value={initialRole}
-        onChange={(e) => update('role', e.target.value)}
-      >
+      <Select className="w-40" value={initialRole} onChange={(e) => update('role', e.target.value)}>
         <option value="">権限: すべて</option>
         {ROLES.map((r) => (
           <option key={r} value={r}>

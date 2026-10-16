@@ -1219,6 +1219,11 @@ Salesforce の「申込情報：申込一覧」CSV は**書き出す列の組が
 | `sales` | 営業担当 | 自分担当の会員/申込/活動のみ読み書き、Free担当は閲覧可能 |
 | `viewer` | 閲覧専用 | 全件閲覧のみ |
 
+**ロールの権限表**(2026-10-16 追加): ユーザー一覧(`/settings/users`、admin のみ)の下に、CRM・メーラー・タスク管理の操作ごとに
+ロール(admin / manager / sales / support / viewer)ができるか(○ / △ 条件付き / ×)を一覧にした表を開閉式で出す。読み取り専用の説明で、
+権限そのものは RLS と Server Action が決める。中身は `lib/domain/role_permissions.ts`(権限を変えたらこの表も直す。メールの送信承認の行は
+`MAIL_APPROVER_ROLES` から作り、判定関数と食い違わないことをテストで確認)。要件定義書の「共通(権限・非機能)」と同じ内容。
+
 ### 7.2 Row Level Security ポリシー方針
 Supabase RLSで以下を実装:
 - `members`: SELECT は全ロール全件(migration 33)。UPDATE は **viewer 以外の全ロールが全会員**(2026-09-18, migration 104。それまでは admin か自分が永久担当の会員のみで、永久担当の約 95% が未設定のため実質 admin 専用だった)。プロテクト者・日程は Server Action で admin のみ、削除は admin のみ
