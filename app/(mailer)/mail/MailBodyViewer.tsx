@@ -1,5 +1,7 @@
 'use client';
 
+import { MAIL_BODY_IFRAME_SANDBOX, stripAnchorTargets } from '@/lib/domain/mail_body_view';
+import { splitLinks } from '@/lib/domain/task_pure';
 import { useState } from 'react';
 
 /**
@@ -7,15 +9,16 @@ import { useState } from 'react';
  *
  * HTML 本文があれば HTML 版を既定で表示し、テキスト版に切り替えられる。
  * サニタイズ用ライブラリは入れず、ブラウザの隔離機構で守る:
- *   - iframe の sandbox 属性(値なし)= スクリプト・フォーム送信・ポップアップ・
- *     親ページへのアクセスをすべて禁止
+ *   - iframe の sandbox 属性 = スクリプト・フォーム送信・親ページへのアクセスを禁止。
+ *     許可するのは本文中のリンクを新しいタブで開くことだけ(MAIL_BODY_IFRAME_SANDBOX。2026-10-16 修正:
+ *     以前はすべて禁止で、リンクを押してもブラウザが黙って止めていた)。a タグの target は外して全部新しいタブにする
  *   - srcdoc 内に CSP を埋め込み、画像を含む外部リソースの読み込みを既定で禁止
  *     (開封トラッキング用の画像ビーコン対策)。インラインスタイルのみ許可
  *   - 「画像を表示」を押したときだけ、そのメールに限り https の画像を許可する
  *     (利用者の明示操作。自動では読み込まない)
  *   - referrer を送らない
  * 本文を親ページの DOM に直接描画しないので、HTML 中のスクリプトやスタイルが
- * CRM 側に影響することはない。
+ * CRM 側に影響することはない。テキスト版は URL をリンクにして表示する(別タブ。splitLinks はタスク管理と共通)。
  */
 export function MailBodyViewer({ text, html }: { text: string | null; html: string | null }) {
   const hasHtml = !!html?.trim();
@@ -40,7 +43,25 @@ export function MailBodyViewer({ text, html }: { text: string | null; html: stri
   if (mode === 'text' || !hasHtml) {
     return (
       <div>
-        <pre className="whitespace-pre-wrap break-words font-sans text-sm">{text}</pre>
+        <pre className="whitespace-pre-wrap break-words font-sans text-sm">
+          {splitLinks(text ?? '').map((s, i) =>
+            s.kind === 'link' ? (
+              <a
+                // biome-ignore lint/suspicious/noArrayIndexKey: 断片は順序固定で再利用しない
+                key={i}
+                href={s.value}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="break-all text-primary underline-offset-2 hover:underline"
+              >
+                {s.value}
+              </a>
+            ) : (
+              // biome-ignore lint/suspicious/noArrayIndexKey: 断片は順序固定で再利用しない
+              <span key={i}>{s.value}</span>
+            ),
+          )}
+        </pre>
         {toggle && <div className="mt-2">{toggle}</div>}
       </div>
     );
@@ -53,7 +74,7 @@ export function MailBodyViewer({ text, html }: { text: string | null; html: stri
 <meta name="referrer" content="no-referrer">
 <base target="_blank">
 <style>body{margin:8px;font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5;color:#111;word-break:break-word}img{max-width:100%;height:auto}</style>
-</head><body>${html}</body></html>`;
+</head><body>${stripAnchorTargets(html ?? '')}</body></html>`;
 
   return (
     <div>
@@ -79,7 +100,7 @@ export function MailBodyViewer({ text, html }: { text: string | null; html: stri
         <iframe
           key={loadImages ? 'img' : 'noimg'}
           title="メール本文(HTML)"
-          sandbox=""
+          sandbox={MAIL_BODY_IFRAME_SANDBOX}
           referrerPolicy="no-referrer"
           srcDoc={doc}
           className="h-full w-full"
