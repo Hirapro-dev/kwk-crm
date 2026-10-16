@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { PERMISSION_ROLES } from '@/lib/domain/role_permissions';
 import type { UserRole } from '@/lib/domain/types';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import Link from 'next/link';
@@ -24,7 +25,8 @@ import { InviteUserForm } from './InviteUserForm';
 import { RolePermissionTable } from './RolePermissionTable';
 import { UsersFilterBar } from './UsersFilterBar';
 
-const ROLES: UserRole[] = ['admin', 'manager', 'sales', 'viewer'];
+// support は DB と画面で使っているロール(UserRole 型には無いため文字列で持つ。2026-10-16 に一覧の件数・絞り込みへ追加)
+const ROLES: readonly string[] = PERMISSION_ROLES;
 
 interface PageProps {
   searchParams: Promise<{ active?: string; role?: string }>;
@@ -35,7 +37,7 @@ export default async function SettingsUsersPage({ searchParams }: PageProps) {
 
   // 既定は「有効のみ」。active=all のときだけ全件表示。
   const activeOnly = sp.active !== 'all';
-  const roleFilter = ROLES.includes(sp.role as UserRole) ? (sp.role as UserRole) : undefined;
+  const roleFilter = sp.role && ROLES.includes(sp.role) ? (sp.role as UserRole) : undefined;
 
   const users = await listAllUsers({ activeOnly, role: roleFilter });
 
@@ -57,7 +59,7 @@ export default async function SettingsUsersPage({ searchParams }: PageProps) {
           actions={
             <span className="text-xs text-muted-foreground">
               admin: {counts.admin ?? 0} / manager: {counts.manager ?? 0} / sales:{' '}
-              {counts.sales ?? 0} / viewer: {counts.viewer ?? 0}
+              {counts.sales ?? 0} / support: {counts.support ?? 0} / viewer: {counts.viewer ?? 0}
             </span>
           }
         />
