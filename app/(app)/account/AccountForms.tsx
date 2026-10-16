@@ -11,6 +11,7 @@ import {
   updateMyName,
   updateMyPassword,
 } from '@/lib/domain/account_actions';
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '@/lib/domain/password_policy';
 
 interface Props {
   isAdmin: boolean;
@@ -226,14 +227,15 @@ function PasswordForm() {
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <Label htmlFor="new-pw">新しいパスワード (6文字以上)</Label>
+              <Label htmlFor="new-pw">新しいパスワード ({PASSWORD_MIN_LENGTH}文字以上)</Label>
               <Input
                 id="new-pw"
                 type={show ? 'text' : 'password'}
                 value={newPw}
                 onChange={(e) => setNewPw(e.target.value)}
                 required
-                minLength={6}
+                minLength={PASSWORD_MIN_LENGTH}
+                maxLength={PASSWORD_MAX_LENGTH}
                 autoComplete="new-password"
               />
             </div>
@@ -245,7 +247,8 @@ function PasswordForm() {
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 required
-                minLength={6}
+                minLength={PASSWORD_MIN_LENGTH}
+                maxLength={PASSWORD_MAX_LENGTH}
                 autoComplete="new-password"
               />
             </div>

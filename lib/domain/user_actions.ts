@@ -4,6 +4,12 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getCurrentUser } from './auth';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MAX_LENGTH_MESSAGE,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_MIN_LENGTH_MESSAGE,
+} from './password_policy';
 
 const ROLES = ['admin', 'manager', 'sales', 'viewer', 'support'] as const;
 
@@ -91,8 +97,8 @@ const PasswordSchema = z.object({
   user_id: z.string().uuid(),
   password: z
     .string()
-    .min(8, 'パスワードは8文字以上にしてください')
-    .max(72, 'パスワードが長すぎます'),
+    .min(PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MESSAGE)
+    .max(PASSWORD_MAX_LENGTH, PASSWORD_MAX_LENGTH_MESSAGE),
 });
 
 /**

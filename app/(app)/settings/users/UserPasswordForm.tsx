@@ -3,12 +3,13 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PASSWORD_MIN_LENGTH } from '@/lib/domain/password_policy';
 import { setUserPassword } from '@/lib/domain/user_actions';
 import { useState, useTransition } from 'react';
 
 /**
  * 対象ユーザーのログインパスワードを admin が設定する小フォーム。
- * 8文字以上。設定後はそのメール+パスワードでログイン可能になる。
+ * PASSWORD_MIN_LENGTH(8)文字以上。設定後はそのメール+パスワードでログイン可能になる。
  */
 export function UserPasswordForm({ userId }: { userId: string }) {
   const [password, setPassword] = useState('');
@@ -39,12 +40,12 @@ export function UserPasswordForm({ userId }: { userId: string }) {
           id="new-password"
           type="text"
           className="w-64"
-          placeholder="8文字以上"
+          placeholder={`${PASSWORD_MIN_LENGTH}文字以上`}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password"
         />
-        <Button type="submit" disabled={pending || password.length < 8}>
+        <Button type="submit" disabled={pending || password.length < PASSWORD_MIN_LENGTH}>
           {pending ? '設定中…' : 'パスワードを設定'}
         </Button>
       </div>

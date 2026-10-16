@@ -3,6 +3,7 @@
 import { Eye, EyeOff, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
+import { PASSWORD_MIN_LENGTH, passwordLengthError } from '@/lib/domain/password_policy';
 import { createClient } from '@/lib/supabase/client';
 
 const ACCENT = '#00C896';
@@ -20,8 +21,9 @@ export function ResetPasswordForm() {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 8) {
-      setError('パスワードは8文字以上で入力してください');
+    const lengthError = passwordLengthError(password);
+    if (lengthError) {
+      setError(lengthError);
       return;
     }
     if (password !== confirm) {
@@ -62,7 +64,7 @@ export function ResetPasswordForm() {
         <input
           type={showPassword ? 'text' : 'password'}
           required
-          placeholder="新しいパスワード（8文字以上）"
+          placeholder={`新しいパスワード（${PASSWORD_MIN_LENGTH}文字以上）`}
           autoComplete="new-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
