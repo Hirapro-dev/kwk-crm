@@ -229,3 +229,57 @@ export function scheduleInputLabel(value: string | null | undefined): string | n
   const m = (value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
   return m ? `${m[1]}/${m[2]}/${m[3]} ${m[4]}:${m[5]}` : null;
 }
+
+/** 送信待ちメールの確認画面の種類(承認 / 承認者本人のそのまま送信 / 送信失敗の送り直し) */
+export type OutboxConfirmKind = 'approve' | 'sendNow' | 'retry';
+
+/**
+ * 送信待ちメールの確認画面(SendConfirmDialog)の文言(2026-10-16)。
+ * 予約なし・予約日時を過ぎている(dueNow)ならすぐ送る、先なら予約日時に送る旨を出し分ける。
+ */
+export function outboxConfirmTexts(
+  kind: OutboxConfirmKind,
+  info: { scheduledLabel: string | null; dueNow: boolean },
+): {
+  title: string;
+  lead: string;
+  methodLabel: string;
+  whenLabel: string;
+  confirmLabel: string;
+  cancelLabel: string;
+} {
+  const when = info.dueNow
+    ? info.scheduledLabel
+      ? `予約日時(${info.scheduledLabel})を過ぎているため、すぐに送信`
+      : 'すぐに送信'
+    : `${info.scheduledLabel} に送信(予約)`;
+  const sendLabel = info.dueNow ? '送信する' : '予約して送信する';
+  if (kind === 'approve') {
+    return {
+      title: '承認内容の確認',
+      lead: `この内容を承認します。承認すると${info.dueNow ? 'すぐに送信' : '指定の日時に送信'}されます。`,
+      methodLabel: '承認して送信',
+      whenLabel: when,
+      confirmLabel: info.dueNow ? '承認して送信する' : '承認する(予約日時に送信)',
+      cancelLabel: 'キャンセル',
+    };
+  }
+  if (kind === 'sendNow') {
+    return {
+      title: '送信内容の確認',
+      lead: '承認を待たずに、この内容で送信します。',
+      methodLabel: '承認せずにそのまま送信',
+      whenLabel: when,
+      confirmLabel: sendLabel,
+      cancelLabel: 'キャンセル',
+    };
+  }
+  return {
+    title: '再送信の確認',
+    lead: '送信に失敗したメールを、この内容で送り直します。',
+    methodLabel: '送り直す(承認済みの内容のまま)',
+    whenLabel: when,
+    confirmLabel: sendLabel,
+    cancelLabel: 'キャンセル',
+  };
+}
