@@ -11,6 +11,7 @@ import {
   canRetryOutbox,
   canSendOwnNow,
   isDueNow,
+  outboxConfirmTexts,
   outboxTabStatuses,
   parseScheduledInput,
   resolveOutboxTab,
@@ -144,5 +145,28 @@ describe('送信方法(承認を依頼 / そのまま送信)', () => {
   it('確認画面の送信日時の表示', () => {
     expect(scheduleInputLabel('2026-10-17T09:30')).toBe('2026/10/17 09:30');
     expect(scheduleInputLabel('')).toBeNull();
+  });
+});
+
+describe('outboxConfirmTexts(承認・そのまま送信・送り直しの確認画面)', () => {
+  it('予約なしの承認は「承認して送信する」ですぐ送る', () => {
+    const t = outboxConfirmTexts('approve', { scheduledLabel: null, dueNow: true });
+    expect(t.confirmLabel).toBe('承認して送信する');
+    expect(t.whenLabel).toBe('すぐに送信');
+  });
+  it('予約日時が先の承認は予約日時に送る旨を出す', () => {
+    const t = outboxConfirmTexts('approve', { scheduledLabel: '2026/10/20 09:00', dueNow: false });
+    expect(t.confirmLabel).toBe('承認する(予約日時に送信)');
+    expect(t.whenLabel).toBe('2026/10/20 09:00 に送信(予約)');
+  });
+  it('予約日時を過ぎていたら、すぐに送ることを明示する', () => {
+    const t = outboxConfirmTexts('sendNow', { scheduledLabel: '2026/10/01 09:00', dueNow: true });
+    expect(t.whenLabel).toContain('過ぎているため、すぐに送信');
+    expect(t.confirmLabel).toBe('送信する');
+  });
+  it('送り直しは再送信の確認', () => {
+    expect(outboxConfirmTexts('retry', { scheduledLabel: null, dueNow: true }).title).toBe(
+      '再送信の確認',
+    );
   });
 });

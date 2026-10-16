@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { type OutboxConfirmKind, outboxConfirmTexts } from '@/lib/domain/mail_outbox';
 import {
   approveMailOutbox,
   cancelMailOutbox,
@@ -14,6 +15,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { ScheduleField } from './ScheduleField';
+import { SendConfirmDialog } from './SendConfirmDialog';
 
 interface Perms {
   approve: boolean;
@@ -37,17 +39,34 @@ interface Initial {
 /**
  * 送信待ちメールの操作(CLAUDE.md §5.15 migration 124)。
  * 承認 / 差し戻し(理由必須)/ 取消 / 修正して出し直す / 送り直す。表示するボタンは権限(サーバーで判定)に従う。
+ * 承認・そのまま送信・送り直しは、送信と同じ確認画面(SendConfirmDialog)で送る内容を見せてから確定する(2026-10-16)。
  */
+
+/** 確認画面に出す内容(送信待ちメールの現在の値) */
+export interface OutboxConfirmInfo {
+  from: string;
+  to: string;
+  cc: string;
+  subject: string;
+  body: string;
+  /** 予約日時の表示("YYYY/MM/DD HH:mm"。予約なしは null) */
+  scheduledLabel: string | null;
+  /** 今送る時刻か(予約なし、または予約日時を過ぎている) */
+  dueNow: boolean;
+}
+
 export function OutboxActions({
   id,
   kind,
   perms,
   initial,
+  confirmInfo,
 }: {
   id: string;
   kind: 'reply' | 'new';
   perms: Perms;
   initial: Initial;
+  confirmInfo: OutboxConfirmInfo;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -56,6 +75,7 @@ export function OutboxActions({
   const [mode, setMode] = useState<'none' | 'reject' | 'edit'>('none');
   const [reason, setReason] = useState('');
   const [form, setForm] = useState<Initial>(initial);
+  const [confirm, setConfirm] = useState<OutboxConfirmKind | null>(null);
 
   const run = (
     fn: () => Promise<{ error?: string; message?: string; threadId?: string | null }>,
@@ -72,6 +92,7 @@ export function OutboxActions({
       }
       setDone(r.message ?? '完了しました');
       setMode('none');
+      setConfirm(null);
       after?.(r);
       router.refresh();
     });
@@ -87,9 +108,8 @@ export function OutboxActions({
             size="sm"
             disabled={pending}
             onClick={() => {
-              if (!window.confirm('このメールを承認しますか?(予約が無ければすぐに送信されます)'))
-                return;
-              run(() => approveMailOutbox(id));
+              setError(null);
+              setConfirm('approve');
             }}
           >
             承認する
@@ -100,20 +120,22 @@ export function OutboxActions({
             size="sm"
             disabled={pending}
             onClick={() => {
-              if (
-                !window.confirm(
-                  '承認を待たずに、このメールをそのまま送信しますか?(予約があれば指定日時に送信されます)',
-                )
-              )
-                return;
-              run(() => sendOwnMailOutboxNow(id));
+              setError(null);
+              setConfirm('sendNow');
             }}
           >
             そのまま送信する
           </Button>
         )}
         {perms.retry && (
-          <Button size="sm" disabled={pending} onClick={() => run(() => retryMailOutbox(id))}>
+          <Button
+            size="sm"
+            disabled={pending}
+            onClick={() => {
+              setError(null);
+              setConfirm('retry');
+            }}
+          >
             もう一度送る
           </Button>
         )}
@@ -156,7 +178,7 @@ export function OutboxActions({
         )}
         {pending && <span className="text-xs text-muted-foreground">処理中…</span>}
         {done && <span className="text-xs text-emerald-700">{done}</span>}
-        {error && <span className="text-xs text-red-600">{error}</span>}
+        {error && !confirm && <span className="text-xs text-red-600">{error}</span>}
       </div>
 
       {mode === 'reject' && (
@@ -267,6 +289,34 @@ export function OutboxActions({
             保存して承認を依頼し直す
           </Button>
         </form>
+      )}
+
+      {confirm && (
+        <SendConfirmDialog
+          open
+          onOpenChange={(o) => !o && setConfirm(null)}
+          pending={pending}
+          error={error}
+          texts={outboxConfirmTexts(confirm, confirmInfo)}
+          onConfirm={() =>
+            run(() =>
+              confirm === 'approve'
+                ? approveMailOutbox(id)
+                : confirm === 'sendNow'
+                  ? sendOwnMailOutboxNow(id)
+                  : retryMailOutbox(id),
+            )
+          }
+          summary={{
+            from: confirmInfo.from,
+            to: confirmInfo.to,
+            cc: confirmInfo.cc,
+            subject: confirmInfo.subject,
+            scheduledAt: '',
+            mode: 'direct',
+            body: confirmInfo.body,
+          }}
+        />
       )}
     </div>
   );

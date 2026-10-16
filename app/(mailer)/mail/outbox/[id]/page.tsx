@@ -13,6 +13,7 @@ import {
   canRejectOutbox,
   canRetryOutbox,
   canSendOwnNow,
+  isDueNow,
   isMailApprover,
   toScheduledInputValue,
 } from '@/lib/domain/mail_outbox';
@@ -142,6 +143,17 @@ export default async function MailOutboxDetailPage({ params }: PageProps) {
             id={o.id}
             kind={o.kind}
             perms={perms}
+            confirmInfo={{
+              from: o.mail_box
+                ? `${o.from_name ? `${o.from_name} ` : ''}<${o.mail_box.address}>`
+                : String(o.mail_box_id),
+              to: o.to_addresses.join(', '),
+              cc: o.cc_addresses.join(', '),
+              subject: o.subject,
+              body: o.text_body,
+              scheduledLabel: o.scheduled_at ? formatDateTime(o.scheduled_at) : null,
+              dueNow: isDueNow(o.scheduled_at, new Date()),
+            }}
             initial={{
               body: o.text_body,
               cc: o.cc_addresses.join(', '),
