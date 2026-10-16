@@ -21,6 +21,7 @@ import { listAllUsers } from '@/lib/domain/users_admin';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { InviteUserForm } from './InviteUserForm';
+import { RolePermissionTable } from './RolePermissionTable';
 import { UsersFilterBar } from './UsersFilterBar';
 
 const ROLES: UserRole[] = ['admin', 'manager', 'sales', 'viewer'];
@@ -114,6 +115,8 @@ export default async function SettingsUsersPage({ searchParams }: PageProps) {
           </TableBody>
         </Table>
       </Card>
+
+      <RolePermissionTable />
     </div>
   );
 }
