@@ -6,6 +6,7 @@ import { Select } from '@/components/ui/select';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { loadActivitiesPage } from '@/lib/domain/list_more_actions';
 import type { ActivityListItem } from '@/lib/domain/types';
+import { jstDateRangeToIso } from '@/lib/utils/date';
 import { useEffect, useRef, useState } from 'react';
 
 /**
@@ -52,13 +53,14 @@ interface Filters {
 const EMPTY_FILTERS: Filters = { dBunrui: [], sBunrui: '', from: '', to: '' };
 
 function toParams(memberId: string, f: Filters) {
+  // 期間は日本時間の 開始日 0:00 〜 終了日の終わり(時差なしの日付だと DB が UTC として比べ、9 時間ずれる)
+  const range = jstDateRangeToIso(f.from, f.to);
   return {
     memberId,
     dBunruiIn: f.dBunrui.length > 0 ? f.dBunrui : undefined,
     sBunrui: f.sBunrui || undefined,
-    from: f.from || undefined,
-    // 終了日はその日の終わりまで含める
-    to: f.to ? `${f.to}T23:59:59.999` : undefined,
+    from: range.from,
+    to: range.to,
   };
 }
 
