@@ -1016,7 +1016,7 @@ hira-pro.com / japan-casino-dealer.jp / asec-frontier.com / scpp.co.jp / usi-aff
 `userFolderSections`。Server Action は `lib/domain/mail_user_folder_actions.ts`。テーブル未適用でも空扱いで画面は壊さない。
 
 **セキュリティ**: Webhook は SNS の署名 (署名用証明書は `sns.<region>.amazonaws.com` のものだけ許可) と `TopicArn` を検証、
-不一致は 401/403。HTML 本文は sandbox iframe + CSP で描画し**画像の自動読み込みをブロック**(開封トラッキング対策)。
+不一致は 401/403。HTML 本文は sandbox iframe + CSP で描画し**画像の自動読み込みをブロック**(開封トラッキング対策)。本文中のリンクは別タブで開く(sandbox で許可するのは新しいタブを開くことだけ: `allow-popups allow-popups-to-escape-sandbox`。スクリプト・親画面の書き換え・フォーム送信は禁止のまま。a タグの target は外して `<base target="_blank">` に統一。テキスト版は URL をリンク化。`lib/domain/mail_body_view.ts`。2026-10-16 修正: それまでは sandbox が全部禁止でリンクを押しても開かなかった)。
 本文・アドレスをログに出さない (§12.4)。AWS の認証情報は Vercel の環境変数のみ (クライアント露出禁止 §12.4)。
 **RLS**: migration 33 と同方針 (SELECT 全ロール / INSERT・UPDATE は viewer 以外 / DELETE は admin)。
 **画面の位置付け** (2026-09-09 変更): メーラーは CRM のメニューバーには出さず(migration 77 で `nav_items` の `mail` を削除)、
