@@ -9,10 +9,13 @@ import {
   canEditOutbox,
   canRejectOutbox,
   canRetryOutbox,
+  canSendOwnNow,
   isDueNow,
   outboxTabStatuses,
   parseScheduledInput,
   resolveOutboxTab,
+  resolveSendMode,
+  scheduleInputLabel,
   toScheduledInputValue,
 } from '@/lib/domain/mail_outbox';
 import { describe, expect, it } from 'vitest';
@@ -119,5 +122,27 @@ describe('タブ', () => {
     expect(resolveOutboxTab('xxx')).toBe('pending');
     expect(resolveOutboxTab('scheduled')).toBe('scheduled');
     expect(outboxTabStatuses('scheduled')).toEqual(['approved', 'sending']);
+  });
+});
+
+describe('送信方法(承認を依頼 / そのまま送信)', () => {
+  it('承認者(admin / manager)だけがそのまま送信を選べる', () => {
+    expect(resolveSendMode('direct', 'admin')).toEqual({ mode: 'direct' });
+    expect(resolveSendMode('direct', 'manager')).toEqual({ mode: 'direct' });
+    expect(resolveSendMode('direct', 'sales').error).toBeTruthy();
+  });
+  it('指定なし・承認依頼は承認待ちにする', () => {
+    expect(resolveSendMode(undefined, 'admin')).toEqual({ mode: 'approval' });
+    expect(resolveSendMode('approval', 'sales')).toEqual({ mode: 'approval' });
+  });
+  it('承認待ちの自分のメールは、承認者本人ならそのまま送れる', () => {
+    expect(canSendOwnNow(admin, item('pending', admin.id))).toBe(true);
+    expect(canSendOwnNow(admin, item('pending'))).toBe(false);
+    expect(canSendOwnNow(author, item('pending'))).toBe(false);
+    expect(canSendOwnNow(admin, item('rejected', admin.id))).toBe(false);
+  });
+  it('確認画面の送信日時の表示', () => {
+    expect(scheduleInputLabel('2026-10-17T09:30')).toBe('2026/10/17 09:30');
+    expect(scheduleInputLabel('')).toBeNull();
   });
 });

@@ -12,6 +12,8 @@ import {
   canEditOutbox,
   canRejectOutbox,
   canRetryOutbox,
+  canSendOwnNow,
+  isMailApprover,
   toScheduledInputValue,
 } from '@/lib/domain/mail_outbox';
 import { getMailOutbox } from '@/lib/domain/mail_outbox_queries';
@@ -76,7 +78,15 @@ export default async function MailOutboxDetailPage({ params }: PageProps) {
     cancel: canCancelOutbox(me, o),
     edit: canEditOutbox(me, o),
     retry: canRetryOutbox(me, o),
+    sendNow: canSendOwnNow(me, o),
   };
+  // 自分が作成した承認待ちのメールでは、承認ボタンが出ない理由を示す
+  const ownPendingNote =
+    o.status === 'pending' && o.created_by === me.id
+      ? isMailApprover(me.role)
+        ? '自分が作成したメールは自分では承認できません。ほかの承認者の承認を待つか、「そのまま送信する」で承認なしで送信できます。'
+        : '承認者(admin / manager)の承認を待っています。承認されると送信されます。'
+      : null;
 
   return (
     <div className="space-y-3">
@@ -105,6 +115,11 @@ export default async function MailOutboxDetailPage({ params }: PageProps) {
             <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs">
               <div className="font-semibold text-amber-800">差し戻しの理由</div>
               <p className="whitespace-pre-wrap">{o.reject_reason}</p>
+            </div>
+          )}
+          {ownPendingNote && (
+            <div className="rounded border border-sky-200 bg-sky-50 p-2 text-xs text-sky-900">
+              {ownPendingNote}
             </div>
           )}
           {o.last_error && (

@@ -8,6 +8,7 @@ import {
   cancelMailOutbox,
   rejectMailOutbox,
   retryMailOutbox,
+  sendOwnMailOutboxNow,
   updateMailOutbox,
 } from '@/lib/domain/mail_outbox_actions';
 import { useRouter } from 'next/navigation';
@@ -20,6 +21,8 @@ interface Perms {
   cancel: boolean;
   edit: boolean;
   retry: boolean;
+  /** 承認待ちの自分のメールを承認者本人がそのまま送る(2026-10-16) */
+  sendNow: boolean;
 }
 
 interface Initial {
@@ -90,6 +93,23 @@ export function OutboxActions({
             }}
           >
             承認する
+          </Button>
+        )}
+        {perms.sendNow && (
+          <Button
+            size="sm"
+            disabled={pending}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  '承認を待たずに、このメールをそのまま送信しますか?(予約があれば指定日時に送信されます)',
+                )
+              )
+                return;
+              run(() => sendOwnMailOutboxNow(id));
+            }}
+          >
+            そのまま送信する
           </Button>
         )}
         {perms.retry && (

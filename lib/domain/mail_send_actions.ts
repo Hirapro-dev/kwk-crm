@@ -5,6 +5,8 @@
  *
  * 2026-10-15 から、送信ボタンではすぐに送らず「承認待ち」(mail_outbox)にする(対象は全メール)。
  * 承認者(admin / manager)が承認したときに送る。送信日時を指定すると、承認後その日時に送る(送信予約)。
+ * 2026-10-16: 承認者本人は「承認を依頼する」か「そのまま送信する」(sendMode = 'direct')を選べる。
+ * そのまま送信は承認済み(承認者 = 本人)として保存し、予約が無ければその場で送る(予約は定期実行が送る)。
  * 承認・差し戻し・取消・修正は mail_outbox_actions.ts。実際の送信は lib/mail/outbox_deliver.ts。
  *
  * - From は受信箱(mail_boxes)の公開アドレス。送れるのは SES でドメイン検証済みの受信箱だけ(未検証は「受信専用」)
@@ -23,8 +25,16 @@ import {
   parseAddressList,
   sanitizeDisplayName,
 } from '@/lib/domain/mail_compose';
-import { parseScheduledInput, submittedMessage } from '@/lib/domain/mail_outbox';
+import {
+  type MailSendMode,
+  directSentMessage,
+  isDueNow,
+  parseScheduledInput,
+  resolveSendMode,
+  submittedMessage,
+} from '@/lib/domain/mail_outbox';
 import { getMailAwsConfig } from '@/lib/mail/aws';
+import { deliverOutboxItem } from '@/lib/mail/outbox_deliver';
 import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
@@ -33,6 +43,8 @@ export interface SendResult {
   error?: string;
   /** 作成した送信待ちメール(mail_outbox.id) */
   outboxId?: string;
+  /** そのまま送信して送れたときのスレッド(新規メールは送信時に作られる) */
+  threadId?: string | null;
   /** 画面に出す案内文 */
   message?: string;
 }
@@ -46,6 +58,35 @@ function validateBody(body: string): string | null {
   if (b.length > MAX_BODY_CHARS)
     return `本文が長すぎます(${MAX_BODY_CHARS.toLocaleString()} 文字まで)`;
   return null;
+}
+
+/** 保存時の状態: 承認依頼は承認待ち、そのまま送信は本人が承認した扱い(承認済み) */
+function statusFields(mode: MailSendMode, userId: string) {
+  return mode === 'direct'
+    ? { status: 'approved', approved_by: userId, approved_at: new Date().toISOString() }
+    : { status: 'pending' };
+}
+
+/** 保存の後始末。そのまま送信で予約が無ければその場で送る(予約ありは定期実行が送る) */
+async function finishSubmission(
+  outboxId: string,
+  mode: MailSendMode,
+  scheduledAt: string | null,
+): Promise<SendResult> {
+  revalidatePath('/mail', 'layout');
+  if (mode === 'approval') return { outboxId, message: submittedMessage(scheduledAt) };
+  if (!isDueNow(scheduledAt, new Date()))
+    return { outboxId, message: directSentMessage(scheduledAt) };
+  const cfg = getMailAwsConfig();
+  if (!cfg) return { outboxId, error: '送信基盤(SES)が未設定です(送信待ちに残っています)' };
+  const r = await deliverOutboxItem(createServiceRoleClient(), cfg, outboxId);
+  if (!r.ok)
+    return {
+      outboxId,
+      error: `送信に失敗しました: ${r.error ?? ''}(送信待ちの「送信失敗」に残っています)`,
+    };
+  if (r.threadId) revalidatePath(`/mail/${r.threadId}`);
+  return { outboxId, threadId: r.threadId, message: directSentMessage(null) };
 }
 
 interface BoxRow {
@@ -85,6 +126,8 @@ export async function replyToMailThread(input: {
   mailBoxId?: number;
   /** 送信予約(日本時間 "YYYY-MM-DDTHH:mm")。空なら承認したらすぐ送る */
   scheduledAt?: string;
+  /** 送信方法。'direct'(そのまま送信)は承認者だけ。省略時は承認を依頼 */
+  sendMode?: MailSendMode;
 }): Promise<SendResult> {
   const me = await getCurrentUser();
   if (me.role === 'viewer') return { error: '閲覧専用ユーザーは送信できません' };
@@ -93,6 +136,8 @@ export async function replyToMailThread(input: {
   if (bodyErr) return { error: bodyErr };
   const schedule = parseScheduledInput(input.scheduledAt, new Date());
   if (schedule.error) return { error: schedule.error };
+  const send = resolveSendMode(input.sendMode, me.role);
+  if (send.error) return { error: send.error };
 
   const thread = await getMailThread(input.threadId);
   if (!thread) return { error: 'スレッドが見つかりません' };
@@ -132,15 +177,14 @@ export async function replyToMailThread(input: {
       in_reply_to: headers.inReplyTo,
       references_header: headers.references,
       scheduled_at: schedule.at,
-      status: 'pending',
+      ...statusFields(send.mode, me.id),
       created_by: me.id,
     })
     .select('id')
     .single();
   if (error || !data) return { error: `承認依頼の保存に失敗しました: ${error?.message ?? ''}` };
 
-  revalidatePath('/mail', 'layout');
-  return { outboxId: (data as { id: string }).id, message: submittedMessage(schedule.at) };
+  return finishSubmission((data as { id: string }).id, send.mode, schedule.at);
 }
 
 /** 新規メールを承認待ちにする(スレッドは送信したときに作る) */
@@ -154,6 +198,8 @@ export async function createMailThreadAndSend(input: {
   fromName?: string;
   /** 送信予約(日本時間 "YYYY-MM-DDTHH:mm")。空なら承認したらすぐ送る */
   scheduledAt?: string;
+  /** 送信方法。'direct'(そのまま送信)は承認者だけ。省略時は承認を依頼 */
+  sendMode?: MailSendMode;
 }): Promise<SendResult> {
   const me = await getCurrentUser();
   if (me.role === 'viewer') return { error: '閲覧専用ユーザーは送信できません' };
@@ -164,6 +210,8 @@ export async function createMailThreadAndSend(input: {
   if (bodyErr) return { error: bodyErr };
   const schedule = parseScheduledInput(input.scheduledAt, new Date());
   if (schedule.error) return { error: schedule.error };
+  const send = resolveSendMode(input.sendMode, me.role);
+  if (send.error) return { error: send.error };
 
   const to = parseAddressList(input.to);
   if (to.error) return { error: to.error };
@@ -192,13 +240,12 @@ export async function createMailThreadAndSend(input: {
       subject,
       text_body: `${input.body.replace(/\s+$/, '')}\n`,
       scheduled_at: schedule.at,
-      status: 'pending',
+      ...statusFields(send.mode, me.id),
       created_by: me.id,
     })
     .select('id')
     .single();
   if (error || !data) return { error: `承認依頼の保存に失敗しました: ${error?.message ?? ''}` };
 
-  revalidatePath('/mail', 'layout');
-  return { outboxId: (data as { id: string }).id, message: submittedMessage(schedule.at) };
+  return finishSubmission((data as { id: string }).id, send.mode, schedule.at);
 }

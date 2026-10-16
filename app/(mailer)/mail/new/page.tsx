@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { listMailBoxes, listMailSignatures } from '@/lib/domain/mail';
 import { splitOtherMailBox } from '@/lib/domain/mail_folders';
+import { canDirectSend } from '@/lib/domain/mail_outbox';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
 import Link from 'next/link';
@@ -61,7 +62,12 @@ export default async function MailNewPage({ searchParams }: PageProps) {
           ) : !cfg ? (
             <p className="text-sm text-muted-foreground">送信基盤(SES)が未設定です。</p>
           ) : (
-            <MailComposeForm boxes={options} signatures={signatures} initialTo={sp.to} />
+            <MailComposeForm
+              boxes={options}
+              signatures={signatures}
+              initialTo={sp.to}
+              canDirectSend={canDirectSend(me.role)}
+            />
           )}
         </CardContent>
       </Card>

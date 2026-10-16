@@ -185,3 +185,47 @@ export function submittedMessage(scheduledAt: string | null): string {
     ? '承認依頼を出しました。承認されると指定の日時に送信されます'
     : '承認依頼を出しました。承認されると送信されます';
 }
+
+/**
+ * 送信方法(2026-10-16 追加。ユーザー決定)。
+ * - approval: 承認を依頼する(承認待ちにする)
+ * - direct: 承認せずにそのまま送る(予約があれば指定日時に送る)。承認者(admin / manager)だけが選べる
+ * 承認者以外(sales / support)は承認の依頼だけ(対象は全メールの方針は変えない)。
+ */
+export type MailSendMode = 'approval' | 'direct';
+
+/** そのまま送信を選べるか(承認者のロールだけ) */
+export function canDirectSend(role: UserRole): boolean {
+  return isMailApprover(role);
+}
+
+/** 画面から来た送信方法を確定する。承認者以外が direct を指定したらエラー */
+export function resolveSendMode(
+  requested: string | null | undefined,
+  role: UserRole,
+): { mode: MailSendMode; error?: string } {
+  if (requested !== 'direct') return { mode: 'approval' };
+  if (!canDirectSend(role)) {
+    return { mode: 'approval', error: 'そのまま送信できるのは承認者(admin / manager)だけです' };
+  }
+  return { mode: 'direct' };
+}
+
+/**
+ * 承認待ちの自分のメールを、承認者本人が承認なしでそのまま送れるか(承認待ちのまま止まった自分のメールの救済)。
+ * 他人のメールは通常の承認(canApproveOutbox)で送る。
+ */
+export function canSendOwnNow(actor: OutboxActor, item: OutboxPermissionTarget): boolean {
+  return isMailApprover(actor.role) && item.created_by === actor.id && item.status === 'pending';
+}
+
+/** そのまま送信したときの案内文 */
+export function directSentMessage(scheduledAt: string | null): string {
+  return scheduledAt ? '送信を予約しました。指定の日時に送信されます' : '送信しました';
+}
+
+/** 確認画面に出す送信日時(datetime-local の値 → "YYYY/MM/DD HH:mm"。空なら null) */
+export function scheduleInputLabel(value: string | null | undefined): string | null {
+  const m = (value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  return m ? `${m[1]}/${m[2]}/${m[3]} ${m[4]}:${m[5]}` : null;
+}

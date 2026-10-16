@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { groupAddressesByDomain } from '@/lib/domain/mail_folders';
+import type { MailSendMode } from '@/lib/domain/mail_outbox';
 import { replyToMailThread } from '@/lib/domain/mail_send_actions';
 import {
   type SignatureOption,
@@ -14,7 +15,8 @@ import {
 import { composeOutgoingBody } from '@/lib/domain/mail_text';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ScheduleField } from './ScheduleField';
+import { ScheduleField, SendModeField } from './ScheduleField';
+import { SendConfirmDialog } from './SendConfirmDialog';
 
 export interface ReplyBoxOption {
   id: number;
@@ -34,6 +36,7 @@ export interface ReplyBoxOption {
  * - 引用: 直近の受信メールを最初から入れる(編集可)
  * 送る本文は 本文 → 署名 → 引用 の順に合成し、画面のとおりに送る(サーバーは付け足さない)。
  * 送信ボタンではすぐに送らず「承認待ち」にする(migration 124)。送信日時を指定すると承認後その日時に送る。
+ * 承認者(admin / manager)は「承認を依頼する / そのまま送信する」を選べる。送信ボタンの後に確認画面を出して確定する(2026-10-16)。
  */
 export function MailReplyForm({
   threadId,
@@ -44,6 +47,8 @@ export function MailReplyForm({
   boxes,
   signatures,
   initialQuote,
+  replySubject,
+  canDirectSend = false,
 }: {
   threadId: string;
   /** 返信先(表示用) */
@@ -58,6 +63,10 @@ export function MailReplyForm({
   signatures: SignatureOption[];
   /** 返信本文に最初から入れる引用 */
   initialQuote: string;
+  /** 返信の件名(確認画面に出す。実際の件名はサーバーで同じ規則で決める) */
+  replySubject: string;
+  /** 承認者(admin / manager)なら true。「そのまま送信する」を選べる */
+  canDirectSend?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -78,6 +87,8 @@ export function MailReplyForm({
   const [quote, setQuote] = useState(initialQuote);
   const [cc, setCc] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
+  const [sendMode, setSendMode] = useState<MailSendMode>('approval');
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
 
@@ -99,11 +110,14 @@ export function MailReplyForm({
       setSignatureId(defaultSignatureValue(box?.default_signature_id, signatures));
   };
 
+  const outgoingBody = composeOutgoingBody({ text, signature: signatureText, quote });
+  const selectedBox = boxes.find((b) => String(b.id) === boxId);
+
   const submit = () => {
     setError(null);
     setSent(null);
     startTransition(async () => {
-      const body = composeOutgoingBody({ text, signature: signatureText, quote });
+      const body = outgoingBody;
       const r = await replyToMailThread({
         threadId,
         body,
@@ -111,152 +125,190 @@ export function MailReplyForm({
         fromName,
         mailBoxId: Number(boxId),
         scheduledAt,
+        sendMode,
       });
       if (r.error) {
         setError(r.error);
+        // 保存はできて送信だけ失敗した場合は、送信待ちに残っているので入力は消して閉じる
+        if (r.outboxId) {
+          setConfirmOpen(false);
+          router.refresh();
+        }
         return;
       }
+      setConfirmOpen(false);
       setText('');
       setCc('');
       setScheduledAt('');
+      setSendMode('approval');
       setSent(r.message ?? '承認依頼を出しました');
       router.refresh();
     });
   };
 
   return (
-    <form
-      className="space-y-2 rounded border p-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        submit();
-      }}
-    >
-      <div className="text-xs text-muted-foreground">
-        返信先: <span className="font-mono">{replyTo ?? '(不明)'}</span>
-        {!sendable && defaultBox && (
-          <span className="ml-2 text-amber-700">
-            ※ {defaultBox.address} は受信専用のため、別の送信元を選んでいます
-          </span>
-        )}
-      </div>
+    <>
+      <form
+        className="space-y-2 rounded border p-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setError(null);
+          setSent(null);
+          setConfirmOpen(true);
+        }}
+      >
+        <div className="text-xs text-muted-foreground">
+          返信先: <span className="font-mono">{replyTo ?? '(不明)'}</span>
+          {!sendable && defaultBox && (
+            <span className="ml-2 text-amber-700">
+              ※ {defaultBox.address} は受信専用のため、別の送信元を選んでいます
+            </span>
+          )}
+        </div>
 
-      <div className="flex flex-wrap gap-2">
-        <div className="block flex-1 basis-56 text-xs">
-          送信元
-          <Select
-            aria-label="送信元"
+        <div className="flex flex-wrap gap-2">
+          <div className="block flex-1 basis-56 text-xs">
+            送信元
+            <Select
+              aria-label="送信元"
+              className="mt-1"
+              value={boxId}
+              disabled={pending}
+              onChange={(e) => handleBoxChange(e.target.value)}
+            >
+              {/* 受信箱が数百件あるため、ドメインごとのセクションに分けて探しやすくする */}
+              {groupAddressesByDomain(boxes).map((g) => (
+                <optgroup key={g.domain} label={g.domain || '(ドメインなし)'}>
+                  {g.items.map((b) => (
+                    <option key={b.id} value={String(b.id)} disabled={!b.sendable}>
+                      {b.display_name ? `${b.display_name} <${b.address}>` : b.address}
+                      {b.sendable ? '' : '(受信専用)'}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </Select>
+          </div>
+          <div className="block flex-1 basis-40 text-xs">
+            差出人表示名(空欄でアドレスのみ表示)
+            <Input
+              aria-label="差出人表示名"
+              className="mt-1"
+              placeholder="例: ひらプロ"
+              maxLength={80}
+              value={fromName}
+              onChange={(e) => {
+                setFromName(e.target.value);
+                setFromNameTouched(true);
+              }}
+              disabled={pending}
+            />
+          </div>
+          <div className="block flex-1 basis-40 text-xs">
+            CC(任意)
+            <Input
+              aria-label="CC"
+              className="mt-1"
+              placeholder="カンマ区切り"
+              value={cc}
+              onChange={(e) => setCc(e.target.value)}
+              disabled={pending}
+            />
+          </div>
+        </div>
+
+        <div className="block text-xs">
+          本文
+          <Textarea
+            aria-label="本文"
             className="mt-1"
-            value={boxId}
+            placeholder="返信本文"
+            rows={8}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
             disabled={pending}
-            onChange={(e) => handleBoxChange(e.target.value)}
+          />
+        </div>
+
+        <div className="block text-xs">
+          署名
+          <Select
+            aria-label="署名"
+            className="mt-1 w-full max-w-md"
+            value={signatureId}
+            disabled={pending}
+            onChange={(e) => {
+              setSignatureId(e.target.value);
+              setSignatureTouched(true);
+            }}
           >
-            {/* 受信箱が数百件あるため、ドメインごとのセクションに分けて探しやすくする */}
-            {groupAddressesByDomain(boxes).map((g) => (
-              <optgroup key={g.domain} label={g.domain || '(ドメインなし)'}>
-                {g.items.map((b) => (
-                  <option key={b.id} value={String(b.id)} disabled={!b.sendable}>
-                    {b.display_name ? `${b.display_name} <${b.address}>` : b.address}
-                    {b.sendable ? '' : '(受信専用)'}
-                  </option>
-                ))}
-              </optgroup>
+            <option value="">署名なし</option>
+            {signatures.map((s) => (
+              <option key={s.id} value={String(s.id)}>
+                {s.name}
+              </option>
             ))}
           </Select>
+          {signatureText && (
+            <pre className="mt-1 whitespace-pre-wrap rounded border bg-gray-50 p-2 font-sans text-[11px] text-muted-foreground">
+              {`-- \n${signatureText}`}
+            </pre>
+          )}
+          {signatures.length === 0 && (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              署名はメール設定の「署名」で登録すると選べるようになります。
+            </p>
+          )}
         </div>
-        <div className="block flex-1 basis-40 text-xs">
-          差出人表示名(空欄でアドレスのみ表示)
-          <Input
-            aria-label="差出人表示名"
-            className="mt-1"
-            placeholder="例: ひらプロ"
-            maxLength={80}
-            value={fromName}
-            onChange={(e) => {
-              setFromName(e.target.value);
-              setFromNameTouched(true);
-            }}
+
+        <div className="block text-xs">
+          引用(返信対象のメール。不要なら消してください)
+          <Textarea
+            aria-label="引用"
+            className="mt-1 text-muted-foreground"
+            rows={6}
+            value={quote}
+            onChange={(e) => setQuote(e.target.value)}
             disabled={pending}
           />
         </div>
-        <div className="block flex-1 basis-40 text-xs">
-          CC(任意)
-          <Input
-            aria-label="CC"
-            className="mt-1"
-            placeholder="カンマ区切り"
-            value={cc}
-            onChange={(e) => setCc(e.target.value)}
-            disabled={pending}
-          />
+
+        {canDirectSend && (
+          <SendModeField value={sendMode} onChange={setSendMode} disabled={pending} />
+        )}
+        <ScheduleField
+          value={scheduledAt}
+          onChange={setScheduledAt}
+          disabled={pending}
+          direct={sendMode === 'direct'}
+        />
+
+        <div className="flex items-center gap-2">
+          <Button type="submit" size="sm" disabled={pending || !text.trim() || !boxId}>
+            {sendMode === 'direct' ? '送信内容を確認' : '承認依頼の内容を確認'}
+          </Button>
+          {sent && <span className="text-xs text-emerald-700">{sent}</span>}
+          {error && !confirmOpen && <span className="text-xs text-red-600">{error}</span>}
         </div>
-      </div>
-
-      <div className="block text-xs">
-        本文
-        <Textarea
-          aria-label="本文"
-          className="mt-1"
-          placeholder="返信本文"
-          rows={8}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          disabled={pending}
-        />
-      </div>
-
-      <div className="block text-xs">
-        署名
-        <Select
-          aria-label="署名"
-          className="mt-1 w-full max-w-md"
-          value={signatureId}
-          disabled={pending}
-          onChange={(e) => {
-            setSignatureId(e.target.value);
-            setSignatureTouched(true);
-          }}
-        >
-          <option value="">署名なし</option>
-          {signatures.map((s) => (
-            <option key={s.id} value={String(s.id)}>
-              {s.name}
-            </option>
-          ))}
-        </Select>
-        {signatureText && (
-          <pre className="mt-1 whitespace-pre-wrap rounded border bg-gray-50 p-2 font-sans text-[11px] text-muted-foreground">
-            {`-- \n${signatureText}`}
-          </pre>
-        )}
-        {signatures.length === 0 && (
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            署名はメール設定の「署名」で登録すると選べるようになります。
-          </p>
-        )}
-      </div>
-
-      <div className="block text-xs">
-        引用(返信対象のメール。不要なら消してください)
-        <Textarea
-          aria-label="引用"
-          className="mt-1 text-muted-foreground"
-          rows={6}
-          value={quote}
-          onChange={(e) => setQuote(e.target.value)}
-          disabled={pending}
-        />
-      </div>
-
-      <ScheduleField value={scheduledAt} onChange={setScheduledAt} disabled={pending} />
-
-      <div className="flex items-center gap-2">
-        <Button type="submit" size="sm" disabled={pending || !text.trim() || !boxId}>
-          {pending ? '保存中…' : '返信の承認を依頼'}
-        </Button>
-        {sent && <span className="text-xs text-emerald-700">{sent}</span>}
-        {error && <span className="text-xs text-red-600">{error}</span>}
-      </div>
-    </form>
+      </form>
+      <SendConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        pending={pending}
+        error={error}
+        onConfirm={submit}
+        summary={{
+          from: selectedBox
+            ? `${fromName.trim() ? `${fromName.trim()} ` : ''}<${selectedBox.address}>`
+            : '',
+          to: replyTo ?? '(不明)',
+          cc,
+          subject: replySubject,
+          scheduledAt,
+          mode: sendMode,
+          body: outgoingBody,
+        }}
+      />
+    </>
   );
 }

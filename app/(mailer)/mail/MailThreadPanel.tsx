@@ -18,9 +18,10 @@ import {
   listMailImportRules,
   listMailSignatures,
 } from '@/lib/domain/mail';
+import { buildReplySubject } from '@/lib/domain/mail_compose';
 import { splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { findMatchingRule } from '@/lib/domain/mail_import_rules';
-import { MAIL_OUTBOX_STATUS_LABELS } from '@/lib/domain/mail_outbox';
+import { MAIL_OUTBOX_STATUS_LABELS, canDirectSend } from '@/lib/domain/mail_outbox';
 import { listThreadOutbox } from '@/lib/domain/mail_outbox_queries';
 import { buildQuotedBody } from '@/lib/domain/mail_text';
 import { listFieldDefinitions } from '@/lib/domain/object_metadata';
@@ -317,6 +318,8 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
           boxes={fromOptions}
           signatures={allSignatures.filter((s) => s.is_active)}
           initialQuote={initialQuote}
+          replySubject={buildReplySubject(thread.subject ?? lastInbound?.subject)}
+          canDirectSend={canDirectSend(me.role)}
         />
       )}
     </div>
