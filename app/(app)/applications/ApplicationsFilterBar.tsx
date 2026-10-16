@@ -16,7 +16,7 @@ export function ApplicationsFilterBar({
   initialQ: string;
   initialProjectId: string;
   initialStatus: string;
-  projects: { id: number; name: string }[];
+  projects: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();

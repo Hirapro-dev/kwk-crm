@@ -6,6 +6,7 @@
  */
 
 import { listActivities } from './activities';
+import { parseAppStatusFilterParam, parseProjectFilterParam } from './application_list_filter';
 import { listApplications } from './applications';
 import { listArticleReactions } from './article_reactions';
 import { listInquiries } from './inquiries';
@@ -43,16 +44,20 @@ export async function loadMoreInquiries(
 export async function loadMoreApplications(
   params: {
     q?: string;
-    projectId?: number;
+    projectId?: string;
     status?: string;
     sort?: string;
     dir?: 'asc' | 'desc';
   },
   page: number,
 ) {
-  // status は AppStatus 型だが呼び出し側でホワイトリスト済みのため緩く渡す
+  // Server Action はクライアントから任意の値を受け取れるため、ここでも検証し直す
   const r = await listApplications({
-    ...(params as Record<string, unknown>),
+    q: params.q,
+    projectId: parseProjectFilterParam(params.projectId) ?? undefined,
+    status: parseAppStatusFilterParam(params.status),
+    sort: params.sort,
+    dir: params.dir,
     page,
     pageSize: LIST_PAGE_SIZE,
   });
