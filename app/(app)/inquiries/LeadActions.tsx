@@ -33,6 +33,7 @@ import { listAcquisitionPointNames } from '@/lib/domain/master_actions';
 import { GENDER_OPTIONS } from '@/lib/domain/member_gender';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import type { MemberWithOwner } from '@/lib/domain/types';
+import { toJstDateTimeLocal } from '@/lib/utils/date';
 import { ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
@@ -107,6 +108,8 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
     new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10),
   );
   const [mailmagAt, setMailmagAt] = useState('');
+  // 「登録日時」ボタンで入れる値(問合せの登録日時を日本時間の datetime-local に)
+  const inquiryRegisteredLocal = toJstDateTimeLocal(inquiry.registered_at);
   const [adPickerOpen, setAdPickerOpen] = useState(false);
   // 性別・郵便番号・住所(住所は問合せの値を初期値にして編集できる。2026-09-17)
   const [gender, setGender] = useState('');
@@ -439,11 +442,29 @@ export function LeadActions({ inquiry }: { inquiry: InquiryListItem }) {
               </div>
               <div className="space-y-1">
                 <Label>メルマガ登録日時</Label>
-                <Input
-                  type="datetime-local"
-                  value={mailmagAt}
-                  onChange={(e) => setMailmagAt(e.target.value)}
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="datetime-local"
+                    value={mailmagAt}
+                    onChange={(e) => setMailmagAt(e.target.value)}
+                  />
+                  {/* 問合せの登録日時(メール取込分はメールの登録日時)を入れる。2026-10-17 */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 whitespace-nowrap"
+                    disabled={!inquiryRegisteredLocal}
+                    onClick={() => setMailmagAt(inquiryRegisteredLocal)}
+                    title={
+                      inquiryRegisteredLocal
+                        ? `この問合せの登録日時(${inquiryRegisteredLocal.replace('T', ' ').replace(/-/g, '/')})を入れます`
+                        : 'この問合せには登録日時がありません'
+                    }
+                  >
+                    登録日時
+                  </Button>
+                </div>
               </div>
             </div>
             <AdMasterPicker
