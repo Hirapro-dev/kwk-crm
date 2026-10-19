@@ -17,7 +17,8 @@ export function MailStatusTabs({
 }) {
   const hrefFor = (key: string) => {
     const p = new URLSearchParams();
-    if (key !== 'new') p.set('tab', key);
+    // 既定のタブは「新着」。検索中(q あり)は既定が「すべて」になるので、新着も明示する
+    if (key !== 'new' || searchParams.q) p.set('tab', key);
     if (searchParams.box) p.set('box', searchParams.box);
     if (searchParams.folder) p.set('folder', searchParams.folder);
     if (searchParams.assignee) p.set('assignee', searchParams.assignee);

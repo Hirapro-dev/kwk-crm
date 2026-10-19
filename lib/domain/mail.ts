@@ -8,8 +8,17 @@
  */
 
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { cache } from 'react';
 import type { MailBoxCount, MailUserFolder } from './mail_folders';
 import { type MailImportRule, findMatchingRule } from './mail_import_rules';
+import {
+  MAIL_SEARCH_LIMIT,
+  type MailSearchHit,
+  adjacentInHits,
+  filterMailSearchHits,
+  mailSearchNote,
+  parseMailSearch,
+} from './mail_search';
 import type {
   MailBox,
   MailMessage,
@@ -89,11 +98,43 @@ function applyThreadFilters<Q extends Record<string, any>>(
   if (params.unreadOnly) q = q.eq('is_read', false);
   if (params.memberId) q = q.eq('member_id', params.memberId);
   if (params.importCandidate) q = q.eq('is_import_candidate', true);
-  if (params.q?.trim()) {
-    const kw = params.q.trim().replace(/[%_]/g, '\\$&');
-    q = q.ilike('subject', `%${kw}%`);
-  }
+  // 検索語(q)はここでは扱わない(searchHits で一致スレッドを先に求める。migration 125)
   return q;
+}
+
+/**
+ * 検索語に一致するスレッド(新しい順、最大 MAIL_SEARCH_LIMIT 件)。migration 125 の search_mail_threads。
+ * 1 回の画面表示で一覧・タブ件数・前後移動が同じ検索を何度も呼ぶため、リクエスト内で結果を使い回す(React の cache)。
+ */
+const searchHits = cache(
+  async (q: string): Promise<{ hits: MailSearchHit[]; note: string; error?: string }> => {
+    const parsed = parseMailSearch(q);
+    if (!parsed) return { hits: [], note: '' };
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc('search_mail_threads', {
+      p_mode: parsed.mode,
+      p_query: parsed.term,
+      p_limit: MAIL_SEARCH_LIMIT,
+    });
+    if (error) {
+      const timeout = /statement timeout|canceling statement/i.test(error.message);
+      return {
+        hits: [],
+        note: '',
+        error: timeout
+          ? '検索に時間がかかりすぎたため中断しました。言葉を足して絞り込んでください'
+          : `検索に失敗しました: ${error.message}`,
+      };
+    }
+    const hits = (data ?? []) as MailSearchHit[];
+    return { hits, note: mailSearchNote(parsed, hits.length) };
+  },
+);
+
+/** 検索語があるときの一致スレッドに、一覧と同じ絞り込みをかける */
+async function filteredSearchHits(params: ThreadFilterParams) {
+  const r = await searchHits((params.q ?? '').trim());
+  return { ...r, hits: filterMailSearchHits(r.hits, params) };
 }
 
 /**
@@ -101,6 +142,7 @@ function applyThreadFilters<Q extends Record<string, any>>(
  * メーラーの状態タブ(新着 / 対応中 / 完了 …)に件数を出すために使う。
  */
 export async function countMailThreads(params: ThreadFilterParams = {}): Promise<number> {
+  if (params.q?.trim()) return (await filteredSearchHits(params)).hits.length;
   const supabase = await createClient();
   const query = applyThreadFilters(
     supabase
@@ -127,6 +169,28 @@ export async function listMailThreads(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  // 検索語があるときは、一致したスレッド(検索結果)から 1 ページ分を取り出して詳細を引く
+  if (params.q?.trim()) {
+    const { hits, note, error } = await filteredSearchHits(params);
+    if (error && params.strict) throw new Error(error);
+    const ids = hits.slice(from, to + 1).map((h) => h.id);
+    if (ids.length === 0) {
+      return { rows: [], total: hits.length, page, pageSize, searchNote: note, searchError: error };
+    }
+    const { data, error: tErr } = await supabase
+      .from('mail_threads')
+      .select(THREAD_SELECT)
+      .in('id', ids);
+    if (tErr) {
+      if (params.strict) throw new Error(`メール一覧の取得に失敗しました: ${tErr.message}`);
+      return { rows: [], total: 0, page, pageSize, searchError: tErr.message };
+    }
+    const byId = new Map(((data ?? []) as unknown as MailThreadListItem[]).map((r) => [r.id, r]));
+    const rows = ids.map((id) => byId.get(id)).filter((r): r is MailThreadListItem => !!r);
+    await attachLatestInbound(supabase, rows, params);
+    return { rows, total: hits.length, page, pageSize, searchNote: note };
+  }
+
   // 総件数は初回(1ページ目)だけ数える。追加読み込みでは不要で、数十万件の候補では数え直しが重いため
   const query = applyThreadFilters(
     supabase
@@ -148,8 +212,16 @@ export async function listMailThreads(
   }
 
   const rows = (data ?? []) as unknown as MailThreadListItem[];
+  await attachLatestInbound(supabase, rows, params);
+  return { rows, total: count ?? 0, page, pageSize };
+}
 
-  // 一覧に差出人を出すため、各スレッドの最新の受信メッセージをまとめて引く
+/** 一覧に差出人を出すため、各スレッドの最新の受信メッセージをまとめて引いて行に付ける */
+async function attachLatestInbound(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  rows: MailThreadListItem[],
+  params: MailThreadListParams,
+): Promise<void> {
   if (rows.length > 0) {
     const ids = rows.map((r) => r.id);
     const { data: msgs } = await supabase
@@ -201,8 +273,6 @@ export async function listMailThreads(
       }
     }
   }
-
-  return { rows, total: count ?? 0, page, pageSize };
 }
 
 /**
@@ -214,6 +284,8 @@ export async function getAdjacentMailThreads(
   threadId: string,
   params: ThreadFilterParams = {},
 ): Promise<{ prevId: string | null; nextId: string | null }> {
+  // 検索結果から開いたときは、検索結果の並びで前後へ移る
+  if (params.q?.trim()) return adjacentInHits((await filteredSearchHits(params)).hits, threadId);
   const supabase = await createClient();
   const { data: cur } = await supabase
     .from('mail_threads')

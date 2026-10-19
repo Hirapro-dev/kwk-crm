@@ -137,7 +137,7 @@ export interface MailThreadDetail extends MailThreadListItem {
 }
 
 export interface MailThreadListParams {
-  /** 件名の部分一致 */
+  /** 検索語。メールアドレスならアドレス検索、それ以外は件名・差出人・本文のテキスト検索(migration 125。lib/domain/mail_search.ts) */
   q?: string;
   status?: MailStatus;
   /** 未指定なら絞らない。画面側は既定で「通常」を渡す */
@@ -165,4 +165,8 @@ export interface MailThreadListResult {
   total: number;
   page: number;
   pageSize: number;
+  /** 検索(q)のときの案内文(何を探したか・上限に達したか)。migration 125 */
+  searchNote?: string;
+  /** 検索に失敗したときの理由(索引の作成前・時間切れなど) */
+  searchError?: string;
 }

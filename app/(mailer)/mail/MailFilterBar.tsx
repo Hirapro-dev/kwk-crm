@@ -40,6 +40,8 @@ export function MailFilterBar({
       if (v) params.set(k, v);
       else params.delete(k);
     };
+    // 検索語が変わったら状態タブを外す(検索結果は既定で「すべて」の状態から表示する。migration 125)
+    if (next.q.trim() !== (searchParams?.get('q') ?? '')) params.delete('tab');
     set('q', next.q.trim());
     set('assignee', next.assignee === 'me' ? currentUserId : next.assignee);
     set('unread', next.unread ? '1' : '');
@@ -80,8 +82,9 @@ export function MailFilterBar({
         未読のみ
       </label>
       <Input
-        className="w-56"
-        placeholder="件名で検索"
+        className="w-64"
+        placeholder="このフォルダ内を検索(件名・本文・メールアドレス)"
+        aria-label="このフォルダ内を検索"
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />

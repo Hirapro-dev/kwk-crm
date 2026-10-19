@@ -39,7 +39,8 @@ export default async function MailPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const me = await getCurrentUser();
 
-  const tab = resolveMailTab(sp.tab);
+  // 検索中(q あり)は、タブの指定が無ければ「すべて」の状態から出す(やり取りを全部見るため。migration 125)
+  const tab = resolveMailTab(sp.tab ?? (sp.q ? 'all' : undefined));
   const mailBoxId = sp.box && /^\d+$/.test(sp.box) ? Number(sp.box) : undefined;
   const importCandidate = sp.folder === 'candidates';
   // 「その他(未振り分け)」: 自分のマイフォルダに入れていない受信箱(未登録アドレス宛の「その他」を含む)
@@ -97,6 +98,7 @@ export default async function MailPage({ searchParams }: PageProps) {
         <div className="min-w-0">
           <h1 className="truncate text-sm font-bold">{title}</h1>
           <p className="text-[11px] text-muted-foreground">
+            {sp.q ? '検索結果 / ' : ''}
             {importCandidate ? 'すべて' : tab.label}: {result.total.toLocaleString()} 件
           </p>
         </div>
@@ -108,6 +110,18 @@ export default async function MailPage({ searchParams }: PageProps) {
           assigneeOptions={assigneeOptions}
         />
       </div>
+
+      {sp.q && (result.searchError || result.searchNote) && (
+        <div
+          className={
+            result.searchError
+              ? 'border-b bg-red-50 px-4 py-1.5 text-xs text-red-700'
+              : 'border-b bg-sky-50 px-4 py-1.5 text-xs text-sky-900'
+          }
+        >
+          {result.searchError ?? result.searchNote}
+        </div>
+      )}
 
       {!importCandidate && (
         <MailStatusTabs
