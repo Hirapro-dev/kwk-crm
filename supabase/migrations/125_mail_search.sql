@@ -10,18 +10,18 @@
 --      日本語に向いた全文検索 PGroonga を使う(Supabase で利用可)。
 --
 -- 実行のしかた(本番):
---   ① この 1 ファイルを SQL Editor で実行する。② の PGroonga 索引の作成は 125 万通ぶんで時間がかかる(目安 10〜40 分)。
---   SQL Editor が途中で切れた場合は、最後の CREATE INDEX だけを psql などの接続から実行する。
---   索引ができるまでの間も検索は動くが、テキスト検索は遅い(タイムアウトすることがある)。
+--   このファイルを SQL Editor で実行する(数秒で終わる)。125 万通ぶんの索引作成は時間がかかるため(PGroonga は目安 10〜40 分)、
+--   SQL Editor では作らず、pg_cron のジョブ(DB の中で動く。画面の接続が切れても止まらない)に任せる。
+--   2026-10-19 に 1 回で全部を SQL Editor で実行したところ、索引作成の途中で「Failed to fetch」になり全体が取り消された。
+--   索引は CONCURRENTLY で作るので、作成中もメールの受信(mail_messages への追加)は止まらない。
+--   索引ができたら、末尾の「後片付け」の SQL でジョブを消す(索引ができる前でも検索は動くが遅い・時間切れになることがある)。
 --   容量: 2026-10-19 時点で DB 3.8 GB、メール本文 約 2.3 GB。PGroonga の索引で数 GB 増える見込み。
 -- ============================================================================
 
 -- Supabase の作法どおり extensions スキーマに入れる(関数・演算子は search_path で参照する)
 CREATE EXTENSION IF NOT EXISTS pgroonga WITH SCHEMA extensions;
 
--- 1) 差出人アドレスの索引(小文字)。宛先・CC は migration 106 の GIN 索引(lower_text_array)を使う
-CREATE INDEX IF NOT EXISTS idx_mail_messages_from_lower
-  ON public.mail_messages (lower(from_address));
+-- 1) 差出人アドレスの索引(小文字)は、末尾の pg_cron ジョブで作る。宛先・CC は migration 106 の GIN 索引(lower_text_array)を使う
 
 -- 2) 検索本体。条件に一致したメールを含むスレッドを、最終メール日時の新しい順に最大 p_limit 件返す
 --    (PostgREST の 1 回の上限 1,000 行に合わせ、既定 1000)。状態・受信箱などの絞り込みはアプリ側で行う。
@@ -95,8 +95,28 @@ $$;
 REVOKE ALL ON FUNCTION public.search_mail_threads(text, text, integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.search_mail_threads(text, text, integer) TO authenticated, service_role;
 
--- 3) テキスト検索の索引(PGroonga。日本語は 2 文字ずつ区切って索引する。全角半角・大文字小文字は同一視)
---    時間がかかるため最後に置く。式は上の関数の WHERE と同じにすること(違うと索引が使われない)。
-CREATE INDEX IF NOT EXISTS idx_mail_messages_pgroonga
-  ON public.mail_messages
-  USING pgroonga ((ARRAY[subject, from_name, from_address, text_body]));
+-- 3) 索引の作成を pg_cron のジョブに登録する(毎分起動。最初の起動で作成が始まり、作成中・作成後の起動は IF NOT EXISTS で何もしない)。
+--    - 差出人アドレスの索引(btree)
+--    - テキスト検索の索引(PGroonga。日本語は 2 文字ずつ区切って索引する。全角半角・大文字小文字は同一視)。
+--      式は上の関数の WHERE と同じにすること(違うと索引が使われない)。
+SELECT cron.schedule(
+  'build_mail_from_lower_index',
+  '* * * * *',
+  $job$CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_mail_messages_from_lower ON public.mail_messages (lower(from_address))$job$
+);
+SELECT cron.schedule(
+  'build_mail_pgroonga_index',
+  '* * * * *',
+  $job$CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_mail_messages_pgroonga ON public.mail_messages USING pgroonga ((ARRAY[subject, from_name, from_address, text_body]))$job$
+);
+
+-- ----------------------------------------------------------------------------
+-- 後片付け(索引ができたのを確認してから、別に実行する):
+--   SELECT cron.unschedule('build_mail_from_lower_index');
+--   SELECT cron.unschedule('build_mail_pgroonga_index');
+-- 作成状況の確認:
+--   SELECT c.relname, i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+--    WHERE c.relname IN ('idx_mail_messages_from_lower', 'idx_mail_messages_pgroonga');
+--   SELECT * FROM pg_stat_progress_create_index;
+-- 作成に失敗して indisvalid = false の索引が残ったら、DROP INDEX CONCURRENTLY してからジョブに作り直させる。
+-- ----------------------------------------------------------------------------

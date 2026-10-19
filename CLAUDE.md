@@ -1045,6 +1045,8 @@ M3 の対応歴自動記録は 2026-09-16 に実装(migration 93。会員に紐�
 - DB 関数 `search_mail_threads(p_mode, p_query, p_limit)`(SECURITY INVOKER)が一致スレッドを新しい順に最大 1,000 件返し、状態タブ・受信箱・担当・未読の
   絞り込みとタブごとの件数・前後移動はアプリ側で同じ結果から作る(`filterMailSearchHits` / `adjacentInHits`。1 回の表示で検索は 1 回: React `cache`)。
   1,000 件に達したら「言葉を足して絞り込んでください」と出す。時間切れ・失敗は一覧の上に理由を出す。
+- 索引(差出人の btree・本文の PGroonga)は 125 万通で作成に時間がかかり、SQL Editor では接続が切れて取り消された(2026-10-19)ため、
+  migration 125 で pg_cron のジョブに `CREATE INDEX CONCURRENTLY` を登録して DB の中で作る(作成中もメールの受信は止まらない)。できたらジョブを消す。
 - 検索中はタブの既定を「すべて」にする(新着だけに絞らない)。2026-10-19 時点で DB 3.8 GB・本文 約 2.3 GB。PGroonga の索引で数 GB 増える見込み。
 
 **送信の承認・送信予約** (2026-10-15 追加, migration 124。ユーザー決定: **承認者は admin と manager、対象は全メール**):
