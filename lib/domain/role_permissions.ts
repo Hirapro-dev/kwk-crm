@@ -6,6 +6,7 @@
  */
 
 import { MAIL_APPROVER_ROLES } from './mail_outbox';
+import { canDeleteMailThreads } from './mail_types';
 
 /** 権限表の列(ロール)。support は DB と画面で使っているロール(migration 28) */
 export const PERMISSION_ROLES = ['admin', 'manager', 'sales', 'support', 'viewer'] as const;
@@ -55,6 +56,11 @@ const MAIL_APPROVERS = Object.fromEntries(
     r,
     (MAIL_APPROVER_ROLES as readonly string[]).includes(r) ? '○' : '×',
   ]),
+) as Record<PermissionRole, PermissionMark>;
+
+/** メールの削除(mail_types.ts の MAIL_DELETE_ROLES)から表の印を作る。判定関数と表がずれないように */
+const MAIL_DELETERS = Object.fromEntries(
+  PERMISSION_ROLES.map((r) => [r, canDeleteMailThreads(r) ? '○' : '×']),
 ) as Record<PermissionRole, PermissionMark>;
 
 export const ROLE_PERMISSION_TABLE: PermissionSection[] = [
@@ -121,7 +127,7 @@ export const ROLE_PERMISSION_TABLE: PermissionSection[] = [
         marks: { ...MAIL_APPROVERS, sales: '△', support: '△' },
         note: '承認者はすべて、それ以外は自分が作成したもののみ(送信前)',
       },
-      { action: 'メールの削除(データは消さず非表示)', marks: ADMIN_ONLY },
+      { action: 'メールの削除(データは消さず非表示)', marks: MAIL_DELETERS },
       { action: 'メール設定・取込ルール', marks: ADMIN_ONLY },
     ],
   },

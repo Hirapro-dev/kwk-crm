@@ -262,7 +262,7 @@ export function MailReplyForm({
         </div>
 
         <div className="block text-xs">
-          引用(返信対象のメール。不要なら消してください)
+          引用(このスレッドのやり取りを新しい順に入れています。不要な部分は消してください)
           <Textarea
             aria-label="引用"
             className="mt-1 text-muted-foreground"
