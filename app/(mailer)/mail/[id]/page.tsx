@@ -28,7 +28,8 @@ export default async function MailThreadPage({ params, searchParams }: PageProps
   const [{ id }, sp] = await Promise.all([params, searchParams]);
 
   // 一覧(page.tsx)と同じ解釈で絞り込み条件を組み立てる
-  const tab = resolveMailTab(sp.tab);
+  // 一覧と同じ: 検索中はタブの指定が無ければ「すべて」
+  const tab = resolveMailTab(sp.tab ?? (sp.q ? 'all' : undefined));
   const mailBoxId = sp.box && /^\d+$/.test(sp.box) ? Number(sp.box) : undefined;
   // 「その他(未振り分け)」から開いたときは、一覧と同じ受信箱群で前後移動する
   const unsorted = sp.folder === 'unsorted';

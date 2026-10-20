@@ -1,7 +1,9 @@
 import type { AppUser } from '@/lib/domain/types';
 import { ExternalLink, Mail, PenSquare } from 'lucide-react';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { MailFolderToggleButton } from './MailFolderSidebar';
+import { MailHeaderSearch } from './MailHeaderSearch';
 import { MailerSettingsMenu } from './MailerSettingsMenu';
 
 /**
@@ -30,6 +32,13 @@ export function MailerTopbar({ me }: { me: AppUser }) {
           <PenSquare className="h-3.5 w-3.5" aria-hidden="true" />
           メール作成
         </Link>
+
+        {/* すべての受信箱を対象にした検索(migration 125)。PC のみ。スマホは一覧の検索欄を使う */}
+        <div className="min-w-0 flex-1 px-2">
+          <Suspense>
+            <MailHeaderSearch />
+          </Suspense>
+        </div>
 
         <div className="ml-auto flex items-center gap-2">
           <a
