@@ -83,7 +83,7 @@ export function MailFilterBar({
       </label>
       <Input
         className="w-64"
-        placeholder="このフォルダ内を検索(件名・本文・メールアドレス)"
+        placeholder="このフォルダ内を検索(件名・差出人名・メールアドレス)"
         aria-label="このフォルダ内を検索"
         value={q}
         onChange={(e) => setQ(e.target.value)}

@@ -1,7 +1,7 @@
 /**
  * メーラーの検索(migration 125)。
  * 意図: メールアドレスを入れたら「そのお客様とのやり取り全部」を探すアドレス検索になり、
- *       それ以外は件名・本文などのテキスト検索になる。状態タブ・受信箱などの絞り込みは一覧と同じ意味で効く。
+ *       それ以外は件名・差出人名のテキスト検索になる(2 文字以下は件名だけ)。状態タブ・受信箱などの絞り込みは一覧と同じ意味で効く。
  */
 import {
   MAIL_SEARCH_LIMIT,
@@ -76,6 +76,10 @@ describe('adjacentInHits / mailSearchNote', () => {
     const hits = [hit({ id: 'a' }), hit({ id: 'b' }), hit({ id: 'c' })];
     expect(adjacentInHits(hits, 'b')).toEqual({ prevId: 'a', nextId: 'c' });
     expect(adjacentInHits(hits, 'z')).toEqual({ prevId: null, nextId: null });
+  });
+  it('2 文字以下は件名だけを探すことを案内する', () => {
+    expect(mailSearchNote({ mode: 'text', term: '山田' }, 3)).toContain('件名だけ');
+    expect(mailSearchNote({ mode: 'text', term: '山田太郎' }, 3)).toContain('差出人名');
   });
   it('上限に達したら絞り込みを促す', () => {
     const p = { mode: 'text' as const, term: '様' };

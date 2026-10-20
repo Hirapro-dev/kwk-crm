@@ -147,7 +147,7 @@ export interface MailThreadDetail extends MailThreadListItem {
 }
 
 export interface MailThreadListParams {
-  /** 検索語。メールアドレスならアドレス検索、それ以外は件名・差出人・本文のテキスト検索(migration 125。lib/domain/mail_search.ts) */
+  /** 検索語。メールアドレスならアドレス検索、それ以外は件名・差出人名のテキスト検索(migration 125 / 126。lib/domain/mail_search.ts) */
   q?: string;
   status?: MailStatus;
   /** 未指定なら絞らない。画面側は既定で「通常」を渡す */

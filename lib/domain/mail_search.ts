@@ -2,7 +2,7 @@
  * メーラーの検索(CLAUDE.md §5.15「検索」/ migration 125)の決定論的ロジック。純粋関数のみ。
  *
  * - 入力にメールアドレスが入っていれば「アドレス検索」(差出人 / 宛先 / CC のどれかに一致するメールのスレッドを、全受信箱から)
- * - それ以外は「テキスト検索」(件名・差出人名・差出人アドレス・本文。空白区切りは AND)
+ * - それ以外は「テキスト検索」(件名・差出人名の部分一致。1〜2 文字は件名だけ。本文は対象外。migration 126)
  * - DB(search_mail_threads)は一致したスレッドを新しい順に最大 MAIL_SEARCH_LIMIT 件返す。状態タブ・受信箱・担当・未読の絞り込みと
  *   タブごとの件数はここで行う(1 回の検索結果を一覧・件数・前後移動で使い回すため)
  */
@@ -87,7 +87,9 @@ export function mailSearchNote(parsed: ParsedMailSearch, hitCount: number): stri
   const what =
     parsed.mode === 'address'
       ? `「${parsed.term}」が差出人・宛先・CC に入っているメール(すべての送信元)`
-      : `「${parsed.term}」を件名・差出人・本文に含むメール`;
+      : [...parsed.term].length >= 3
+        ? `「${parsed.term}」を件名・差出人名に含むメール`
+        : `「${parsed.term}」を件名に含むメール(2 文字以下は件名だけを検索します)`;
   return hitCount >= MAIL_SEARCH_LIMIT
     ? `${what}のうち新しい ${MAIL_SEARCH_LIMIT.toLocaleString()} スレッドを表示しています。言葉を足して絞り込んでください。`
     : `${what}を表示しています。`;

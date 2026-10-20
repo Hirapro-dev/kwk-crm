@@ -1040,14 +1040,17 @@ M3 の対応歴自動記録は 2026-09-16 に実装(migration 93。会員に紐�
 **一覧の上**(`MailFilterBar`。今のフォルダ・受信箱の中だけ)。検索語の解釈は純粋関数 `parseMailSearch`(`lib/domain/mail_search.ts`):
 - **メールアドレス**(「氏名 <アドレス>」の形も可)→ そのアドレスが **差出人・宛先(To)・CC** のどれかに入っているメールのスレッド
   (自社のどの送信元アドレスのものも含め、そのお客様とのやり取りを全部。差出人は `lower(from_address)` の索引、宛先・CC は migration 106 の GIN 索引)
-- **それ以外** → **件名・差出人名・差出人アドレス・本文(テキスト版)** を全期間で探す(空白区切りは AND)。日本語向けの全文検索 **PGroonga**
-  (`extensions` スキーマ。索引 `idx_mail_messages_pgroonga`、式は `ARRAY[subject, from_name, from_address, text_body]`)。HTML だけのメール(約 4%)の本文は対象外
-- DB 関数 `search_mail_threads(p_mode, p_query, p_limit)`(SECURITY INVOKER)が一致スレッドを新しい順に最大 1,000 件返し、状態タブ・受信箱・担当・未読の
+- **それ以外** → **スレッドの件名・メールの差出人名** の部分一致(大文字小文字は区別しない)。索引は pg_trgm(`idx_mail_threads_subject_trgm` /
+  `idx_mail_messages_from_name_trgm`)。pg_trgm は 3 文字未満では索引が使えないため、**1〜2 文字はスレッドの件名だけ**を探す(全件を見て約 3 秒)。
+  **本文は対象外**(2026-10-20 ユーザー決定。当初は本文まで PGroonga で探す設計(migration 125)だったが、本文 125 万通の索引作成中に DB のサーバー処理が
+  再起動して止まった(メモリ不足の可能性が高い)ため中止し、migration 126 で件名・差出人名に変更。本文検索は DB を一時的に大きくして索引を作る案を別途検討)
+- DB 関数 `search_mail_threads(p_mode, p_query, p_limit)`(SECURITY INVOKER。migration 125、126 でテキスト検索を差し替え)が一致スレッドを新しい順に最大 1,000 件返し、状態タブ・受信箱・担当・未読の
   絞り込みとタブごとの件数・前後移動はアプリ側で同じ結果から作る(`filterMailSearchHits` / `adjacentInHits`。1 回の表示で検索は 1 回: React `cache`)。
   1,000 件に達したら「言葉を足して絞り込んでください」と出す。時間切れ・失敗は一覧の上に理由を出す。
-- 索引(差出人の btree・本文の PGroonga)は 125 万通で作成に時間がかかり、SQL Editor では接続が切れて取り消された(2026-10-19)ため、
-  migration 125 で pg_cron のジョブに `CREATE INDEX CONCURRENTLY` を登録して DB の中で作る(作成中もメールの受信は止まらない)。できたらジョブを消す。
-- 検索中はタブの既定を「すべて」にする(新着だけに絞らない)。2026-10-19 時点で DB 3.8 GB・本文 約 2.3 GB。PGroonga の索引で数 GB 増える見込み。
+- 索引は作成に時間がかかり、SQL Editor では接続が切れて取り消される(2026-10-19)ため、pg_cron のジョブに `CREATE INDEX CONCURRENTLY` を登録して DB の中で作る
+  (作成中もメールの受信は止まらない)。ジョブには 2 分の時間制限があるので作成中だけ `ALTER ROLE postgres SET statement_timeout = 0`、できたら RESET してジョブを消す。
+  2 つ同時に作るとお互いを待って止まる(deadlock)ので 1 つずつ作る。
+- 検索中はタブの既定を「すべて」にする(新着だけに絞らない)。
 
 **送信の承認・送信予約** (2026-10-15 追加, migration 124。ユーザー決定: **承認者は admin と manager、対象は全メール**):
 メーラーの返信・新規作成の送信ボタンはすぐに送らず、送信待ちメール `mail_outbox` に「承認待ち」で保存する。承認者が内容を確認して承認したときに送る。

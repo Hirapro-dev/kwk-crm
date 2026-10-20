@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
  * メーラーのヘッダーの検索欄(CLAUDE.md §5.15「検索」/ migration 125)。
  * すべての受信箱を対象に探す(受信箱・フォルダの指定は外す)。メールアドレスを入れると、
  * そのアドレスが差出人・宛先・CC に入っているやり取りを、自社のどの送信元のものも含めて全部出す。
- * それ以外の言葉は件名・差出人・本文から探す。フォルダ内だけを探すときは一覧の上の検索欄を使う。
+ * それ以外の言葉は件名・差出人名から探す(本文は対象外。migration 126)。フォルダ内だけを探すときは一覧の上の検索欄を使う。
  */
 export function MailHeaderSearch() {
   const router = useRouter();
@@ -36,7 +36,7 @@ export function MailHeaderSearch() {
         <input
           type="search"
           aria-label="すべての受信箱から検索"
-          placeholder="すべての受信箱から検索(メールアドレス・件名・本文)"
+          placeholder="すべての受信箱から検索(メールアドレス・件名・差出人名)"
           className="h-8 w-full rounded bg-white/15 pl-8 pr-2 text-xs text-white placeholder:text-white/60 focus:bg-white/25 focus:outline-none"
           value={q}
           onChange={(e) => setQ(e.target.value)}
