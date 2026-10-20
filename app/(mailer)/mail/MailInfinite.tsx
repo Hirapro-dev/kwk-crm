@@ -38,7 +38,7 @@ interface Props {
   boxAddresses?: Record<number, string>;
   /** true なら左端にチェックボックスを出し、一括操作できる(viewer 以外) */
   canEdit?: boolean;
-  /** true なら行のゴミ箱と一括削除(論理削除)を出す(admin のみ渡す。2026-09-17) */
+  /** true なら行のゴミ箱と一括削除(論理削除)を出す(admin と manager に渡す。2026-09-17、manager は 2026-10-20 追加) */
   canDelete?: boolean;
   /** 一括操作の担当の選択肢 */
   assigneeOptions?: Array<{ id: string; name: string }>;

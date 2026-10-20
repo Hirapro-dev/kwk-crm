@@ -23,6 +23,16 @@ export const MAIL_SOURCES = ['ses', 'import_maildealer', 'import_server'] as con
 export const OTHER_MAILBOX_ADDRESS = 'other@unassigned.invalid';
 
 /**
+ * メールスレッドを削除(論理削除)できるロール。2026-10-20 に manager を追加(ユーザー要望。それまでは admin のみ)。
+ * 一覧のゴミ箱・一括削除の表示と、Server Action deleteMailThreads の判定の両方でこれを使う。
+ */
+export const MAIL_DELETE_ROLES: readonly string[] = ['admin', 'manager'];
+
+export function canDeleteMailThreads(role: string): boolean {
+  return MAIL_DELETE_ROLES.includes(role);
+}
+
+/**
  * 「取込候補」の判定に使う宛先アドレス(migration 82 / CLAUDE.md §5.15)。
  * 旧 Salesforce の「メール to リード」用アドレス。フォーム通知メールはこれを宛先(To/Cc)に
  * 含めて送られてくるため、含むメールのスレッドを取込候補として左フォルダに出す。

@@ -18,6 +18,7 @@ import {
 } from '@/lib/domain/mail';
 import { unsortedBoxIds } from '@/lib/domain/mail_folders';
 import { MAIL_TABS, mailTabFilter, resolveMailTab } from '@/lib/domain/mail_tabs';
+import { canDeleteMailThreads } from '@/lib/domain/mail_types';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import { MailFilterBar } from './MailFilterBar';
 import { MailInfinite } from './MailInfinite';
@@ -126,7 +127,7 @@ export default async function MailPage({ searchParams }: PageProps) {
           showBoxColumn={unsorted || !mailBoxId}
           boxAddresses={Object.fromEntries(boxes.map((b) => [b.id, b.address]))}
           canEdit={me.role !== 'viewer'}
-          canDelete={me.role === 'admin'}
+          canDelete={canDeleteMailThreads(me.role)}
           assigneeOptions={assigneeOptions}
           importRules={importRules}
         />
