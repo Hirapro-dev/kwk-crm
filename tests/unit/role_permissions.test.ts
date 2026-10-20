@@ -4,6 +4,7 @@
  *       すべての行が 5 ロール分の印を持ち、閲覧ロール(viewer)は書き込み系の操作ができない表示になっている。
  */
 import { canApproveOutbox } from '@/lib/domain/mail_outbox';
+import { canDeleteMailThreads } from '@/lib/domain/mail_types';
 import { PERMISSION_ROLES, ROLE_PERMISSION_TABLE } from '@/lib/domain/role_permissions';
 import { describe, expect, it } from 'vitest';
 
@@ -42,6 +43,20 @@ describe('ROLE_PERMISSION_TABLE', () => {
       } else if (!r.action.includes('閲覧')) {
         expect(r.marks.viewer, r.action).toBe('×');
       }
+    }
+  });
+
+  it('メールの削除は admin と manager が ○(2026-10-20 に manager を追加)', () => {
+    const row = rows.find((r) => r.action.startsWith('メールの削除'));
+    expect(row?.marks).toMatchObject({
+      admin: '○',
+      manager: '○',
+      sales: '×',
+      support: '×',
+      viewer: '×',
+    });
+    for (const role of PERMISSION_ROLES) {
+      expect(row?.marks[role]).toBe(canDeleteMailThreads(role) ? '○' : '×');
     }
   });
 });

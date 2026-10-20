@@ -8,7 +8,13 @@
 import { getCurrentUser } from '@/lib/domain/auth';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { MAIL_CATEGORIES, MAIL_STATUSES, type MailCategory, type MailStatus } from './mail_types';
+import {
+  MAIL_CATEGORIES,
+  MAIL_STATUSES,
+  type MailCategory,
+  type MailStatus,
+  canDeleteMailThreads,
+} from './mail_types';
 
 export interface UpdateMailThreadInput {
   id: string;
@@ -141,15 +147,17 @@ export async function bulkUpdateMailThreads(
 const DELETE_MAX = 500;
 
 /**
- * 選択したスレッドを論理削除する(一覧のゴミ箱・一括削除。CLAUDE.md §5.14 と同じ方針: admin のみ、1 回 500 件まで、
+ * 選択したスレッドを論理削除する(一覧のゴミ箱・一括削除。CLAUDE.md §5.14 と同じ方針: 1 回 500 件まで、
  * deleted_at をセットするだけ)。会員に紐付いたスレッドは DB トリガー(migration 93)で対応歴も論理削除される。
- * 2026-09-17 追加。
+ * 2026-09-17 追加。削除できるのは admin と manager(2026-10-20 に manager を追加。canDeleteMailThreads)。
  */
 export async function deleteMailThreads(
   ids: string[],
 ): Promise<{ deleted?: number; error?: string }> {
   const me = await getCurrentUser();
-  if (me.role !== 'admin') return { error: '削除は管理者のみ可能です' };
+  if (!canDeleteMailThreads(me.role)) {
+    return { error: '削除できるのは管理者・マネージャーのみです' };
+  }
   const cleaned = [...new Set((ids ?? []).filter((id) => typeof id === 'string' && id))];
   if (cleaned.length === 0) return { error: '削除するメールが選択されていません' };
   if (cleaned.length > DELETE_MAX)
@@ -167,7 +175,7 @@ export async function deleteMailThreads(
   // 書込みはサービスロールで行う。PostgREST は UPDATE を常に RETURNING 付きの CTE で実行するため、削除日時を付けて
   // 閲覧ポリシー(deleted_at IS NULL)から外れた行は「new row violates row-level security policy」で拒否される
   // (2026-09-17 に発覚。他オブジェクトの論理削除が SECURITY DEFINER の RPC を使っているのも同じ理由。§5.14)。
-  // admin 判定は上で済ませている
+  // 権限(admin / manager)の判定は上で済ませている
   const admin = createServiceRoleClient();
   const { error } = await admin
     .from('mail_threads')
