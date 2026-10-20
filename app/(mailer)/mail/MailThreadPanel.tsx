@@ -23,7 +23,7 @@ import { splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { findMatchingRule } from '@/lib/domain/mail_import_rules';
 import { MAIL_OUTBOX_STATUS_LABELS, canDirectSend } from '@/lib/domain/mail_outbox';
 import { listThreadOutbox } from '@/lib/domain/mail_outbox_queries';
-import { buildQuotedBody } from '@/lib/domain/mail_text';
+import { buildThreadQuote } from '@/lib/domain/mail_text';
 import { listFieldDefinitions } from '@/lib/domain/object_metadata';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import { getMailAwsConfig } from '@/lib/mail/aws';
@@ -107,8 +107,8 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
         };
       }),
   );
-  // 返信本文に最初から入れる引用(直近の受信メール。HTML しか無ければテキスト化)
-  const initialQuote = lastInbound ? buildQuotedBody(lastInbound) : '';
+  // 返信本文に最初から入れる引用: スレッドのやり取り全部を新しい順に(2026-10-20。各メールの中の既存の引用は外す)
+  const initialQuote = buildThreadQuote(thread.messages);
 
   // 取込候補から開いたとき(showReply=false)は、返信の代わりに取込ルール(§5.16)のパネルを出す。
   // このメールに一致するルールがあれば編集、無ければ新規作成になる。
@@ -192,7 +192,8 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
         </CardContent>
       </Card>
 
-      {thread.messages.map((m) => {
+      {/* メッセージは新しい順に並べる(2026-10-20 ユーザー要望。取得は古い順なので逆にする) */}
+      {[...thread.messages].reverse().map((m) => {
         const isOut = m.direction === 'out';
         const fromLabel = isOut
           ? `${m.sender?.full_name ?? '(送信者不明)'} <${m.from_address}>`
