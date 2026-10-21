@@ -94,7 +94,10 @@ export function MailReplyForm({
   const [quote, setQuote] = useState(initialQuote);
   const [cc, setCc] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
-  const [sendMode, setSendMode] = useState<MailSendMode>('approval');
+  const [sendMode, setSendMode] = useState<MailSendMode>(
+    // 承認者は「そのまま送信する」が既定(2026-10-21 ユーザー指定)
+    canDirectSend ? 'direct' : 'approval',
+  );
   const [confirmOpen, setConfirmOpen] = useState(false);
   const att = useMailAttachments();
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +153,7 @@ export function MailReplyForm({
       att.reset();
       setCc('');
       setScheduledAt('');
-      setSendMode('approval');
+      setSendMode(canDirectSend ? 'direct' : 'approval');
       setSent(r.message ?? '承認依頼を出しました');
       router.refresh();
     });
@@ -264,7 +267,7 @@ export function MailReplyForm({
           </Select>
           {signatureText && (
             <pre className="mt-1 whitespace-pre-wrap rounded border bg-gray-50 p-2 font-sans text-[11px] text-muted-foreground">
-              {`-- \n${signatureText}`}
+              {signatureText}
             </pre>
           )}
           {signatures.length === 0 && (

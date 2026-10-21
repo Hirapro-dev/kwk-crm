@@ -28,10 +28,11 @@ describe('quoteSourceText', () => {
 });
 
 describe('composeOutgoingBody', () => {
-  it('本文 → "-- " 区切りの署名 → 引用 の順に並べ、末尾は改行1つ', () => {
+  // 署名の前の "-- " 区切り行は付けない(2026-10-21 ユーザー決定。署名自体に罫線があり、「--」が余計に見えるため)
+  it('本文 → 空行 → 署名 → 引用 の順に並べ、末尾は改行1つ(「-- 」の区切り行は付けない)', () => {
     expect(
       composeOutgoingBody({ text: 'お世話になります。', signature: '株式会社X', quote: '> 元' }),
-    ).toBe('お世話になります。\n\n-- \n株式会社X\n\n> 元\n');
+    ).toBe('お世話になります。\n\n株式会社X\n\n> 元\n');
   });
   it('署名・引用が無ければ本文だけ', () => {
     expect(composeOutgoingBody({ text: '本文  \n' })).toBe('本文\n');

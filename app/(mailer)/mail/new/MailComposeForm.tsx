@@ -70,7 +70,10 @@ export function MailComposeForm({
   );
   const [signatureTouched, setSignatureTouched] = useState(false);
   const [scheduledAt, setScheduledAt] = useState('');
-  const [sendMode, setSendMode] = useState<MailSendMode>('approval');
+  const [sendMode, setSendMode] = useState<MailSendMode>(
+    // 承認者は「そのまま送信する」が既定(2026-10-21 ユーザー指定)
+    canDirectSend ? 'direct' : 'approval',
+  );
   const [confirmOpen, setConfirmOpen] = useState(false);
   const att = useMailAttachments();
   const [error, setError] = useState<string | null>(null);
@@ -236,7 +239,7 @@ export function MailComposeForm({
           </Select>
           {signatureText && (
             <pre className="mt-1 whitespace-pre-wrap rounded border bg-gray-50 p-2 font-sans text-[11px] text-muted-foreground">
-              {`-- \n${signatureText}`}
+              {signatureText}
             </pre>
           )}
         </div>

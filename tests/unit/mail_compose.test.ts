@@ -49,8 +49,8 @@ describe('buildReplyHeaders(顧客側でもスレッド化される)', () => {
 });
 
 describe('appendSignature', () => {
-  it('"-- " 区切りで署名を付け、末尾は改行1つ', () => {
-    expect(appendSignature('本文\n\n', '株式会社X\n担当')).toBe('本文\n\n-- \n株式会社X\n担当\n');
+  it('空行のあとに署名を付け、末尾は改行1つ(「-- 」の区切り行は付けない。2026-10-21)', () => {
+    expect(appendSignature('本文\n\n', '株式会社X\n担当')).toBe('本文\n\n株式会社X\n担当\n');
   });
 
   it('署名が空なら本文だけ(末尾改行は整える)', () => {
