@@ -91,6 +91,29 @@ export async function sendViaSes(cfg: MailAwsConfig, input: SesSendInput): Promi
 }
 
 /**
+ * SES v2 SendEmail(Raw)。添付付きメール(raw_message.ts で組み立てた MIME)を送る。戻り値は SES の MessageId。
+ * 宛先は MIME のヘッダと同じものを Destination にも渡す。失敗は例外。
+ */
+export async function sendRawViaSes(
+  cfg: MailAwsConfig,
+  input: { raw: Buffer; to: string[]; cc?: string[] },
+): Promise<string> {
+  const ses = createSesClient(cfg);
+  const r = await ses.send(
+    new SendEmailCommand({
+      Destination: {
+        ToAddresses: input.to,
+        ...(input.cc && input.cc.length > 0 ? { CcAddresses: input.cc } : {}),
+      },
+      ...(cfg.configurationSet ? { ConfigurationSetName: cfg.configurationSet } : {}),
+      Content: { Raw: { Data: new Uint8Array(input.raw) } },
+    }),
+  );
+  if (!r.MessageId) throw new Error('SES から MessageId が返りませんでした');
+  return r.MessageId;
+}
+
+/**
  * SES の例外を利用者向けの文言にする。原因の切り分けができる範囲で具体的に。
  */
 export function describeSesError(e: unknown): string {

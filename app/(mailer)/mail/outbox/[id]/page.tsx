@@ -5,6 +5,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
+import { getMailAttachmentSignedUrl } from '@/lib/domain/mail';
 import {
   MAIL_OUTBOX_STATUS_LABELS,
   canApproveOutbox,
@@ -17,7 +18,8 @@ import {
   isMailApprover,
   toScheduledInputValue,
 } from '@/lib/domain/mail_outbox';
-import { getMailOutbox } from '@/lib/domain/mail_outbox_queries';
+import { getMailOutbox, listMailOutboxAttachments } from '@/lib/domain/mail_outbox_queries';
+import { inlineMarker } from '@/lib/domain/mail_outgoing_attachments';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -29,8 +31,21 @@ interface PageProps {
 
 export default async function MailOutboxDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const [me, o] = await Promise.all([getCurrentUser(), getMailOutbox(id)]);
+  const [me, o, attachments] = await Promise.all([
+    getCurrentUser(),
+    getMailOutbox(id),
+    listMailOutboxAttachments(id),
+  ]);
   if (!o) notFound();
+  // 添付(migration 128)。承認者が中身を確かめられるよう、短期の閲覧 URL を付ける
+  const attachmentViews = await Promise.all(
+    attachments.map(async (a) => ({
+      ...a,
+      url: await getMailAttachmentSignedUrl(a.storage_path, 600),
+      // 本文中の画像は、本文に目印が残っているものだけ送る
+      willSend: !a.content_id || o.text_body.includes(inlineMarker(a.filename)),
+    })),
+  );
 
   const rows: Array<[string, React.ReactNode]> = [
     ['状態', MAIL_OUTBOX_STATUS_LABELS[o.status]],
@@ -139,6 +154,32 @@ export default async function MailOutboxDetailPage({ params }: PageProps) {
           <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded border bg-gray-50 p-3 font-sans text-sm">
             {o.text_body}
           </pre>
+          {attachmentViews.length > 0 && (
+            <div className="text-xs">
+              <div className="text-muted-foreground">添付({attachmentViews.length} 件)</div>
+              <ul className="mt-1 flex flex-wrap gap-2">
+                {attachmentViews.map((a) => (
+                  <li key={a.id} className="rounded border px-2 py-1">
+                    {a.url ? (
+                      <a href={a.url} target="_blank" rel="noopener noreferrer" className="sf-link">
+                        📎 {a.filename}
+                      </a>
+                    ) : (
+                      <span>📎 {a.filename}(取得不可)</span>
+                    )}{' '}
+                    <span className="text-muted-foreground">
+                      {Math.max(1, Math.round(a.size_bytes / 1024)).toLocaleString()}KB
+                    </span>
+                    {a.content_id && (
+                      <span className="ml-1 text-sky-700">
+                        {a.willSend ? '(本文中の画像)' : '(本文に目印が無いため送りません)'}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <OutboxActions
             id={o.id}
             kind={o.kind}
@@ -153,6 +194,13 @@ export default async function MailOutboxDetailPage({ params }: PageProps) {
               body: o.text_body,
               scheduledLabel: o.scheduled_at ? formatDateTime(o.scheduled_at) : null,
               dueNow: isDueNow(o.scheduled_at, new Date()),
+              attachments: attachmentViews
+                .filter((a) => a.willSend)
+                .map((a) => ({
+                  filename: a.filename,
+                  size: a.size_bytes,
+                  inline: a.content_id !== null,
+                })),
             }}
             initial={{
               body: o.text_body,

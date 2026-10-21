@@ -53,6 +53,8 @@ export interface OutboxConfirmInfo {
   scheduledLabel: string | null;
   /** 今送る時刻か(予約なし、または予約日時を過ぎている) */
   dueNow: boolean;
+  /** 送る添付(本文中の画像は本文に目印が残っているものだけ) */
+  attachments?: Array<{ filename: string; size: number; inline: boolean }>;
 }
 
 export function OutboxActions({
@@ -279,6 +281,13 @@ export function OutboxActions({
               onChange={(e) => setForm({ ...form, body: e.target.value })}
               disabled={pending}
             />
+            {(confirmInfo.attachments?.length ?? 0) > 0 && (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                添付はそのまま送ります。本文中の画像は、本文の目印「[画像:
+                名前]」を消すと送られません。
+                添付を差し替えるときは、この送信待ちを取り消して作り直してください。
+              </p>
+            )}
           </div>
           <ScheduleField
             value={form.scheduledAt}
@@ -315,6 +324,7 @@ export function OutboxActions({
             scheduledAt: '',
             mode: 'direct',
             body: confirmInfo.body,
+            attachments: confirmInfo.attachments,
           }}
         />
       )}

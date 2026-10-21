@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { type MailSendMode, scheduleInputLabel } from '@/lib/domain/mail_outbox';
+import { formatAttachmentSize } from './MailAttachments';
 
 export interface SendConfirmSummary {
   /** 送信元(表示名 <アドレス>) */
@@ -21,6 +22,8 @@ export interface SendConfirmSummary {
   mode: MailSendMode;
   /** 実際に送る本文(署名・引用を含めた完成形) */
   body: string;
+  /** 送る添付(本文中の画像は目印が本文に残っているものだけ) */
+  attachments?: Array<{ filename: string; size: number; inline: boolean }>;
 }
 
 /**
@@ -106,6 +109,20 @@ export function SendConfirmDialog({
         <pre className="mt-3 max-h-[45vh] overflow-auto whitespace-pre-wrap rounded border bg-gray-50 p-3 font-sans text-sm">
           {summary.body}
         </pre>
+        {summary.attachments && summary.attachments.length > 0 && (
+          <div className="mt-2 text-xs">
+            <div className="text-muted-foreground">添付({summary.attachments.length} 件)</div>
+            <ul className="mt-1 flex flex-wrap gap-1">
+              {summary.attachments.map((a) => (
+                <li key={a.filename} className="rounded border px-2 py-0.5">
+                  📎 {a.filename}{' '}
+                  <span className="text-muted-foreground">{formatAttachmentSize(a.size)}</span>
+                  {a.inline && <span className="ml-1 text-sky-700">(本文中の画像)</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
         <DialogFooter>
           <Button

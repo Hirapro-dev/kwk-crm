@@ -8,11 +8,25 @@
  *   新規メールはこの時点でスレッドを作る
  * - 書込みはサービスロール(定期実行には利用者のセッションが無いため)。送信者は作成者(created_by)として記録する
  * - 本文・アドレスはログに出さない(§12.4)
+ * - 添付(mail_outbox_attachments。migration 128)があれば Storage から取り出して MIME を組み立て、SES の Raw 送信で送る。
+ *   本文中の画像は本文に目印が残っているものだけを HTML 本文に入れる。送った添付は mail_attachments にも登録してスレッドに出す
  */
 
 import { sesMessageIdHeader } from '@/lib/domain/mail_compose';
+import {
+  buildHtmlBody,
+  sniffAttachmentType,
+  usedInlineAttachments,
+} from '@/lib/domain/mail_outgoing_attachments';
 import type { MailAwsConfig } from '@/lib/mail/aws';
-import { describeSesError, domainOf, isDomainSendable, sendViaSes } from '@/lib/mail/ses_send';
+import { type RawAttachment, buildRawMessage } from '@/lib/mail/raw_message';
+import {
+  describeSesError,
+  domainOf,
+  isDomainSendable,
+  sendRawViaSes,
+  sendViaSes,
+} from '@/lib/mail/ses_send';
 import type { createServiceRoleClient } from '@/lib/supabase/server';
 
 type AdminClient = ReturnType<typeof createServiceRoleClient>;
@@ -30,6 +44,56 @@ interface OutboxRow {
   in_reply_to: string | null;
   references_header: string | null;
   created_by: string;
+}
+
+interface OutboxAttachmentRow {
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  storage_path: string;
+  content_id: string | null;
+}
+
+/** 送る添付を Storage から取り出す。本文中の画像は本文に目印が残っているものだけ。中身の種類が違うものは送らない */
+async function loadAttachmentsToSend(
+  admin: AdminClient,
+  outboxId: string,
+  text: string,
+): Promise<{ items: Array<RawAttachment & { row: OutboxAttachmentRow }>; error?: string }> {
+  const { data, error } = await admin
+    .from('mail_outbox_attachments')
+    .select('filename, content_type, size_bytes, storage_path, content_id')
+    .eq('outbox_id', outboxId)
+    .order('sort_order', { ascending: true });
+  // 表がまだ無い(migration 128 の適用前)なら添付は存在しえないので「添付なし」として送る
+  if (error && (error.code === 'PGRST205' || error.code === '42P01')) return { items: [] };
+  if (error) return { items: [], error: `添付の取得に失敗しました: ${error.message}` };
+  const rows = (data ?? []) as OutboxAttachmentRow[];
+  const used = new Set(
+    usedInlineAttachments(
+      text,
+      rows.filter((r) => r.content_id),
+    ),
+  );
+  const toSend = rows.filter((r) => !r.content_id || used.has(r));
+  const items: Array<RawAttachment & { row: OutboxAttachmentRow }> = [];
+  for (const r of toSend) {
+    const { data: blob, error: dlErr } = await admin.storage
+      .from('mail-attachments')
+      .download(r.storage_path);
+    if (dlErr || !blob) return { items: [], error: `添付「${r.filename}」を取り出せませんでした` };
+    const content = Buffer.from(await blob.arrayBuffer());
+    if (sniffAttachmentType(content) !== r.content_type)
+      return { items: [], error: `添付「${r.filename}」の中身が PDF・JPG・PNG ではありません` };
+    items.push({
+      filename: r.filename,
+      contentType: r.content_type,
+      content,
+      cid: r.content_id,
+      row: r,
+    });
+  }
+  return { items };
 }
 
 export interface DeliverResult {
@@ -102,28 +166,61 @@ export async function deliverOutboxItem(
     return { ok: false, error: msg };
   }
 
-  // 3) 送信
+  // 3) 添付の取り出し(あれば)
+  const att = await loadAttachmentsToSend(admin, row.id, row.text_body);
+  if (att.error) {
+    await markFailed(admin, row.id, att.error);
+    return { ok: false, error: att.error };
+  }
+  const inlineSent = att.items.filter((a) => a.cid);
+  const htmlBody =
+    inlineSent.length > 0
+      ? buildHtmlBody(
+          row.text_body,
+          inlineSent.map((a) => ({ filename: a.filename, cid: a.cid as string })),
+        )
+      : null;
+
+  // 4) 送信(添付なしは従来の Simple 送信、添付ありは MIME を組み立てて Raw 送信)
   let sesMessageId: string;
   try {
-    sesMessageId = await sendViaSes(cfg, {
-      fromAddress: box.address,
-      fromName: row.from_name,
-      to: row.to_addresses,
-      cc: row.cc_addresses,
-      subject: row.subject,
-      text: row.text_body,
-      headers:
-        row.kind === 'reply'
-          ? { 'In-Reply-To': row.in_reply_to ?? '', References: row.references_header ?? '' }
-          : undefined,
-    });
+    sesMessageId =
+      att.items.length === 0
+        ? await sendViaSes(cfg, {
+            fromAddress: box.address,
+            fromName: row.from_name,
+            to: row.to_addresses,
+            cc: row.cc_addresses,
+            subject: row.subject,
+            text: row.text_body,
+            headers:
+              row.kind === 'reply'
+                ? { 'In-Reply-To': row.in_reply_to ?? '', References: row.references_header ?? '' }
+                : undefined,
+          })
+        : await sendRawViaSes(cfg, {
+            raw: await buildRawMessage({
+              fromAddress: box.address,
+              fromName: row.from_name,
+              to: row.to_addresses,
+              cc: row.cc_addresses,
+              subject: row.subject,
+              text: row.text_body,
+              html: htmlBody,
+              inReplyTo: row.kind === 'reply' ? row.in_reply_to : null,
+              references: row.kind === 'reply' ? row.references_header : null,
+              attachments: att.items,
+            }),
+            to: row.to_addresses,
+            cc: row.cc_addresses,
+          });
   } catch (e) {
     const msg = describeSesError(e);
     await markFailed(admin, row.id, msg);
     return { ok: false, error: msg };
   }
 
-  // 4) 履歴の保存(送信自体は完了している。ここで失敗しても再送しないよう sent にする)
+  // 5) 履歴の保存(送信自体は完了している。ここで失敗しても再送しないよう sent にする)
   const now = new Date().toISOString();
   let threadId = row.thread_id;
   let saveError: string | null = null;
@@ -165,7 +262,7 @@ export async function deliverOutboxItem(
         cc_addresses: row.cc_addresses,
         subject: row.subject,
         text_body: row.text_body,
-        html_body: null,
+        html_body: htmlBody,
         sent_at: now,
         provider_message_id: sesMessageId,
         delivery_status: 'queued',
@@ -176,6 +273,20 @@ export async function deliverOutboxItem(
       .single();
     if (mErr || !msg) saveError = `メールの保存に失敗: ${mErr?.message ?? ''}`;
     else messageRowId = (msg as { id: string }).id;
+
+    // 送った添付をスレッドに出す(実体は送信待ちのときと同じ Storage のファイル)
+    if (messageRowId && att.items.length > 0) {
+      const { error: aErr } = await admin.from('mail_attachments').insert(
+        att.items.map((a) => ({
+          message_id: messageRowId,
+          filename: a.row.filename,
+          content_type: a.row.content_type,
+          size_bytes: a.row.size_bytes,
+          storage_path: a.row.storage_path,
+        })),
+      );
+      if (aErr) saveError = `添付の記録に失敗: ${aErr.message}`;
+    }
 
     if (row.kind === 'reply') {
       await admin

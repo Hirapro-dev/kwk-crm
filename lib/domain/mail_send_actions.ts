@@ -13,6 +13,8 @@
  * - 返信は直近の受信メールの差出人へ。In-Reply-To / References は申請時に決めて保存する
  * - 送信元はスレッドの受信箱が既定。フォームで送信可能な別の受信箱を選ぶこともできる(スレッドの受信箱は変えない)
  * - 署名・引用はフォーム側で本文に含めて送る(画面で見えるもの = 送るもの)。ここでは付け足さない
+ * - 添付(PDF・JPG・PNG。migration 128)は画面から Storage へ直接アップロードしたものを、ここで確かめて送信待ちメールに登録する
+ *   (lib/mail/outbox_attachments.ts)。本文中の画像は本文の目印「[画像: 名前]」の位置に出す
  * - 権限: viewer は不可。本文・アドレスはログに出さない(§12.4)
  */
 
@@ -33,7 +35,9 @@ import {
   resolveSendMode,
   submittedMessage,
 } from '@/lib/domain/mail_outbox';
+import type { SubmittedAttachment } from '@/lib/domain/mail_outgoing_attachments';
 import { getMailAwsConfig } from '@/lib/mail/aws';
+import { insertOutboxAttachments, prepareOutboxAttachments } from '@/lib/mail/outbox_attachments';
 import { deliverOutboxItem } from '@/lib/mail/outbox_deliver';
 import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
@@ -89,6 +93,27 @@ async function finishSubmission(
   return { outboxId, threadId: r.threadId, message: directSentMessage(null) };
 }
 
+/** 送信待ちメールに添付を登録する。失敗したらその送信待ちメールは取り消す(添付が欠けたまま承認・送信されないように) */
+async function attachOrCancel(
+  admin: ReturnType<typeof createServiceRoleClient>,
+  outboxId: string,
+  userId: string,
+  rows: Parameters<typeof insertOutboxAttachments>[3],
+): Promise<string | null> {
+  const err = await insertOutboxAttachments(admin, outboxId, userId, rows);
+  if (!err) return null;
+  await admin
+    .from('mail_outbox')
+    .update({
+      status: 'cancelled',
+      cancelled_by: userId,
+      cancelled_at: new Date().toISOString(),
+      last_error: `添付の登録に失敗したため取り消しました: ${err}`.slice(0, 1000),
+    })
+    .eq('id', outboxId);
+  return `添付の登録に失敗しました: ${err}`;
+}
+
 interface BoxRow {
   id: number;
   address: string;
@@ -128,6 +153,8 @@ export async function replyToMailThread(input: {
   scheduledAt?: string;
   /** 送信方法。'direct'(そのまま送信)は承認者だけ。省略時は承認を依頼 */
   sendMode?: MailSendMode;
+  /** 添付(画面から Storage へアップロード済みのもの) */
+  attachments?: SubmittedAttachment[];
 }): Promise<SendResult> {
   const me = await getCurrentUser();
   if (me.role === 'viewer') return { error: '閲覧専用ユーザーは送信できません' };
@@ -163,6 +190,8 @@ export async function replyToMailThread(input: {
     input.fromName !== undefined ? sanitizeDisplayName(input.fromName) : box.display_name;
 
   const admin = createServiceRoleClient();
+  const att = await prepareOutboxAttachments(admin, me.id, input.attachments);
+  if (!att.rows) return { error: att.error };
   const { data, error } = await admin
     .from('mail_outbox')
     .insert({
@@ -183,8 +212,11 @@ export async function replyToMailThread(input: {
     .select('id')
     .single();
   if (error || !data) return { error: `承認依頼の保存に失敗しました: ${error?.message ?? ''}` };
+  const outboxId = (data as { id: string }).id;
+  const attErr = await attachOrCancel(admin, outboxId, me.id, att.rows);
+  if (attErr) return { error: attErr };
 
-  return finishSubmission((data as { id: string }).id, send.mode, schedule.at);
+  return finishSubmission(outboxId, send.mode, schedule.at);
 }
 
 /** 新規メールを承認待ちにする(スレッドは送信したときに作る) */
@@ -200,6 +232,8 @@ export async function createMailThreadAndSend(input: {
   scheduledAt?: string;
   /** 送信方法。'direct'(そのまま送信)は承認者だけ。省略時は承認を依頼 */
   sendMode?: MailSendMode;
+  /** 添付(画面から Storage へアップロード済みのもの) */
+  attachments?: SubmittedAttachment[];
 }): Promise<SendResult> {
   const me = await getCurrentUser();
   if (me.role === 'viewer') return { error: '閲覧専用ユーザーは送信できません' };
@@ -228,6 +262,8 @@ export async function createMailThreadAndSend(input: {
     input.fromName !== undefined ? sanitizeDisplayName(input.fromName) : box.display_name;
 
   const admin = createServiceRoleClient();
+  const att = await prepareOutboxAttachments(admin, me.id, input.attachments);
+  if (!att.rows) return { error: att.error };
   const { data, error } = await admin
     .from('mail_outbox')
     .insert({
@@ -246,6 +282,9 @@ export async function createMailThreadAndSend(input: {
     .select('id')
     .single();
   if (error || !data) return { error: `承認依頼の保存に失敗しました: ${error?.message ?? ''}` };
+  const outboxId = (data as { id: string }).id;
+  const attErr = await attachOrCancel(admin, outboxId, me.id, att.rows);
+  if (attErr) return { error: attErr };
 
-  return finishSubmission((data as { id: string }).id, send.mode, schedule.at);
+  return finishSubmission(outboxId, send.mode, schedule.at);
 }
