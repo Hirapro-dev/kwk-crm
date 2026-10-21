@@ -4,6 +4,7 @@
  *       送った後(送信中・送信済み・取消)は誰も触れない・予約日時は日本時間で解釈する。
  */
 import {
+  MAIL_THREAD_STATUS_AFTER_SEND,
   canApproveOutbox,
   canCancelOutbox,
   canEditOutbox,
@@ -19,6 +20,7 @@ import {
   scheduleInputLabel,
   toScheduledInputValue,
 } from '@/lib/domain/mail_outbox';
+import { MAIL_TABS } from '@/lib/domain/mail_tabs';
 import { describe, expect, it } from 'vitest';
 
 const author = { id: 'u-author', role: 'sales' as const };
@@ -168,5 +170,13 @@ describe('outboxConfirmTexts(承認・そのまま送信・送り直しの確認
     expect(outboxConfirmTexts('retry', { scheduledLabel: null, dueNow: true }).title).toBe(
       '再送信の確認',
     );
+  });
+});
+
+describe('送信後のスレッドの状態(2026-10-21 ユーザー指定)', () => {
+  // 返信を送ったら対応は済んだものとして「対応完了」タブに入れる。お客様から返事が来れば受信処理で「未対応」に戻る
+  it('送信したスレッドは「完了」になり、「対応完了」タブに表示される', () => {
+    expect(MAIL_THREAD_STATUS_AFTER_SEND).toBe('完了');
+    expect(MAIL_TABS.find((t) => t.key === 'done')?.status).toBe(MAIL_THREAD_STATUS_AFTER_SEND);
   });
 });

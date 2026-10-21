@@ -4,7 +4,7 @@
  *
  * - 二重送信の防止: 送る前に status を approved → sending へ条件付きで書き換え、書き換えられた 1 件だけを送る
  *   (承認の操作と定期実行が同時に動いても、どちらか一方しか送らない)
- * - 送信後は mail_messages(direction=out)に保存し、スレッドを「対応中」にする(従来の即時送信と同じ)。
+ * - 送信後は mail_messages(direction=out)に保存し、スレッドを「完了」(対応完了)にする(MAIL_THREAD_STATUS_AFTER_SEND。2026-10-21 から。それまでは「対応中」)。
  *   新規メールはこの時点でスレッドを作る
  * - 書込みはサービスロール(定期実行には利用者のセッションが無いため)。送信者は作成者(created_by)として記録する
  * - 本文・アドレスはログに出さない(§12.4)
@@ -13,6 +13,7 @@
  */
 
 import { sesMessageIdHeader } from '@/lib/domain/mail_compose';
+import { MAIL_THREAD_STATUS_AFTER_SEND } from '@/lib/domain/mail_outbox';
 import {
   buildHtmlBody,
   sniffAttachmentType,
@@ -233,7 +234,7 @@ export async function deliverOutboxItem(
         mail_box_id: box.id,
         subject: row.subject,
         member_id: memberId,
-        status: '対応中',
+        status: MAIL_THREAD_STATUS_AFTER_SEND,
         category: '通常',
         assignee_id: row.created_by,
         last_message_at: now,
@@ -291,7 +292,12 @@ export async function deliverOutboxItem(
     if (row.kind === 'reply') {
       await admin
         .from('mail_threads')
-        .update({ status: '対応中', last_direction: 'out', last_message_at: now, is_read: true })
+        .update({
+          status: MAIL_THREAD_STATUS_AFTER_SEND,
+          last_direction: 'out',
+          last_message_at: now,
+          is_read: true,
+        })
         .eq('id', threadId);
     }
   }

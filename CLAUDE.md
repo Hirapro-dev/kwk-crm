@@ -925,7 +925,7 @@ IMAP ポーリング・独自メールサーバーは持たない。
   `迷惑メール` = SES の spamVerdict FAIL / `X-Spam-Flag: YES` / `X-Spam-Status: Yes` / 件名先頭 `[SPAM]`;
   `メルマガ` = `List-Unsubscribe` または `List-Id` あり / `Precedence: bulk` or `list`; それ以外 `通常`。
   分類したスレッドは `status` を `完了` にしない (見た目上は受信箱の既定表示から外れるだけ)。
-- 送信時: `In-Reply-To` / `References` を付与し顧客側でもスレッド化。送信後 `status`→`対応中`、`last_direction`→`out`。
+- 送信時: `In-Reply-To` / `References` を付与し顧客側でもスレッド化。送信後 `status`→`完了`(対応完了タブ。2026-10-21 ユーザー指定、それまでは `対応中`。`MAIL_THREAD_STATUS_AFTER_SEND`。お客様から返事が来れば受信時に `未対応` へ戻る)、`last_direction`→`out`。
   既定では BCC しない (Xserver の転送で戻ってきても `message_id` UNIQUE で二重登録されない)。
 
 **その他(未登録アドレス宛)** (2026-09-11 追加, migration 78): 共有アドレスは順次 mail_boxes に
@@ -1071,7 +1071,7 @@ M3 の対応歴自動記録は 2026-09-16 に実装(migration 93。会員に紐�
   **送り直し**は承認者が送信失敗に対して。viewer は作成も不可。
 - 送信: `lib/mail/outbox_deliver.ts`。承認時に予約なし(または予約日時を過ぎている)ならその場で送る。予約日時が先なら「予約中」にし、
   Vercel Cron(`/api/cron/mail-outbox`、毎分。CRON_SECRET で保護)が承認済みで予約日時を過ぎたものを送る。二重送信を防ぐため、送る前に
-  `approved → sending` を条件付き UPDATE で取れた 1 件だけを送る。送信後は従来どおり `mail_messages`(direction=out)を作り、スレッドを「対応中」にする。
+  `approved → sending` を条件付き UPDATE で取れた 1 件だけを送る。送信後は従来どおり `mail_messages`(direction=out)を作り、スレッドを「完了」(対応完了)にする(2026-10-21 から。新規メールで作るスレッドも同じ)。
   送信に失敗したら `failed` と `last_error`。送信日時の入力は日本時間(`parseScheduledInput`。1 分以上先・365 日以内)。
 - 画面: 左フォルダの固定項目「**送信待ち**」(承認待ちの件数バッジ)→ `/mail/outbox`(タブ: 承認待ち / 予約中 / 差し戻し / 送信失敗 / 送信済み / 取消)/
   `/mail/outbox/[id]`(内容の確認と 承認 / 差し戻し / 修正 / 取消 / 送り直し。`OutboxActions`)。スレッド画面には、そのスレッドの送信待ちの返信を一覧で出す。
