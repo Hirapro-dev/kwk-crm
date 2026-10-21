@@ -8,6 +8,7 @@
  *   - 送信予約の入力(日本時間の "YYYY-MM-DDTHH:mm")の解釈と範囲チェック
  */
 
+import type { MailStatus } from './mail_types';
 import type { UserRole } from './types';
 
 export type MailOutboxStatus =
@@ -30,6 +31,13 @@ export const MAIL_OUTBOX_STATUS_LABELS: Record<MailOutboxStatus, string> = {
   failed: '送信失敗',
   cancelled: '取消',
 };
+
+/**
+ * メールを送った後のスレッドの状態。返信を送ったら対応は済んだものとして「対応完了」タブに入れる
+ * (2026-10-21 ユーザー指定。それまでは「対応中」)。お客様から返事が来れば受信処理で「未対応」に戻る。
+ * 新規メールで送信時に作るスレッドも同じ。
+ */
+export const MAIL_THREAD_STATUS_AFTER_SEND: MailStatus = '完了';
 
 /** 承認できるロール(2026-10-15 ユーザー決定: admin と manager) */
 export const MAIL_APPROVER_ROLES: readonly UserRole[] = ['admin', 'manager'];
