@@ -70,7 +70,7 @@ function defaultScheduleValue(): string {
 
 /**
  * 送信方法の選択(2026-10-16)。承認者(admin / manager)にだけ出す。
- * approval = 承認を依頼する / direct = 承認せずにそのまま送信する
+ * direct = 承認せずにそのまま送信する(左・既定。2026-10-21 ユーザー指定)/ approval = 承認を依頼する
  */
 export function SendModeField({
   value,
@@ -86,16 +86,16 @@ export function SendModeField({
       <legend className="mb-1">送信方法</legend>
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-1">
+          <input type="radio" checked={value === 'direct'} onChange={() => onChange('direct')} />
+          承認せずにそのまま送信する
+        </label>
+        <label className="flex items-center gap-1">
           <input
             type="radio"
             checked={value === 'approval'}
             onChange={() => onChange('approval')}
           />
           承認を依頼する
-        </label>
-        <label className="flex items-center gap-1">
-          <input type="radio" checked={value === 'direct'} onChange={() => onChange('direct')} />
-          承認せずにそのまま送信する
         </label>
       </div>
     </fieldset>

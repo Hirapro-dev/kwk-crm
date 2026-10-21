@@ -3,7 +3,7 @@
  * 返信フォーム(クライアント)と Server Action の両方から使う純粋関数。
  * サーバー専用モジュール(node:crypto 等)に依存させない。
  *
- *   - 署名の付け方("-- " 区切り、RFC 3676)
+ *   - 署名の付け方(本文の後に空行を 1 つ入れて付ける。2026-10-21 から RFC 3676 の "-- " 区切り行は付けない(ユーザー決定))
  *   - 返信時の引用(日時・差出人の行 + 各行 "> ")
  *   - HTML しか無いメールを引用するためのテキスト化
  *   - 本文 + 署名 + 引用 の合成(送るものをそのまま画面に出す)
@@ -11,12 +11,12 @@
 
 import { formatDateTime } from '@/lib/utils/date';
 
-/** 本文末尾に署名を付ける。署名が空なら本文のまま。区切りは "-- " (RFC 3676) */
+/** 本文末尾に署名を付ける。署名が空なら本文のまま。本文との間は空行 1 つ(「-- 」の区切り行は付けない) */
 export function appendSignature(body: string, signature: string | null | undefined): string {
   const sig = (signature ?? '').trim();
   const b = body.replace(/\s+$/, '');
   if (!sig) return `${b}\n`;
-  return `${b}\n\n-- \n${sig}\n`;
+  return `${b}\n\n${sig}\n`;
 }
 
 /**
@@ -135,7 +135,7 @@ export function buildThreadQuote(
 }
 
 /**
- * 送信する本文を合成する: 本文 → 署名("-- " 区切り) → 引用。
+ * 送信する本文を合成する: 本文 → 署名 → 引用(それぞれの間は空行 1 つ)。
  * フォームはこの結果をそのまま送るので、画面で見えるものと送られるものが一致する。
  */
 export function composeOutgoingBody(parts: {
@@ -147,7 +147,7 @@ export function composeOutgoingBody(parts: {
   const sig = (parts.signature ?? '').trim();
   const quote = (parts.quote ?? '').replace(/\s+$/, '');
   let out = text;
-  if (sig) out = `${out}\n\n-- \n${sig}`;
+  if (sig) out = `${out}\n\n${sig}`;
   if (quote) out = `${out}\n\n${quote}`;
   return `${out.replace(/^\n+/, '')}\n`;
 }

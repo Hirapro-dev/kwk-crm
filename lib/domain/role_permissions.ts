@@ -110,7 +110,7 @@ export const ROLE_PERMISSION_TABLE: PermissionSection[] = [
       {
         action: '承認せずにそのまま送信',
         marks: MAIL_APPROVERS,
-        note: '送るときに「承認を依頼する / そのまま送信する」を選べる。承認待ちの自分のメールもそのまま送信できる',
+        note: '送るときに「そのまま送信する(既定)/ 承認を依頼する」を選べる。承認待ちの自分のメールもそのまま送信できる',
       },
       {
         action: '送信の承認・差し戻し',
