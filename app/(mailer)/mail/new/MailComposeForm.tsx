@@ -15,6 +15,13 @@ import {
 import { composeOutgoingBody } from '@/lib/domain/mail_text';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
+import {
+  MailAttachmentField,
+  attachmentBlockReason,
+  attachmentsToSend,
+  bodyFileHandlers,
+  useMailAttachments,
+} from '../MailAttachments';
 import { ScheduleField, SendModeField } from '../ScheduleField';
 import { SendConfirmDialog } from '../SendConfirmDialog';
 
@@ -65,6 +72,7 @@ export function MailComposeForm({
   const [scheduledAt, setScheduledAt] = useState('');
   const [sendMode, setSendMode] = useState<MailSendMode>('approval');
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const att = useMailAttachments();
   const [error, setError] = useState<string | null>(null);
 
   const signatureText = signatureBodyOf(signatureId, signatures);
@@ -92,6 +100,7 @@ export function MailComposeForm({
         fromName,
         scheduledAt,
         sendMode,
+        attachments: att.submitted,
       });
       if (r.error) {
         setError(r.error);
@@ -198,11 +207,14 @@ export function MailComposeForm({
             aria-label="本文"
             className="mt-1"
             rows={12}
+            placeholder="画像をドラッグ&ドロップ・貼り付けすると、この位置に入ります"
             value={text}
             onChange={(e) => setText(e.target.value)}
             disabled={pending}
+            {...bodyFileHandlers(att, text, setText)}
           />
         </div>
+        <MailAttachmentField att={att} text={text} setText={setText} disabled={pending} />
         <div className="block text-xs">
           署名
           <Select
@@ -241,10 +253,21 @@ export function MailComposeForm({
           <Button
             type="submit"
             size="sm"
-            disabled={pending || !to.trim() || !subject.trim() || !text.trim()}
+            disabled={
+              pending ||
+              !to.trim() ||
+              !subject.trim() ||
+              !text.trim() ||
+              attachmentBlockReason(att.items) !== null
+            }
           >
             {sendMode === 'direct' ? '送信内容を確認' : '承認依頼の内容を確認'}
           </Button>
+          {attachmentBlockReason(att.items) && (
+            <span className="text-xs text-muted-foreground">
+              {attachmentBlockReason(att.items)}
+            </span>
+          )}
           {error && !confirmOpen && <span className="text-xs text-red-600">{error}</span>}
         </div>
       </form>
@@ -264,6 +287,7 @@ export function MailComposeForm({
           scheduledAt,
           mode: sendMode,
           body: outgoingBody,
+          attachments: attachmentsToSend(att.items, outgoingBody),
         }}
       />
     </>

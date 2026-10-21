@@ -106,3 +106,24 @@ export async function listThreadOutbox(threadId: string): Promise<MailOutboxItem
   if (error) return [];
   return (data ?? []) as unknown as MailOutboxItem[];
 }
+
+/** 送信待ちメールの添付(migration 128)。テーブル未適用・失敗は空 */
+export interface MailOutboxAttachment {
+  id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  storage_path: string;
+  content_id: string | null;
+}
+
+export async function listMailOutboxAttachments(outboxId: string): Promise<MailOutboxAttachment[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('mail_outbox_attachments')
+    .select('id, filename, content_type, size_bytes, storage_path, content_id')
+    .eq('outbox_id', outboxId)
+    .order('sort_order', { ascending: true });
+  if (error) return [];
+  return (data ?? []) as MailOutboxAttachment[];
+}
