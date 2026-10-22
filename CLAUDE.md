@@ -842,6 +842,9 @@ Asana の基本構成(プロジェクト > セクション > タスク > サブ�
 - **一括削除の上限**: 1回 500 件 (RPC・Server Action の両方で検証)。誤操作時の被害を限定する。
 - **「全選択」の範囲**: 画面に**読み込み済みの行のみ**。検索条件に一致する全件ではない
   (無限スクロールのため、意図しない大量削除を防ぐ)。
+- **Shift を押しながらチェック**(2026-10-22 ユーザー要望): 前にチェックした行から今回の行までを、今回の行と同じ状態(選択 / 解除)にまとめてそろえる
+  (Gmail と同じ操作。読み込み済みの行の範囲で。純粋関数 `applyRowSelection`、`lib/domain/list_selection.ts`)。`InfiniteTable` の共通の動きなので、
+  選択列のあるすべての一覧(会員・問合せ・申込・メーラーなど)で使える。
 - **実装**: 共通部品 `InfiniteTable` の `selection` プロップ(未指定なら従来どおり選択列なし)、
   確認ダイアログ `components/layout/DeleteConfirmDialog.tsx`、
   Server Action `lib/domain/delete_actions.ts`。

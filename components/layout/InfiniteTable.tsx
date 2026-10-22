@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { applyRowSelection } from '@/lib/domain/list_selection';
 import { cn } from '@/lib/utils/cn';
 import { Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -196,13 +197,17 @@ export function InfiniteTable<T>({
     setSelectedIds(allOnScreenSelected ? new Set() : new Set(rows.map((r) => selection.getId(r))));
   };
 
-  const toggleOne = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  // 前回チェックした行。Shift を押しながらチェックすると、この行から今回の行までをまとめて選ぶ / 外す(2026-10-22)
+  const anchorIdRef = useRef<string | null>(null);
+  const toggleOne = (id: string, shift: boolean) => {
+    if (!selection) return;
+    const rowIds = rows.map((r) => selection.getId(r));
+    setSelectedIds((prev) =>
+      applyRowSelection(rowIds, prev, id, { shift, anchorId: anchorIdRef.current }),
+    );
+    anchorIdRef.current = id;
+    // Shift クリックでできた文字の選択(行の文字が青くなる)を消す
+    if (shift) window.getSelection()?.removeAllRanges();
   };
 
   /**
@@ -395,8 +400,11 @@ export function InfiniteTable<T>({
                           <input
                             type="checkbox"
                             aria-label="この行を選択"
+                            title="Shift を押しながらチェックすると、前にチェックした行からここまでをまとめて選べます"
                             checked={selectedIds.has(rowId)}
-                            onChange={() => toggleOne(rowId)}
+                            onChange={(e) =>
+                              toggleOne(rowId, (e.nativeEvent as MouseEvent).shiftKey === true)
+                            }
                             className="h-4 w-4 cursor-pointer accent-primary"
                           />
                           {/* 削除処理(onDelete)が無い一覧では出さない(メーラーで押しても何も起きないボタンが出ていた。2026-09-17) */}
