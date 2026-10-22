@@ -45,7 +45,8 @@ export interface MailSearchHit {
 
 /** 一覧と同じ絞り込み条件(lib/domain/mail.ts の applyThreadFilters と同じ意味) */
 export interface MailSearchFilter {
-  status?: string;
+  /** 配列ならどれかに一致(「対応中」タブ = 対応中 + 承認待ち) */
+  status?: string | readonly string[];
   category?: string;
   /** users.id / 'none' = 未割当 */
   assigneeId?: string;
@@ -60,7 +61,8 @@ export function filterMailSearchHits(
   f: MailSearchFilter,
 ): MailSearchHit[] {
   return hits.filter((h) => {
-    if (f.status && h.status !== f.status) return false;
+    if (typeof f.status === 'string' && h.status !== f.status) return false;
+    if (Array.isArray(f.status) && !f.status.includes(h.status)) return false;
     if (f.category && h.category !== f.category) return false;
     if (f.assigneeId === 'none' && h.assignee_id !== null) return false;
     if (f.assigneeId && f.assigneeId !== 'none' && h.assignee_id !== f.assigneeId) return false;

@@ -90,7 +90,9 @@ export default async function MailPage({ searchParams }: PageProps) {
         ? currentBox.display_name
           ? `${currentBox.display_name} <${currentBox.address}>`
           : currentBox.address
-        : 'すべての受信箱';
+        : sp.assignee === me.id
+          ? '自分の担当'
+          : 'すべての受信箱';
   const listKey = `${tab.key}|${sp.q ?? ''}|${sp.assignee ?? ''}|${sp.box ?? ''}|${sp.unread ?? ''}|${sp.folder ?? ''}`;
 
   return (

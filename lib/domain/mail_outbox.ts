@@ -39,6 +39,20 @@ export const MAIL_OUTBOX_STATUS_LABELS: Record<MailOutboxStatus, string> = {
  */
 export const MAIL_THREAD_STATUS_AFTER_SEND: MailStatus = '完了';
 
+/**
+ * 送信待ちメールが変わったあとのスレッドの状態(migration 129。2026-10-22 ユーザー指定)。
+ * 返信が承認待ちの間はスレッドを「承認待ち」にし(一覧の「対応中」タブに出る)、承認待ちが無くなったら
+ * (差し戻し・取消・承認して予約中・送信失敗)「対応中」に戻す。それ以外の状態(送信後の「完了」、手で変えた状態)は変えない。
+ * 戻り値 null = 書き込まない。
+ */
+export function threadStatusAfterOutboxChange(
+  current: MailStatus,
+  hasPendingOutbox: boolean,
+): MailStatus | null {
+  if (hasPendingOutbox) return current === '承認待ち' ? null : '承認待ち';
+  return current === '承認待ち' ? '対応中' : null;
+}
+
 /** 承認できるロール(2026-10-15 ユーザー決定: admin と manager) */
 export const MAIL_APPROVER_ROLES: readonly UserRole[] = ['admin', 'manager'];
 

@@ -10,15 +10,15 @@ import type { MailCategory, MailStatus } from './mail_types';
 export interface MailTab {
   key: string;
   label: string;
-  /** undefined = 状態で絞らない */
-  status?: MailStatus;
+  /** undefined = 状態で絞らない。配列ならどれかに一致(「対応中」タブ = 対応中 + 承認待ち。migration 129) */
+  status?: MailStatus | readonly MailStatus[];
   /** undefined = 分類で絞らない */
   category?: MailCategory;
 }
 
 export const MAIL_TABS: readonly MailTab[] = [
   { key: 'new', label: '新着', status: '未対応', category: '通常' },
-  { key: 'active', label: '対応中', status: '対応中', category: '通常' },
+  { key: 'active', label: '対応中', status: ['対応中', '承認待ち'], category: '通常' },
   { key: 'done', label: '対応完了', status: '完了', category: '通常' },
   { key: 'all', label: 'すべて', category: '通常' },
   { key: 'newsletter', label: 'メルマガ', category: 'メルマガ' },
@@ -42,7 +42,7 @@ export function resolveMailTab(key: string | undefined): MailTab {
 export function mailTabFilter(
   tab: MailTab,
   opts: { importCandidate: boolean },
-): { status?: MailStatus; category?: MailCategory } {
+): { status?: MailStatus | readonly MailStatus[]; category?: MailCategory } {
   if (opts.importCandidate) return {};
   return { status: tab.status, category: tab.category };
 }

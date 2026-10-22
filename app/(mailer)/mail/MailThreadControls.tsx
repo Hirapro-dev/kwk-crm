@@ -6,7 +6,7 @@ import { Select } from '@/components/ui/select';
 import { type UpdateMailThreadInput, updateMailThread } from '@/lib/domain/mail_actions';
 import {
   MAIL_CATEGORIES,
-  MAIL_STATUSES,
+  MAIL_MANUAL_STATUSES,
   type MailCategory,
   type MailStatus,
 } from '@/lib/domain/mail_types';
@@ -70,7 +70,13 @@ export function MailThreadControls({
           disabled={pending}
           onChange={(e) => apply({ status: e.target.value as MailStatus })}
         >
-          {MAIL_STATUSES.map((s) => (
+          {/* 承認待ちは送信待ちメールに合わせて自動で付く状態。今その状態のときだけ表示し、手では選ばせない */}
+          {status === '承認待ち' && (
+            <option value="承認待ち" disabled>
+              承認待ち
+            </option>
+          )}
+          {MAIL_MANUAL_STATUSES.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>

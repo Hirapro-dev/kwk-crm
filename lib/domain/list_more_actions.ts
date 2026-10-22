@@ -105,7 +105,7 @@ export async function loadMoreLpEntries(
 export async function loadMoreMailThreads(
   params: {
     q?: string;
-    status?: MailStatus;
+    status?: MailStatus | readonly MailStatus[];
     category?: MailCategory;
     assigneeId?: string;
     mailBoxId?: number;

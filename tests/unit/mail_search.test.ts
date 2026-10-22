@@ -63,6 +63,11 @@ describe('filterMailSearchHits', () => {
   });
   it('状態・分類・受信箱・担当・未読で絞れる', () => {
     expect(filterMailSearchHits(hits, { status: '完了' }).map((h) => h.id)).toEqual(['b']);
+    // 「対応中」タブのように状態を複数指定したら、どれかに一致するもの(migration 129)
+    expect(filterMailSearchHits(hits, { status: ['未対応', '対応中'] }).map((h) => h.id)).toEqual([
+      'a',
+      'c',
+    ]);
     expect(filterMailSearchHits(hits, { category: '通常' }).map((h) => h.id)).toEqual(['a', 'b']);
     expect(filterMailSearchHits(hits, { mailBoxIds: [1, 3] }).map((h) => h.id)).toEqual(['a', 'c']);
     expect(filterMailSearchHits(hits, { assigneeId: 'none' }).map((h) => h.id)).toEqual(['a', 'c']);

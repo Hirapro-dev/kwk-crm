@@ -31,6 +31,7 @@ import {
   PinOff,
   Send,
   Trash2,
+  UserCheck,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -58,6 +59,8 @@ interface Props {
   candidateFolder: { pendingCount: number; unreadCount: number };
   /** 「送信待ち」(承認待ち・送信予約。migration 124)の承認待ち件数 */
   outboxPendingCount: number;
+  /** 「自分の担当」(2026-10-22): 自分が担当のメール。件数は未対応(通常分類) */
+  myAssigned: { userId: string; pendingCount: number };
   /** 自分がピン留めした受信箱(ピン留めした順。migration 84) */
   pinned: MailFolderItem[];
   /** 自分のマイフォルダ(migration 92)。受信箱をドラッグ&ドロップで整理する */
@@ -170,6 +173,7 @@ function FolderTree({
   unsortedFolder,
   candidateFolder,
   outboxPendingCount,
+  myAssigned,
   pinned,
   folders,
   onNavigate,
@@ -179,6 +183,12 @@ function FolderTree({
   const currentBox = searchParams.get('box') ?? '';
   const currentFolder = searchParams.get('folder') ?? '';
   const onList = pathname === '/mail';
+  // 「自分の担当」を開いている(受信箱・固定フォルダの指定なしで、担当 = 自分)
+  const onMyAssigned =
+    onList &&
+    currentBox === '' &&
+    currentFolder === '' &&
+    searchParams.get('assignee') === myAssigned.userId;
   // ピン留め/解除(Server Action)。完了後はレイアウトが再取得され、pinned が更新される
   const [pinPending, startPin] = useTransition();
   const pinnedIds = new Set(pinned.map((p) => p.id));
@@ -255,6 +265,14 @@ function FolderTree({
     const qs = p.toString();
     return qs ? `/mail?${qs}` : '/mail';
   };
+  // 「自分の担当」: すべての受信箱を担当 = 自分で絞る。状態タブは維持する
+  const hrefForMyAssigned = () => {
+    const p = new URLSearchParams();
+    const tab = searchParams.get('tab');
+    if (tab) p.set('tab', tab);
+    p.set('assignee', myAssigned.userId);
+    return `/mail?${p.toString()}`;
+  };
   // 受信箱をまたぐ固定フォルダ(取込候補)。受信箱の指定は外し、状態タブは維持する
   const hrefForFolder = (folder: string) => {
     const p = new URLSearchParams();
@@ -279,11 +297,22 @@ function FolderTree({
       <Link
         href={hrefFor(null)}
         onClick={onNavigate}
-        className={itemClass(onList && currentBox === '' && currentFolder === '')}
+        className={itemClass(onList && currentBox === '' && currentFolder === '' && !onMyAssigned)}
       >
         <Inbox className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
         <span className="truncate">すべての受信箱</span>
         <CountBadge n={total.pendingCount} strong />
+      </Link>
+
+      <Link
+        href={hrefForMyAssigned()}
+        onClick={onNavigate}
+        className={itemClass(onMyAssigned)}
+        title="自分が担当のメール(すべての受信箱)。件数は未対応の数です。状態タブで対応中・対応完了も見られます"
+      >
+        <UserCheck className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
+        <span className="truncate">自分の担当</span>
+        <CountBadge n={myAssigned.pendingCount} strong />
       </Link>
 
       <Link
