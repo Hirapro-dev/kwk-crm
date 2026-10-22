@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { MAIL_TABS, mailTabFilter, resolveMailTab } from '../../lib/domain/mail_tabs';
-import { MAIL_MANUAL_STATUSES, MAIL_STATUSES } from '../../lib/domain/mail_types';
+import {
+  MAIL_MANUAL_STATUSES,
+  MAIL_STATUSES,
+  MAIL_THREAD_STATUS_ON_INBOUND,
+} from '../../lib/domain/mail_types';
 
 /** メーラーの状態タブ解決(CLAUDE.md §8.1)。既定は「新着 = 未対応 / 通常」 */
 describe('resolveMailTab', () => {
@@ -61,5 +65,16 @@ describe('承認待ち', () => {
   it('承認待ちは状態の一つだが、手で選べる状態には入れない', () => {
     expect(MAIL_STATUSES).toContain('承認待ち');
     expect(MAIL_MANUAL_STATUSES).toEqual(['未対応', '対応中', '完了']);
+  });
+});
+
+/**
+ * お客様からメールが届いたときの状態(2026-10-22 ユーザー指定)。今の状態(対応中・承認待ち・完了)に関係なく「未対応」に戻し、
+ * 一覧の「新着」タブに出す(以前は「完了」のときだけ戻していたため、対応中のスレッドに来た返信が埋もれていた)。
+ */
+describe('受信したときの状態', () => {
+  it('お客様からのメールが届いたスレッドは「未対応」=「新着」タブに出る', () => {
+    expect(MAIL_THREAD_STATUS_ON_INBOUND).toBe('未対応');
+    expect(resolveMailTab('new').status).toBe(MAIL_THREAD_STATUS_ON_INBOUND);
   });
 });

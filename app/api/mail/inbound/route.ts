@@ -36,7 +36,7 @@ import {
   parseAddress,
   safeFilename,
 } from '@/lib/domain/mail_inbound';
-import { OTHER_MAILBOX_ADDRESS } from '@/lib/domain/mail_types';
+import { MAIL_THREAD_STATUS_ON_INBOUND, OTHER_MAILBOX_ADDRESS } from '@/lib/domain/mail_types';
 import { createS3Client, getMailAwsConfig } from '@/lib/mail/aws';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
@@ -350,18 +350,18 @@ export async function POST(request: Request): Promise<Response> {
   } else {
     const { data: current } = await supabase
       .from('mail_threads')
-      .select('status, member_id')
+      .select('member_id')
       .eq('id', threadId)
       .maybeSingle();
-    const cur = current as { status: string; member_id: string | null } | null;
+    const cur = current as { member_id: string | null } | null;
     await supabase
       .from('mail_threads')
       .update({
         last_message_at: sentAt,
         last_direction: 'in',
         is_read: false,
-        // 完了後に顧客から返信が来たら未対応に戻す(埋もれさせない)
-        ...(cur?.status === '完了' ? { status: '未対応' } : {}),
+        // お客様からメールが届いたら、今の状態(対応中・承認待ち・完了)に関係なく未対応に戻して新着に出す(2026-10-22)
+        status: MAIL_THREAD_STATUS_ON_INBOUND,
         // 未紐付けのスレッドに会員が判明したら紐付ける(既存の紐付けは上書きしない)
         ...(!cur?.member_id && memberId ? { member_id: memberId } : {}),
         // 既存スレッドに候補メールが加わったら候補にする(候補でないメールでは戻さない)

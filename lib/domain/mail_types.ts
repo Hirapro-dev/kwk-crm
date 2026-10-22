@@ -10,6 +10,11 @@
  */
 export const MAIL_STATUSES = ['未対応', '対応中', '完了', '承認待ち'] as const;
 export type MailStatus = (typeof MAIL_STATUSES)[number];
+/**
+ * お客様からメールが届いたときのスレッドの状態(2026-10-22 ユーザー指定)。今の状態(対応中・承認待ち・完了)に関係なく
+ * 「未対応」に戻して「新着」タブに出す(以前は「完了」のときだけ戻していたため、対応中のスレッドに来た返信が埋もれていた)。
+ */
+export const MAIL_THREAD_STATUS_ON_INBOUND: MailStatus = '未対応';
 /** 画面で手で選べる状態(スレッドの操作欄・まとめて変更)。承認待ちは自動なので入れない */
 export const MAIL_MANUAL_STATUSES = [
   '未対応',
