@@ -116,6 +116,7 @@
 | 型安全 | `supabase gen types typescript` で自動生成 |
 | マイグレーション | `supabase migration` (SQLファイル管理) |
 | ホスティング | Vercel(フロント) + Supabase(バックエンド) |
+| ランタイム | **Node.js 24.x**(本番 Vercel・CI とも。`package.json` の `engines` で固定。2026-10-22 に 20 / 「>=20」から変更: 20 はサポート終了で、`>=` だと新しい系統が出たとき本番が自動で上がるため。ビルドの最初に `node -v` を出して実際の版をビルドログに残す) |
 | パッケージ管理 | pnpm |
 | 形式チェック | Biome (ESLint+Prettier代替) |
 | テスト | Vitest + Playwright(E2E最低限) |

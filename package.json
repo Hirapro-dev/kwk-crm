@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:turbo": "next dev --turbo",
-    "build": "next build",
+    "build": "node -v && next build",
     "start": "next start",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
@@ -94,7 +94,7 @@
     "vitest": "^2.1.5"
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": "24.x",
     "npm": ">=10.0.0"
   }
 }
