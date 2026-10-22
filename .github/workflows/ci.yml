@@ -29,10 +29,12 @@ jobs:
 
       # このリポジトリのパッケージマネージャは npm (package-lock.json)。
       # pnpm-lock.yaml は存在しないため pnpm を使うとインストールで失敗する。
+      # 本番(Vercel)と同じ系統。package.json の engines(24.x)と合わせる。
+      # 20 は 2026-04 にサポート終了(2026-10 のセキュリティ告知: サポート終了版は常に影響を受ける)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
