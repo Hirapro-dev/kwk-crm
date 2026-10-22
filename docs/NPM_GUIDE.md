@@ -61,11 +61,9 @@ pnpm dev
 
 ### `nvm` が `globalconfig` 警告を出す
 
-ホームディレクトリの `~/.npmrc` に `globalconfig` / `prefix` が設定されている可能性。プロジェクト直下の `.npmrc` で空文字に上書きしているため、警告は出るが動作には影響なし。気になる場合は以下で消える:
-
-```bash
-nvm use --delete-prefix $(node --version) --silent
-```
+`~/.npmrc` やプロジェクトの `.npmrc` に `globalconfig` / `prefix` があると、nvm は `nvm use` を止める。
+プロジェクトの `.npmrc` には以前この 2 行(空文字の上書き)があり、プロジェクトのフォルダで `nvm use` が止まっていたため、2026-10-22 に外した。
+それでも出る場合は `~/.npmrc` を確認する。`nvm use --delete-prefix` は警告の出た npmrc を書き換えるので、プロジェクトの `.npmrc` が対象のときは使わない。
 
 ### `npm run dev` で起動するが HTTP 500
 
