@@ -19,14 +19,15 @@ import {
   mailSearchNote,
   parseMailSearch,
 } from './mail_search';
-import type {
-  MailBox,
-  MailMessage,
-  MailSignature,
-  MailThreadDetail,
-  MailThreadListItem,
-  MailThreadListParams,
-  MailThreadListResult,
+import {
+  MAIL_STATUSES,
+  type MailBox,
+  type MailMessage,
+  type MailSignature,
+  type MailThreadDetail,
+  type MailThreadListItem,
+  type MailThreadListParams,
+  type MailThreadListResult,
 } from './mail_types';
 
 export * from './mail_types';
@@ -88,7 +89,13 @@ function applyThreadFilters<Q extends Record<string, any>>(
   params: ThreadFilterParams,
 ): Q {
   let q = query;
-  if (params.status) q = q.eq('status', params.status);
+  if (Array.isArray(params.status)) {
+    // 決められた状態だけを使う(一覧の続き読み込みは画面から値が来るため)
+    q = q.in(
+      'status',
+      params.status.filter((s) => (MAIL_STATUSES as readonly string[]).includes(s)),
+    );
+  } else if (params.status) q = q.eq('status', params.status);
   if (params.category) q = q.eq('category', params.category);
   if (params.assigneeId === 'none') q = q.is('assignee_id', null);
   else if (params.assigneeId) q = q.eq('assignee_id', params.assigneeId);

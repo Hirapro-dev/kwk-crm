@@ -5,7 +5,7 @@ import { bulkUpdateMailThreads } from '@/lib/domain/mail_actions';
 import { applyImportRuleToThreads } from '@/lib/domain/mail_import_exec_actions';
 import {
   MAIL_CATEGORIES,
-  MAIL_STATUSES,
+  MAIL_MANUAL_STATUSES,
   type MailCategory,
   type MailStatus,
 } from '@/lib/domain/mail_types';
@@ -80,7 +80,7 @@ export function MailBulkActions({ ctx, assigneeOptions, importRules }: Props) {
           aria-label="選択したメールの状態を変更"
         >
           <option value="">変更…</option>
-          {MAIL_STATUSES.map((s) => (
+          {MAIL_MANUAL_STATUSES.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>

@@ -10,7 +10,7 @@ import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import {
   MAIL_CATEGORIES,
-  MAIL_STATUSES,
+  MAIL_MANUAL_STATUSES,
   type MailCategory,
   type MailStatus,
   canDeleteMailThreads,
@@ -44,7 +44,7 @@ export async function updateMailThread(
   const patch: Record<string, unknown> = {};
 
   if (input.status !== undefined) {
-    if (!MAIL_STATUSES.includes(input.status)) {
+    if (!(MAIL_MANUAL_STATUSES as readonly string[]).includes(input.status)) {
       return { error: `不正なステータスです: ${input.status}` };
     }
     patch.status = input.status;
@@ -119,7 +119,7 @@ export async function bulkUpdateMailThreads(
 
   const patch: Record<string, unknown> = {};
   if (input.status !== undefined) {
-    if (!MAIL_STATUSES.includes(input.status))
+    if (!(MAIL_MANUAL_STATUSES as readonly string[]).includes(input.status))
       return { error: `不正なステータスです: ${input.status}` };
     patch.status = input.status;
   }

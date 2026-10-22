@@ -18,6 +18,7 @@ import {
   resolveOutboxTab,
   resolveSendMode,
   scheduleInputLabel,
+  threadStatusAfterOutboxChange,
   toScheduledInputValue,
 } from '@/lib/domain/mail_outbox';
 import { MAIL_TABS } from '@/lib/domain/mail_tabs';
@@ -178,5 +179,23 @@ describe('送信後のスレッドの状態(2026-10-21 ユーザー指定)', () 
   it('送信したスレッドは「完了」になり、「対応完了」タブに表示される', () => {
     expect(MAIL_THREAD_STATUS_AFTER_SEND).toBe('完了');
     expect(MAIL_TABS.find((t) => t.key === 'done')?.status).toBe(MAIL_THREAD_STATUS_AFTER_SEND);
+  });
+});
+
+describe('threadStatusAfterOutboxChange(スレッドの状態を送信待ちに合わせる。migration 129)', () => {
+  // 返信が承認待ちの間はスレッドを「承認待ち」に。承認待ちが無くなったら(差し戻し・取消・予約中・送信失敗)「対応中」に戻す
+  it('承認待ちの返信があれば「承認待ち」', () => {
+    expect(threadStatusAfterOutboxChange('未対応', true)).toBe('承認待ち');
+    expect(threadStatusAfterOutboxChange('完了', true)).toBe('承認待ち');
+  });
+  it('承認待ちが無くなったら、承認待ちだったスレッドは「対応中」', () => {
+    expect(threadStatusAfterOutboxChange('承認待ち', false)).toBe('対応中');
+  });
+  it('承認待ちが無く、承認待ちでもないスレッドは変えない(送信後の「完了」や手で変えた状態を保つ)', () => {
+    expect(threadStatusAfterOutboxChange('完了', false)).toBeNull();
+    expect(threadStatusAfterOutboxChange('未対応', false)).toBeNull();
+  });
+  it('すでに承認待ちなら書き込まない', () => {
+    expect(threadStatusAfterOutboxChange('承認待ち', true)).toBeNull();
   });
 });

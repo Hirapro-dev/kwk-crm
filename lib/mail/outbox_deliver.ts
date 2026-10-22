@@ -20,6 +20,7 @@ import {
   usedInlineAttachments,
 } from '@/lib/domain/mail_outgoing_attachments';
 import type { MailAwsConfig } from '@/lib/mail/aws';
+import { syncThreadStatusWithOutbox } from '@/lib/mail/outbox_thread_status';
 import { type RawAttachment, buildRawMessage } from '@/lib/mail/raw_message';
 import {
   describeSesError,
@@ -119,11 +120,17 @@ async function findMemberIdByEmail(admin: AdminClient, address: string): Promise
 }
 
 async function markFailed(admin: AdminClient, id: string, message: string): Promise<void> {
-  await admin
+  const { data } = await admin
     .from('mail_outbox')
     .update({ status: 'failed', last_error: message.slice(0, 1000) })
     .eq('id', id)
-    .eq('status', 'sending');
+    .eq('status', 'sending')
+    .select('thread_id');
+  // 承認待ちが残っていなければスレッドを「対応中」に戻す(migration 129)
+  await syncThreadStatusWithOutbox(
+    admin,
+    ((data ?? []) as Array<{ thread_id: string | null }>)[0]?.thread_id,
+  );
 }
 
 /**
@@ -312,6 +319,8 @@ export async function deliverOutboxItem(
       last_error: saveError ? `送信は完了しましたが履歴の保存に失敗しました: ${saveError}` : null,
     })
     .eq('id', row.id);
+  // 同じスレッドにまだ承認待ちの返信があれば「承認待ち」のままにする(migration 129)
+  await syncThreadStatusWithOutbox(admin, threadId);
 
   return { ok: true, threadId };
 }

@@ -24,7 +24,7 @@ interface Props {
   total: number;
   params: {
     q?: string;
-    status?: MailStatus;
+    status?: MailStatus | readonly MailStatus[];
     category?: MailCategory;
     assigneeId?: string;
     mailBoxId?: number;
@@ -50,6 +50,7 @@ const STATUS_CLASS: Record<MailStatus, string> = {
   未対応: 'bg-red-100 text-red-800 border-red-200',
   対応中: 'bg-amber-100 text-amber-800 border-amber-200',
   完了: 'bg-gray-100 text-gray-700 border-gray-200',
+  承認待ち: 'bg-sky-100 text-sky-800 border-sky-200',
 };
 
 export function MailInfinite({

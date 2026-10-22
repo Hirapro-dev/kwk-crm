@@ -28,19 +28,29 @@ import { MailFolderSidebar, MailFolderSidebarProvider } from './MailFolderSideba
 import { MailerTopbar } from './MailerTopbar';
 
 export default async function MailerLayout({ children }: { children: React.ReactNode }) {
-  const [me, boxes, counts, candidatePending, candidateUnread, pinIds, userFolders, outboxCounts] =
-    await Promise.all([
-      getCurrentUser(),
-      listMailBoxes(),
-      listMailBoxCounts(),
-      // 「取込候補」(migration 82)は受信箱をまたぐ絞り込みなので、受信箱別の集計とは別に数える
-      countMailThreads({ importCandidate: true, status: '未対応' }),
-      countMailThreads({ importCandidate: true, unreadOnly: true }),
-      listMyMailBoxPins(),
-      listMyMailUserFolders(),
-      // 「送信待ち」(migration 124)の承認待ち件数
-      countMailOutboxByStatus(),
-    ]);
+  const me = await getCurrentUser();
+  const [
+    boxes,
+    counts,
+    candidatePending,
+    candidateUnread,
+    pinIds,
+    userFolders,
+    outboxCounts,
+    myPending,
+  ] = await Promise.all([
+    listMailBoxes(),
+    listMailBoxCounts(),
+    // 「取込候補」(migration 82)は受信箱をまたぐ絞り込みなので、受信箱別の集計とは別に数える
+    countMailThreads({ importCandidate: true, status: '未対応' }),
+    countMailThreads({ importCandidate: true, unreadOnly: true }),
+    listMyMailBoxPins(),
+    listMyMailUserFolders(),
+    // 「送信待ち」(migration 124)の承認待ち件数
+    countMailOutboxByStatus(),
+    // 「自分の担当」(2026-10-22)の未対応件数(通常分類。ほかのフォルダの件数と同じ数え方)
+    countMailThreads({ assigneeId: me.id, status: '未対応', category: '通常' }),
+  ]);
   const candidateFolder = { pendingCount: candidatePending, unreadCount: candidateUnread };
   // 「その他」(未登録アドレス宛。migration 78)はドメイン階層に混ぜず、固定項目として出す
   const { rest } = splitOtherMailBox(boxes);
@@ -68,6 +78,7 @@ export default async function MailerLayout({ children }: { children: React.React
             unsortedFolder={unsortedFolder}
             candidateFolder={candidateFolder}
             outboxPendingCount={outboxCounts.pending ?? 0}
+            myAssigned={{ userId: me.id, pendingCount: myPending }}
             pinned={pinned}
             folders={folders}
           />

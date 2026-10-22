@@ -24,6 +24,7 @@ import {
 } from '@/lib/domain/mail_outbox';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { deliverOutboxItem } from '@/lib/mail/outbox_deliver';
+import { syncThreadStatusWithOutbox } from '@/lib/mail/outbox_thread_status';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
@@ -55,9 +56,11 @@ async function loadCore(id: string): Promise<OutboxCore | null> {
   return (data as OutboxCore | null) ?? null;
 }
 
-function revalidate(item: OutboxCore, threadId?: string | null) {
-  revalidatePath('/mail', 'layout');
+/** 操作の後始末: スレッドの状態を送信待ちに合わせ(承認待ち ⇔ 対応中。migration 129)、画面を取り直す */
+async function revalidate(item: OutboxCore, threadId?: string | null) {
   const t = threadId ?? item.thread_id;
+  await syncThreadStatusWithOutbox(createServiceRoleClient(), t);
+  revalidatePath('/mail', 'layout');
   if (t) revalidatePath(`/mail/${t}`);
 }
 
@@ -93,17 +96,17 @@ export async function approveMailOutbox(id: string): Promise<OutboxActionResult>
   if ((updated ?? []).length === 0) return { error: 'このメールは既に処理されています' };
 
   if (!isDueNow(item.scheduled_at, new Date())) {
-    revalidate(item);
+    await revalidate(item);
     return { message: '承認しました。指定の日時に送信されます' };
   }
 
   const cfg = getMailAwsConfig();
   if (!cfg) {
-    revalidate(item);
+    await revalidate(item);
     return { error: '承認しましたが、送信基盤(SES)が未設定のため送信できません' };
   }
   const r = await deliverOutboxItem(admin, cfg, id);
-  revalidate(item, r.threadId);
+  await revalidate(item, r.threadId);
   if (!r.ok) return { error: `承認しましたが送信に失敗しました: ${r.error ?? ''}` };
   return { message: '承認して送信しました', threadId: r.threadId };
 }
@@ -130,16 +133,16 @@ export async function sendOwnMailOutboxNow(id: string): Promise<OutboxActionResu
   if ((updated ?? []).length === 0) return { error: 'このメールは既に処理されています' };
 
   if (!isDueNow(item.scheduled_at, new Date())) {
-    revalidate(item);
+    await revalidate(item);
     return { message: '送信を予約しました。指定の日時に送信されます' };
   }
   const cfg = getMailAwsConfig();
   if (!cfg) {
-    revalidate(item);
+    await revalidate(item);
     return { error: '送信基盤(SES)が未設定のため送信できません(予約中に残っています)' };
   }
   const r = await deliverOutboxItem(admin, cfg, id);
-  revalidate(item, r.threadId);
+  await revalidate(item, r.threadId);
   if (!r.ok) return { error: `送信に失敗しました: ${r.error ?? ''}` };
   return { message: '送信しました', threadId: r.threadId };
 }
@@ -172,7 +175,7 @@ export async function rejectMailOutbox(id: string, reason: string): Promise<Outb
     .select('id');
   if (error) return { error: `差し戻しに失敗しました: ${error.message}` };
   if ((updated ?? []).length === 0) return { error: 'このメールは既に処理されています' };
-  revalidate(item);
+  await revalidate(item);
   return { message: '差し戻しました' };
 }
 
@@ -192,7 +195,7 @@ export async function cancelMailOutbox(id: string): Promise<OutboxActionResult> 
     .select('id');
   if (error) return { error: `取消に失敗しました: ${error.message}` };
   if ((updated ?? []).length === 0) return { error: 'このメールは既に送信中か処理済みです' };
-  revalidate(item);
+  await revalidate(item);
   return { message: '取り消しました' };
 }
 
@@ -257,7 +260,7 @@ export async function updateMailOutbox(input: {
     .select('id');
   if (error) return { error: `保存に失敗しました: ${error.message}` };
   if ((updated ?? []).length === 0) return { error: 'このメールは既に送信中か処理済みです' };
-  revalidate(item);
+  await revalidate(item);
   return { message: '修正して承認依頼を出し直しました' };
 }
 
@@ -279,13 +282,13 @@ export async function retryMailOutbox(id: string): Promise<OutboxActionResult> {
   if ((updated ?? []).length === 0) return { error: 'このメールは既に処理されています' };
 
   if (!isDueNow(item.scheduled_at, new Date())) {
-    revalidate(item);
+    await revalidate(item);
     return { message: '予約中に戻しました。指定の日時に送信されます' };
   }
   const cfg = getMailAwsConfig();
   if (!cfg) return { error: '送信基盤(SES)が未設定です' };
   const r = await deliverOutboxItem(admin, cfg, id);
-  revalidate(item, r.threadId);
+  await revalidate(item, r.threadId);
   if (!r.ok) return { error: `送信に失敗しました: ${r.error ?? ''}` };
   return { message: '送信しました', threadId: r.threadId };
 }

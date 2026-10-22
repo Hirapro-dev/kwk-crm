@@ -4,8 +4,18 @@
  * (lib/supabase/server 等)に依存させない。DB アクセスは lib/domain/mail.ts。
  */
 
-export const MAIL_STATUSES = ['未対応', '対応中', '完了'] as const;
+/**
+ * スレッドの状態。「承認待ち」(migration 129。2026-10-22)は返信が承認待ちの間だけ付く状態で、
+ * 送信待ちメールに合わせて自動で切り替える(lib/mail/outbox_thread_status.ts)。
+ */
+export const MAIL_STATUSES = ['未対応', '対応中', '完了', '承認待ち'] as const;
 export type MailStatus = (typeof MAIL_STATUSES)[number];
+/** 画面で手で選べる状態(スレッドの操作欄・まとめて変更)。承認待ちは自動なので入れない */
+export const MAIL_MANUAL_STATUSES = [
+  '未対応',
+  '対応中',
+  '完了',
+] as const satisfies readonly MailStatus[];
 
 /** 受信時の自動分類。受信箱の既定表示は「通常」のみ。削除はしない */
 export const MAIL_CATEGORIES = ['通常', 'メルマガ', '自動応答', '迷惑メール'] as const;
@@ -149,7 +159,8 @@ export interface MailThreadDetail extends MailThreadListItem {
 export interface MailThreadListParams {
   /** 検索語。メールアドレスならアドレス検索、それ以外は件名・差出人名のテキスト検索(migration 125 / 126。lib/domain/mail_search.ts) */
   q?: string;
-  status?: MailStatus;
+  /** 配列ならどれかに一致(「対応中」タブ = 対応中 + 承認待ち。migration 129) */
+  status?: MailStatus | readonly MailStatus[];
   /** 未指定なら絞らない。画面側は既定で「通常」を渡す */
   category?: MailCategory;
   /** users.id / 'none' = 未割当 */

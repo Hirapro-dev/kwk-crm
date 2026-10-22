@@ -5,11 +5,14 @@
  */
 
 import { Button } from '@/components/ui/button';
+import { getCurrentUser } from '@/lib/domain/auth';
 import { getAdjacentMailThreads, listMailBoxes, listMyMailUserFolders } from '@/lib/domain/mail';
 import { unsortedBoxIds } from '@/lib/domain/mail_folders';
 import { mailTabFilter, resolveMailTab } from '@/lib/domain/mail_tabs';
+import { canDeleteMailThreads } from '@/lib/domain/mail_types';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
+import { MailThreadDeleteButton } from '../MailThreadDeleteButton';
 import { MailThreadPanel } from '../MailThreadPanel';
 
 interface PageProps {
@@ -25,7 +28,7 @@ interface PageProps {
 }
 
 export default async function MailThreadPage({ params, searchParams }: PageProps) {
-  const [{ id }, sp] = await Promise.all([params, searchParams]);
+  const [{ id }, sp, me] = await Promise.all([params, searchParams, getCurrentUser()]);
 
   // 一覧(page.tsx)と同じ解釈で絞り込み条件を組み立てる
   // 一覧と同じ: 検索中はタブの指定が無ければ「すべて」
@@ -92,6 +95,13 @@ export default async function MailThreadPage({ params, searchParams }: PageProps
               次のメール
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </Button>
+          )}
+          {/* 削除(admin / manager。2026-10-22)。削除したら次のメール、無ければ一覧へ */}
+          {canDeleteMailThreads(me.role) && (
+            <MailThreadDeleteButton
+              threadId={id}
+              afterHref={withQs(nextId ? `/mail/${nextId}` : prevId ? `/mail/${prevId}` : '/mail')}
+            />
           )}
         </div>
       </div>

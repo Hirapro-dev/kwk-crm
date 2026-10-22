@@ -39,6 +39,7 @@ import type { SubmittedAttachment } from '@/lib/domain/mail_outgoing_attachments
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { insertOutboxAttachments, prepareOutboxAttachments } from '@/lib/mail/outbox_attachments';
 import { deliverOutboxItem } from '@/lib/mail/outbox_deliver';
+import { syncThreadStatusWithOutbox } from '@/lib/mail/outbox_thread_status';
 import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
@@ -215,6 +216,8 @@ export async function replyToMailThread(input: {
   const outboxId = (data as { id: string }).id;
   const attErr = await attachOrCancel(admin, outboxId, me.id, att.rows);
   if (attErr) return { error: attErr };
+  // 承認待ちの間はスレッドを「承認待ち」にする(一覧の「対応中」タブに出る。migration 129)
+  await syncThreadStatusWithOutbox(admin, thread.id);
 
   return finishSubmission(outboxId, send.mode, schedule.at);
 }
