@@ -12,6 +12,7 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import { listLegacyBondFilterOptions, listLegacyBonds } from '@/lib/domain/legacy_bonds';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
+import Link from 'next/link';
 import { Suspense } from 'react';
 
 interface PageProps {
@@ -76,6 +77,10 @@ export default async function LegacyBondsPage({ searchParams }: PageProps) {
               </span>
             </div>
           </div>
+          {/* 要件のまとめと使い方(2026-10-23) */}
+          <Link href="/legacy-bonds/manual" className="text-xs text-primary hover:underline">
+            使い方
+          </Link>
         </div>
 
         {/* 検索・フィルタ・並び替え(社債名 / 今回の結果 / 償還対象月の範囲 / 並び替え項目と向き) */}
