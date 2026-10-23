@@ -13,6 +13,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { MAIL_IMPORT_CANDIDATE_SUBJECT_KEYWORDS } from '@/lib/domain/mail_types';
 import { storageSafeName } from '@/lib/domain/task_pure';
 
 export interface ParsedAddress {
@@ -213,6 +214,23 @@ export interface ClassifyInput {
  * 会員として登録済みの差出人は、他の条件に当てはまっても「通常」にする
  * (顧客からのメールを誤判定で埋もれさせない)。
  */
+/** エキスパ(フォームの配信サービス)の差出人のドメイン。サブドメインも含む */
+const EXPA_SENDER_DOMAINS = ['ex-pa.jp'];
+
+/**
+ * エキスパのフォーム登録通知か(差出人がエキスパ かつ 件名に取込候補のキーワードを含む)。
+ * お客様の申込み・問合せそのものなので、迷惑メール・メルマガに分けない(2026-10-23。転送元のサーバーが
+ * [SPAM] を付けることがあり、約 7.6 万通が迷惑メールに埋もれていた)。件名だけ真似たメールは対象にしない。
+ */
+export function isExpaFormNotification(fromAddress: string, subject: string): boolean {
+  const domain = (fromAddress.split('@')[1] ?? '').trim().toLowerCase();
+  const fromExpa = EXPA_SENDER_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
+  const s = subject.toLowerCase();
+  return (
+    fromExpa && MAIL_IMPORT_CANDIDATE_SUBJECT_KEYWORDS.some((k) => s.includes(k.toLowerCase()))
+  );
+}
+
 export function classifyInbound(
   input: ClassifyInput,
 ): '通常' | 'メルマガ' | '自動応答' | '迷惑メール' {
@@ -220,6 +238,8 @@ export function classifyInbound(
   const h = input.headers;
   const from = input.fromAddress;
   const subject = input.subject ?? '';
+  // エキスパのフォーム登録通知は、迷惑メールの印・配信停止の情報が付いていても「通常」
+  if (isExpaFormNotification(from, subject)) return '通常';
 
   // 自動応答・不達通知
   const autoSubmitted = (h['auto-submitted'] ?? '').toLowerCase();
