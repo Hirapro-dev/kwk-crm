@@ -10,6 +10,7 @@ import { type InfiniteCol, InfiniteTable } from '@/components/layout/InfiniteTab
 import { TableCell } from '@/components/ui/table';
 import { deleteRecords } from '@/lib/domain/delete_actions';
 import type { LegacyBondListParams } from '@/lib/domain/legacy_bonds';
+import { legacyBondAttention } from '@/lib/domain/legacy_bonds_calc';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { loadMoreLegacyBonds } from '@/lib/domain/list_more_actions';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
@@ -27,7 +28,26 @@ interface Props {
   canDelete?: boolean;
 }
 
+/** 今月(日本時間)の "YYYY/MM" */
+function currentJstYm(): string {
+  const j = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return `${j.getUTCFullYear()}/${String(j.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+const ATTENTION_LABEL = { overdue: '満期超過', soon: '満期間近' } as const;
+
 export function LegacyBondsInfinite({ initialRows, fields, total, params, canDelete }: Props) {
+  const nowYm = currentJstYm();
+  // 回答が決まっていない行のうち、満期を過ぎたもの(赤)と 2 か月以内のもの(黄)を目立たせる(2026-10-23)
+  const attentionOf = (row: Row) =>
+    legacyBondAttention(
+      {
+        redemption_month: row.redemption_month ? String(row.redemption_month) : null,
+        result: row.result ? String(row.result) : null,
+      },
+      nowYm,
+    );
+
   if (fields.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -81,6 +101,21 @@ export function LegacyBondsInfinite({ initialRows, fields, total, params, canDel
           </TableCell>
         );
       }
+      if (f.field_name === 'result') {
+        const att = attentionOf(row);
+        return (
+          <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">
+            {row.result ? String(row.result) : '-'}
+            {att && (
+              <span
+                className={`ml-1 rounded px-1 text-[10px] ${att === 'overdue' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}
+              >
+                {ATTENTION_LABEL[att]}
+              </span>
+            )}
+          </TableCell>
+        );
+      }
       const raw = getFieldValue(row, f.field_name, f.is_in_db, f.csv_column_name);
       const formatted = formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
       return (
@@ -100,6 +135,10 @@ export function LegacyBondsInfinite({ initialRows, fields, total, params, canDel
       columns={columns}
       renderRow={renderRow}
       getKey={(r) => String(r.id)}
+      rowClassName={(r) => {
+        const att = attentionOf(r);
+        return att === 'overdue' ? 'bg-red-50' : att === 'soon' ? 'bg-amber-50' : undefined;
+      }}
       emptyMessage="該当するデータがありません"
       selection={
         canDelete
