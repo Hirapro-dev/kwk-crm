@@ -27,7 +27,7 @@ import { buildThreadQuote } from '@/lib/domain/mail_text';
 import { listFieldDefinitions } from '@/lib/domain/object_metadata';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import { getMailAwsConfig } from '@/lib/mail/aws';
-import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
+import { domainOf, isDomainSendable, sendableDomainMap } from '@/lib/mail/ses_send';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -92,21 +92,25 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
     : `送信元ドメイン ${boxDomain ?? ''} が SES で未検証です。検証(DKIM 設定)後に送信できるようになります。`;
   const lastInbound = [...thread.messages].reverse().find((m) => m.direction === 'in');
 
-  // 返信フォームの送信元候補(有効な受信箱すべて。「その他」は除く。送信可否はドメインの SES 検証状態)
-  const fromOptions = await Promise.all(
-    splitOtherMailBox(allBoxes)
-      .rest.filter((b) => b.is_active)
-      .map(async (b) => {
-        const d = domainOf(b.address);
-        return {
-          id: b.id,
-          address: b.address,
-          display_name: b.display_name,
-          default_signature_id: b.default_signature_id,
-          sendable: !!cfg && !!d && (await isDomainSendable(cfg, d)),
-        };
-      }),
-  );
+  // 返信フォームの送信元候補(有効な受信箱すべて。「その他」は除く。送信可否はドメインの SES 検証状態)。
+  // ドメインごとに 1 回だけ調べる(受信箱ごとに同時に問い合わせると SES に断られ、検証済みでも「受信専用」になっていた)
+  const activeBoxes = splitOtherMailBox(allBoxes).rest.filter((b) => b.is_active);
+  const sendableByDomain = cfg
+    ? await sendableDomainMap(
+        cfg,
+        activeBoxes.map((b) => b.address),
+      )
+    : new Map<string, boolean>();
+  const fromOptions = activeBoxes.map((b) => {
+    const d = domainOf(b.address);
+    return {
+      id: b.id,
+      address: b.address,
+      display_name: b.display_name,
+      default_signature_id: b.default_signature_id,
+      sendable: !!d && sendableByDomain.get(d) === true,
+    };
+  });
   // 返信本文に最初から入れる引用: スレッドのやり取り全部を新しい順に(2026-10-20。各メールの中の既存の引用は外す)
   const initialQuote = buildThreadQuote(thread.messages);
 

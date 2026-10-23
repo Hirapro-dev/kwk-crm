@@ -10,9 +10,11 @@ AWS コンソール > IAM > ユーザー > 「ユーザーを作成」で2つ作
 
 - バケット名(`hirapro-crm-mail-inbound`)やリージョン(`ap-northeast-1`)を変える場合は JSON 内の ARN も合わせて変更する。
 - `setup` ユーザーのキーは構築が終わったら削除してよい(再実行が必要になったら作り直す)。
-- `webhook` ユーザーはバケットの `inbound/` 配下の読取と送信、送信ドメインの SES 登録(`ses:CreateEmailIdentity` / `ses:GetEmailIdentity`)だけ。受信ルールや他のバケットには触れない。
+- `webhook` ユーザーはバケットの `inbound/` 配下の読取と送信、送信ドメインの SES 登録と確認(`ses:CreateEmailIdentity` / `ses:GetEmailIdentity` / `ses:ListEmailIdentities`)だけ。受信ルールや他のバケットには触れない。
   - `ses:CreateEmailIdentity` は 2026-09-09 に追加(`/mail/settings` から送信ドメインを SES に登録できるようにするため)。
     既に作成済みの `hirapro-crm-mail-webhook` には、IAM 画面でインラインポリシーを `webhook-user-policy.json` の内容に**貼り替える**。
+  - `ses:ListEmailIdentities` は 2026-10-23 に追加(返信・新規作成の送信元の候補で、全ドメインの検証状態を 1 回で取るため)。
+    無くても動く(ドメインごとに問い合わせる)が、画面を開くのが遅くなる。同じく**貼り替える**。
 
 ## 実行手順(setup ユーザーのキーで)
 

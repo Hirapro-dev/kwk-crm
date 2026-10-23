@@ -10,7 +10,7 @@ import { listMailBoxes, listMailSignatures } from '@/lib/domain/mail';
 import { splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { canDirectSend } from '@/lib/domain/mail_outbox';
 import { getMailAwsConfig } from '@/lib/mail/aws';
-import { domainOf, isDomainSendable } from '@/lib/mail/ses_send';
+import { domainOf, sendableDomainMap } from '@/lib/mail/ses_send';
 import Link from 'next/link';
 import { type ComposeBoxOption, MailComposeForm } from './MailComposeForm';
 
@@ -27,21 +27,24 @@ export default async function MailNewPage({ searchParams }: PageProps) {
   // 署名は署名マスタの有効なものだけ選べる
   const signatures = allSignatures.filter((s) => s.is_active);
 
-  const options: ComposeBoxOption[] = await Promise.all(
-    boxes
-      .filter((b) => b.is_active)
-      .map(async (b) => {
-        const domain = domainOf(b.address);
-        const sendable = cfg && domain ? await isDomainSendable(cfg, domain) : false;
-        return {
-          id: b.id,
-          address: b.address,
-          display_name: b.display_name,
-          default_signature_id: b.default_signature_id,
-          sendable,
-        };
-      }),
-  );
+  // 送信可否はドメインごとに 1 回だけ調べる(受信箱ごとに同時に問い合わせると SES に断られ、検証済みでも「受信専用」になっていた)
+  const activeBoxes = boxes.filter((b) => b.is_active);
+  const sendableByDomain = cfg
+    ? await sendableDomainMap(
+        cfg,
+        activeBoxes.map((b) => b.address),
+      )
+    : new Map<string, boolean>();
+  const options: ComposeBoxOption[] = activeBoxes.map((b) => {
+    const domain = domainOf(b.address);
+    return {
+      id: b.id,
+      address: b.address,
+      display_name: b.display_name,
+      default_signature_id: b.default_signature_id,
+      sendable: !!domain && sendableByDomain.get(domain) === true,
+    };
+  });
 
   return (
     <div className="space-y-3">
