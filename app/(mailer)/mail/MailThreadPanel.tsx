@@ -18,6 +18,7 @@ import {
   listMailImportRules,
   listMailSignatures,
 } from '@/lib/domain/mail';
+import { splitVisibleAttachments } from '@/lib/domain/mail_attachment_view';
 import { buildReplySubject } from '@/lib/domain/mail_compose';
 import { splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { findMatchingRule } from '@/lib/domain/mail_import_rules';
@@ -29,8 +30,10 @@ import { listAllUsers } from '@/lib/domain/users_admin';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { domainOf, isDomainSendable, sendableDomainMap } from '@/lib/mail/ses_send';
 import { formatDateTime } from '@/lib/utils/date';
+import { Paperclip } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { MailAttachmentList } from './MailAttachmentList';
 import { MailBodyViewer } from './MailBodyViewer';
 import { MailImportRulePanel } from './MailImportRulePanel';
 import { MailReplyForm } from './MailReplyForm';
@@ -50,13 +53,6 @@ interface Props {
 
 /** 署名 URL の有効期間。画面を開いたまま添付を開く猶予として 10 分 */
 const ATTACHMENT_URL_TTL_SEC = 600;
-
-function formatBytes(n: number | null): string {
-  if (n === null || n === undefined) return '';
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
 
 export async function MailThreadPanel({ threadId, embedded, showReply = true }: Props) {
   const [thread, me, users, allBoxes, allSignatures, outbox] = await Promise.all([
@@ -144,6 +140,12 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
         .map((f) => ({ field_name: f.field_name, label: f.label, is_in_db: f.is_in_db }))
     : [];
 
+  // スレッド全体の添付ファイルの数(電子署名などの部品は数えない)
+  const threadFileCount = thread.messages.reduce(
+    (n, m) => n + splitVisibleAttachments(m.attachments ?? []).files.length,
+    0,
+  );
+
   // 添付の署名 URL をまとめて発行
   const signedUrls = new Map<string, string>();
   await Promise.all(
@@ -176,6 +178,12 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
               )}
             </span>
             <span>{thread.messages.length} 通</span>
+            {threadFileCount > 0 && (
+              <span className="inline-flex items-center gap-1 rounded bg-sky-600 px-1.5 py-0.5 font-semibold text-white">
+                <Paperclip className="h-3 w-3" aria-hidden="true" />
+                添付 {threadFileCount} 件
+              </span>
+            )}
             {!sendable && (
               <Badge variant="outline" className="text-[10px] text-muted-foreground">
                 受信専用
@@ -199,6 +207,7 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
       {/* メッセージは新しい順に並べる(2026-10-20 ユーザー要望。取得は古い順なので逆にする) */}
       {[...thread.messages].reverse().map((m) => {
         const isOut = m.direction === 'out';
+        const fileCount = splitVisibleAttachments(m.attachments ?? []).files.length;
         const fromLabel = isOut
           ? `${m.sender?.full_name ?? '(送信者不明)'} <${m.from_address}>`
           : m.from_name
@@ -215,6 +224,12 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
                   <Badge variant="outline" className="text-[11px]">
                     {isOut ? '送信' : '受信'}
                   </Badge>
+                  {fileCount > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded bg-sky-600 px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                      <Paperclip className="h-3 w-3" aria-hidden="true" />
+                      添付 {fileCount}
+                    </span>
+                  )}
                   <span className="font-medium">{fromLabel}</span>
                   {isOut && m.delivery_status && (
                     <span
@@ -238,36 +253,8 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
               </div>
             </CardHeader>
             <CardContent className="px-3 py-3">
+              <MailAttachmentList attachments={m.attachments ?? []} signedUrls={signedUrls} />
               <MailBodyViewer text={m.text_body} html={m.html_body} />
-
-              {m.attachments && m.attachments.length > 0 && (
-                <ul className="mt-3 flex flex-wrap gap-2 border-t pt-2 text-xs">
-                  {m.attachments.map((a) => {
-                    const url = signedUrls.get(a.id);
-                    return (
-                      <li key={a.id}>
-                        {url ? (
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="sf-link rounded border px-2 py-1"
-                          >
-                            📎 {a.filename}{' '}
-                            <span className="text-muted-foreground">
-                              {formatBytes(a.size_bytes)}
-                            </span>
-                          </a>
-                        ) : (
-                          <span className="rounded border px-2 py-1 text-muted-foreground">
-                            📎 {a.filename}(取得不可)
-                          </span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
             </CardContent>
           </Card>
         );
