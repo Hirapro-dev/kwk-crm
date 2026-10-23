@@ -109,7 +109,7 @@
 
 | レイヤ | 採用技術 |
 |---|---|
-| フロント | **Next.js 15** (App Router) + TypeScript + Tailwind CSS + shadcn/ui |
+| フロント | **Next.js 15** (App Router。2026-10-23 に 15.3.9 → **15.5.28**: 2026-10-14 の Next.js セキュリティ更新(Server Actions の DoS ほか)。15.3 系には修正版が出ないため 15.5 系(Maintenance LTS)へ。画像処理の `sharp` も 0.35.5 以上を直接指定) + TypeScript + Tailwind CSS + shadcn/ui |
 | 認証 | **Supabase Auth** (email/password、将来Google SSO検討) |
 | DB | **Supabase Postgres** (Pro プラン以上必須:8GB〜) |
 | API | Supabase 自動生成 PostgREST + Edge Functions (必要時) |
