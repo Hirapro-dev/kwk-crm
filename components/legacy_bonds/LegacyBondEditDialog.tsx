@@ -118,8 +118,9 @@ export function LegacyBondEditDialog({ bond }: { bond: LegacyBondRow }) {
           </DialogHeader>
           <div className="grid gap-3 text-xs sm:grid-cols-2">
             <label htmlFor="lb-result" className="block">
-              今回の結果 id="lb-result"{' '}
+              今回の結果
               <Select
+                id="lb-result"
                 className="mt-1"
                 value={form.result}
                 disabled={pending || locked}
@@ -134,8 +135,9 @@ export function LegacyBondEditDialog({ bond }: { bond: LegacyBondRow }) {
               </Select>
             </label>
             <label htmlFor="lb-contract" className="block">
-              契約書送付 id="lb-contract"日
+              契約書送付日
               <Input
+                id="lb-contract"
                 className="mt-1"
                 type="date"
                 value={form.contractSentDate}
@@ -144,8 +146,9 @@ export function LegacyBondEditDialog({ bond }: { bond: LegacyBondRow }) {
               />
             </label>
             <label htmlFor="lb-principal" className="block">
-              前回継続元金( id="lb-principal"円)
+              前回継続元金(円)
               <Input
+                id="lb-principal"
                 className="mt-1"
                 inputMode="numeric"
                 value={form.prevPrincipal}
@@ -154,8 +157,9 @@ export function LegacyBondEditDialog({ bond }: { bond: LegacyBondRow }) {
               />
             </label>
             <label htmlFor="lb-years" className="block">
-              前回継続年数(年) id="lb-years"{' '}
+              前回継続年数(年)
               <Input
+                id="lb-years"
                 className="mt-1"
                 inputMode="numeric"
                 value={form.prevYears}
@@ -173,8 +177,9 @@ export function LegacyBondEditDialog({ bond }: { bond: LegacyBondRow }) {
               />
             </label>
             <label htmlFor="lb-rate" className="block">
-              前回継続利息(年 %) id="lb-rate"{' '}
+              前回継続利息(年 %)
               <Input
+                id="lb-rate"
                 className="mt-1"
                 inputMode="decimal"
                 value={form.prevInterestRate}
@@ -193,8 +198,9 @@ export function LegacyBondEditDialog({ bond }: { bond: LegacyBondRow }) {
             </label>
             {form.result === '一部継続' && (
               <label htmlFor="lb-partial" className="block">
-                一部償還金額(払い出す額。円) id="lb-partial"{' '}
+                一部償還金額(払い出す額。円)
                 <Input
+                  id="lb-partial"
                   className="mt-1"
                   inputMode="numeric"
                   value={form.partialRedemptionAmount}
@@ -204,8 +210,9 @@ export function LegacyBondEditDialog({ bond }: { bond: LegacyBondRow }) {
               </label>
             )}
             <label htmlFor="lb-bank" className="block sm:col-span-2">
-              銀行情報 id="lb-bank"{' '}
+              銀行情報
               <Textarea
+                id="lb-bank"
                 className="mt-1"
                 rows={3}
                 value={form.bankInfo}
