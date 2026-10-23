@@ -100,3 +100,36 @@ describe('classifyInbound', () => {
     expect(classifyInbound(base)).toBe('通常');
   });
 });
+
+describe('classifyInbound(エキスパのフォーム通知。2026-10-23)', () => {
+  // 意図: エキスパ(ex-pa.jp)のフォーム登録通知は、お客様の申込み・問合せそのもの(問合せとして取り込む元)。
+  // 転送元のサーバーが迷惑メールの印([SPAM] / X-Spam-Flag)を付けることがあり、迷惑メールに埋もれていたため、
+  // 迷惑メールの判定より先に「通常」にする。差出人のドメインも見て、件名だけ真似たメールは対象にしない。
+  const expa = {
+    ...base,
+    fromAddress: 'info@ex-pa.jp',
+    subject: '[SPAM] [エキスパ]フォーム登録通知 abc123',
+    headers: { 'x-spam-flag': 'YES', 'x-spam-status': 'Yes, score=6.1' },
+  };
+  it('迷惑メールの印が付いていても「通常」', () => {
+    expect(classifyInbound(expa)).toBe('通常');
+    expect(classifyInbound({ ...expa, sesSpamFail: true })).toBe('通常');
+  });
+  it('配信停止の情報が付いていても「通常」(メルマガにしない)', () => {
+    expect(
+      classifyInbound({ ...expa, headers: { 'list-unsubscribe': '<mailto:u@ex-pa.jp>' } }),
+    ).toBe('通常');
+  });
+  it('エキスパのサブドメイン(送信サーバー)からも「通常」', () => {
+    expect(classifyInbound({ ...expa, fromAddress: 'noreply@mail.ex-pa.jp' })).toBe('通常');
+  });
+  it('件名が同じでもエキスパ以外の差出人は、これまでどおり迷惑メールの判定をする', () => {
+    expect(classifyInbound({ ...expa, fromAddress: 'spam@example.com' })).toBe('迷惑メール');
+    expect(classifyInbound({ ...expa, fromAddress: 'x@notex-pa.jp' })).toBe('迷惑メール');
+  });
+  it('エキスパからでもフォーム通知でないメール(案内など)は、これまでどおり判定する', () => {
+    expect(
+      classifyInbound({ ...expa, subject: 'エキスパ通信 10月号', headers: { 'list-id': 'x' } }),
+    ).toBe('メルマガ');
+  });
+});
