@@ -30,12 +30,16 @@ export interface LegacyBondRow {
   partial_continue_amount: number | null;
   partial_redemption_amount: number | null;
   bank_info: string | null;
+  /** 源泉徴収なし(海外法人名義)。migration 130 */
+  withholding_exempt: boolean;
+  /** この行から作った次の期。migration 130 */
+  next_bond_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
 const COLS =
-  'id,member_id,member_name,application_no,application_id,project_name,project_id,bond_name,payment_amount,redemption_month,redemption_amount,prev_principal,prev_years,prev_interest_rate,interest,withholding_tax,result,contract_sent_date,partial_continue_amount,partial_redemption_amount,bank_info,created_at,updated_at';
+  'id,member_id,member_name,application_no,application_id,project_name,project_id,bond_name,payment_amount,redemption_month,redemption_amount,prev_principal,prev_years,prev_interest_rate,interest,withholding_tax,result,contract_sent_date,partial_continue_amount,partial_redemption_amount,bank_info,withholding_exempt,next_bond_id,created_at,updated_at';
 
 /** 一覧でソート可能なカラム(SortHeader からの ?sort= を受ける) */
 const SORTABLE = new Set([
@@ -170,4 +174,17 @@ export async function listLegacyBondFilterOptions(): Promise<{
     if (r.result) results.add(r.result);
   }
   return { bondNames: [...bonds].sort(), results: [...results].sort() };
+}
+
+/** この行を次の期として作った元の行(前の期)の ID。無ければ null */
+export async function getPrevLegacyBondId(id: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('legacy_bonds')
+    .select('id')
+    .eq('next_bond_id', id)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (error || !data) return null;
+  return (data as { id: string }).id;
 }

@@ -1,16 +1,20 @@
 /**
  * 旧社債管理 詳細画面(CLAUDE.md §5.13c)
  *
- * 上部: ハイライト(社債名 / 入金額 / 償還対象月 / 償還金額 / 今回の結果)
- * 中央: 2 カラムの項目表(左: 関係先と社債の情報、右: 金額と継続条件)
- * 閲覧は admin のみ(RLS でも制限)。
+ * 上部: ハイライト(社債名 / 入金額 / 償還対象月 / 償還金額 / 今回の結果)と「編集」
+ * 中央: 2 カラムの項目表(左: 関係先と社債の情報、右: 金額と継続条件)。前の期 / 次の期へのリンク
+ * 下部: 継続した行で次の期がまだ無ければ「次の期を作成」(2026-10-23。migration 130)
+ * 閲覧・編集は admin のみ(RLS でも制限)。
  */
 
 import { HighlightPanel } from '@/components/layout/HighlightPanel';
 import { ShareLinkButton } from '@/components/layout/ShareLinkButton';
+import { LegacyBondContinuePanel } from '@/components/legacy_bonds/LegacyBondContinuePanel';
+import { LegacyBondEditDialog } from '@/components/legacy_bonds/LegacyBondEditDialog';
 import { Card } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/domain/auth';
-import { getLegacyBond } from '@/lib/domain/legacy_bonds';
+import { getLegacyBond, getPrevLegacyBondId } from '@/lib/domain/legacy_bonds';
+import { isContinueResult } from '@/lib/domain/legacy_bonds_calc';
 import { formatDate } from '@/lib/utils/date';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -46,8 +50,16 @@ export default async function LegacyBondDetailPage({
     );
   }
   const { id } = await params;
-  const bond = await getLegacyBond(id);
+  const [bond, prevId] = await Promise.all([getLegacyBond(id), getPrevLegacyBondId(id)]);
   if (!bond) notFound();
+  const bondLink = (target: string | null) =>
+    target ? (
+      <Link href={`/legacy-bonds/${target}`} className="text-primary hover:underline">
+        {target}
+      </Link>
+    ) : (
+      '-'
+    );
 
   const memberLink = bond.member_id ? (
     <Link href={`/members/${bond.member_id}`} className="text-primary hover:underline">
@@ -83,7 +95,12 @@ export default async function LegacyBondDetailPage({
           { label: '償還金額', value: yen(bond.redemption_amount) },
           { label: '今回の結果', value: bond.result ?? '-' },
         ]}
-        actions={<ShareLinkButton />}
+        actions={
+          <div className="flex items-center gap-2">
+            <LegacyBondEditDialog bond={bond} />
+            <ShareLinkButton />
+          </div>
+        }
       />
 
       <Card className="p-4">
@@ -128,14 +145,34 @@ export default async function LegacyBondDetailPage({
               {bond.prev_interest_rate != null ? `${bond.prev_interest_rate} %` : '-'}
             </DetailRow>
             <DetailRow label="利息">{yen(bond.interest)}</DetailRow>
-            <DetailRow label="源泉税">{yen(bond.withholding_tax)}</DetailRow>
+            <DetailRow label="源泉税">
+              {yen(bond.withholding_tax)}
+              {bond.withholding_exempt && (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  源泉徴収なし(海外法人名義)
+                </span>
+              )}
+            </DetailRow>
             <DetailRow label="一部継続金額">{yen(bond.partial_continue_amount)}</DetailRow>
             <DetailRow label="一部償還金額">{yen(bond.partial_redemption_amount)}</DetailRow>
+            <DetailRow label="前の期">{bondLink(prevId)}</DetailRow>
+            <DetailRow label="次の期">{bondLink(bond.next_bond_id)}</DetailRow>
             <DetailRow label="作成日">{formatDate(bond.created_at)}</DetailRow>
             <DetailRow label="最終更新日">{formatDate(bond.updated_at)}</DetailRow>
           </div>
         </dl>
       </Card>
+
+      {isContinueResult(bond.result) && !bond.next_bond_id && (
+        <Card className="p-4">
+          <h2 className="mb-2 text-sm font-semibold">次の期を作成</h2>
+          <p className="mb-2 text-xs text-muted-foreground">
+            今回の結果が「{bond.result}
+            」です。継続年数を選ぶと、次の期の行(元金・満期・利率・金額を自動計算)を作成します。
+          </p>
+          <LegacyBondContinuePanel bond={bond} />
+        </Card>
+      )}
     </div>
   );
 }
