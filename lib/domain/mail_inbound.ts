@@ -13,6 +13,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { storageSafeName } from '@/lib/domain/task_pure';
 
 export interface ParsedAddress {
   /** 小文字化・前後空白除去済みのアドレス */
@@ -250,6 +251,54 @@ export function safeFilename(raw: string | null | undefined): string {
     .replace(/^\.+/, '')
     .trim();
   return s || 'attachment';
+}
+
+/** 受信した添付で保存する大きさの上限(これより大きいものは保存しない) */
+export const INBOUND_MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+/**
+ * 受信した添付の Storage の保存先。Supabase Storage はキーに ASCII 以外の文字があると "Invalid key" で拒否するため、
+ * ファイル名は英数字だけにする(送信側の添付・タスクの添付と同じ storageSafeName)。元のファイル名は
+ * mail_attachments.filename に持ち、ダウンロード時にはそちらを使う。2026-10-23 まで日本語名の添付が保存されずに消えていた。
+ */
+export function inboundAttachmentStoragePath(
+  threadId: string,
+  messageRowId: string,
+  uniquePrefix: string,
+  filename: string | null | undefined,
+): string {
+  return `${threadId}/${messageRowId}/${uniquePrefix}_${storageSafeName(filename ?? '')}`;
+}
+
+/** 受信した添付として保存するファイル名(名前が無ければ "attachment") */
+export function inboundAttachmentFilename(raw: string | null | undefined): string {
+  return raw || safeFilename(raw);
+}
+
+/**
+ * 元のメールの添付のうち、まだ保存していない(同じメールに同じファイル名の行が無い)もので、保存してよいもの。
+ * 保存してよい条件は受信処理と同じ(実行形式は保存しない・25MB まで・中身があること)。
+ * 消えていた添付の取り直し(lib/mail/inbound_attachment_backfill.ts)で使う。何度実行しても増えない。
+ */
+export function pickMissingInboundAttachments<
+  T extends { filename?: string | null; size?: number; content?: { byteLength: number } | null },
+>(
+  attachments: readonly T[],
+  savedFilenames: readonly (string | null)[],
+): { toSave: T[]; skipped: number } {
+  const saved = new Set(savedFilenames.map((f) => f ?? ''));
+  const toSave: T[] = [];
+  let skipped = 0;
+  for (const a of attachments) {
+    if (saved.has(inboundAttachmentFilename(a.filename))) continue;
+    const size = a.size ?? a.content?.byteLength ?? 0;
+    if (isBlockedAttachment(a.filename) || size > INBOUND_MAX_ATTACHMENT_BYTES || !a.content) {
+      skipped++;
+      continue;
+    }
+    toSave.push(a);
+  }
+  return { toSave, skipped };
 }
 
 /** 受信を拒否する添付の拡張子(実行形式など)。保存せず、メッセージ本文のみ取り込む。 */

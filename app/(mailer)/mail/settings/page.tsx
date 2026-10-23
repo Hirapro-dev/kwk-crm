@@ -26,6 +26,7 @@ import { listFieldDefinitions } from '@/lib/domain/object_metadata';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { type DomainIdentity, getDomainIdentity } from '@/lib/mail/ses_identity';
 import { redirect } from 'next/navigation';
+import { BackfillAttachmentsButton } from './BackfillAttachmentsButton';
 import { CollapsibleCard } from './CollapsibleCard';
 import { CopyButton } from './CopyButton';
 import { DomainCard } from './DomainCard';
@@ -36,6 +37,9 @@ import { NewMailBoxForm } from './NewMailBoxForm';
 import { NewMailSignatureForm } from './NewMailSignatureForm';
 import { ProcessCandidatesButton } from './ProcessCandidatesButton';
 import { ReassignOtherButton } from './ReassignOtherButton';
+
+/** 受信添付の取り直し(Server Action)で S3 から元のメールを読むため、実行時間を長めにとる */
+export const maxDuration = 60;
 
 export default async function MailSettingsPage() {
   const me = await getCurrentUser();
@@ -123,6 +127,14 @@ export default async function MailSettingsPage() {
               3本を追加
             </li>
           </ol>
+          <div className="space-y-1 border-t pt-2">
+            <p>
+              受信添付の取り直し: 2026-10-23
+              まで、日本語のファイル名の添付が保存されずに消えていました。S3 に残る元のメール(直近
+              30 日分)から、欠けている添付を取り直します。何度実行しても重複しません。
+            </p>
+            <BackfillAttachmentsButton />
+          </div>
         </div>
       </CollapsibleCard>
 
