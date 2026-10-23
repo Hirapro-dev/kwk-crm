@@ -2,19 +2,21 @@
 
 /**
  * 送信メールの添付(CLAUDE.md §5.15「送信メールの添付」/ migration 128)。返信・新規作成フォームで共通に使う。
- * - 添付欄: 「ファイルを添付」ボタン、または欄へのドラッグ&ドロップ。PDF・JPG・PNG だけ
+ * - 添付欄: 「ファイルを添付」ボタン、または欄へのドラッグ&ドロップ。PDF・JPG・PNG・Word・Excel・PowerPoint だけ
  * - 本文の欄: 画像をドラッグ&ドロップ / 貼り付けすると、カーソルの位置に「[画像: 名前]」の目印を入れ、相手には本文のその位置に画像を出す。
- *   PDF は本文に落としても通常の添付になる
+ *   画像以外(PDF・Office 文書)は本文に落としても通常の添付になる
  * - 選んだ時点で Storage へ直接アップロードする(終わるまで送信できない)
  */
 
 import { Button } from '@/components/ui/button';
 import {
   MAIL_ATTACHMENT_ACCEPT,
+  MAIL_ATTACHMENT_KINDS_LABEL,
   MAIL_ATTACHMENT_MAX_FILES,
   MAIL_ATTACHMENT_MAX_TOTAL_BYTES,
   type SubmittedAttachment,
   checkNewAttachments,
+  fileExtLabel,
   inlineMarker,
   insertMarkerAt,
   isInlineImageType,
@@ -149,7 +151,7 @@ export function attachmentBlockReason(items: readonly MailAttachmentItem[]): str
 
 /**
  * 本文の欄(textarea)に付けるドラッグ&ドロップ・貼り付けの処理。
- * 画像は本文中の画像としてカーソルの位置に目印を入れ、PDF は通常の添付にする。
+ * 画像は本文中の画像としてカーソルの位置に目印を入れ、画像以外は通常の添付にする。
  */
 export function bodyFileHandlers(
   att: MailAttachmentsState,
@@ -243,7 +245,7 @@ export function MailAttachmentField({
             📎 ファイルを添付
           </Button>
           <span className="text-[11px] text-muted-foreground">
-            PDF・JPG・PNG(合計 {MAIL_ATTACHMENT_MAX_TOTAL_BYTES / 1024 / 1024}MB・
+            {MAIL_ATTACHMENT_KINDS_LABEL}(合計 {MAIL_ATTACHMENT_MAX_TOTAL_BYTES / 1024 / 1024}MB・
             {MAIL_ATTACHMENT_MAX_FILES} ファイルまで)。ここにドラッグ&ドロップでも添付できます。
             画像を本文の欄にドラッグ&ドロップ(貼り付け)すると、本文のその位置に表示されます。
           </span>
@@ -275,7 +277,7 @@ export function MailAttachmentField({
                     />
                   ) : (
                     <span className="flex h-8 w-8 items-center justify-center rounded border text-[10px]">
-                      PDF
+                      {fileExtLabel(it.filename)}
                     </span>
                   )}
                   <span className="min-w-0 break-all">

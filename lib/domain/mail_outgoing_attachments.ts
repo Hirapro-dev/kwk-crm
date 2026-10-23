@@ -2,7 +2,8 @@
  * メーラーの送信メールの添付(CLAUDE.md §5.15「送信メールの添付」/ migration 128)の純粋関数。画面とサーバーの両方で使う。
  *
  * 2026-10-21 ユーザー決定:
- *   - 送れるのは PDF・JPG・PNG だけ。1 ファイル 10MB・10 ファイル・1 通の合計 15MB まで
+ *   - 送れるのは PDF・JPG・PNG だけ(2026-10-23 に Word・Excel・PowerPoint を追加。新旧の形式。マクロ付きは送らない)。
+ *     1 ファイル 10MB・10 ファイル・1 通の合計 15MB まで
  *     (送るときに約 1.3 倍に膨らむため、相手のサーバー(Gmail などは 25MB)で弾かれにくい大きさ)
  *   - 本文の欄に画像を落とす(貼り付ける)と、その位置に「[画像: 名前]」の目印を入れ、相手には本文のその位置に画像を出す
  *     (HTML メールの <img src="cid:…">)。目印を消した画像は送らない。PDF は本文に落としても通常の添付
@@ -10,20 +11,51 @@
 
 import { splitLinks, storageSafeName } from './task_pure';
 
-export type MailAttachmentType = 'application/pdf' | 'image/jpeg' | 'image/png';
+export const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+export const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+export const PPTX_TYPE =
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+
+export type MailAttachmentType =
+  | 'application/pdf'
+  | 'image/jpeg'
+  | 'image/png'
+  | typeof DOCX_TYPE
+  | typeof XLSX_TYPE
+  | typeof PPTX_TYPE
+  | 'application/msword'
+  | 'application/vnd.ms-excel'
+  | 'application/vnd.ms-powerpoint';
+
+/** 送れる種類の説明(画面・エラーの文言) */
+export const MAIL_ATTACHMENT_KINDS_LABEL = 'PDF・JPG・PNG・Word・Excel・PowerPoint';
 
 export const MAIL_ATTACHMENT_MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const MAIL_ATTACHMENT_MAX_TOTAL_BYTES = 15 * 1024 * 1024;
 export const MAIL_ATTACHMENT_MAX_FILES = 10;
-/** ファイル選択の accept 属性 */
-export const MAIL_ATTACHMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
-
 const EXT_TYPES: Record<string, MailAttachmentType> = {
   pdf: 'application/pdf',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   png: 'image/png',
+  docx: DOCX_TYPE,
+  xlsx: XLSX_TYPE,
+  pptx: PPTX_TYPE,
+  doc: 'application/msword',
+  xls: 'application/vnd.ms-excel',
+  ppt: 'application/vnd.ms-powerpoint',
 };
+
+/** ファイル選択の accept 属性 */
+export const MAIL_ATTACHMENT_ACCEPT = Object.keys(EXT_TYPES)
+  .map((e) => `.${e}`)
+  .join(',');
+
+/** 添付欄のアイコンに出す拡張子(例: PDF / XLSX)。拡張子が無ければ「FILE」 */
+export function fileExtLabel(filename: string): string {
+  const ext = /\.([A-Za-z0-9]{1,5})$/.exec(filename ?? '')?.[1];
+  return ext ? ext.toUpperCase() : 'FILE';
+}
 
 export function isInlineImageType(t: string | null | undefined): boolean {
   return t === 'image/jpeg' || t === 'image/png';
@@ -41,7 +73,8 @@ export function resolveAttachmentType(
   const byExt = EXT_TYPES[ext] ?? null;
   if (!byExt) return null;
   const m = (mime ?? '').trim().toLowerCase();
-  if (!m) return byExt;
+  // 種類が付いていない・「不明」のときは拡張子で判断する(Office 文書でよくある)
+  if (!m || m === 'application/octet-stream') return byExt;
   const normalized = m === 'image/jpg' || m === 'image/pjpeg' ? 'image/jpeg' : m;
   return normalized === byExt ? byExt : null;
 }
@@ -63,7 +96,7 @@ export function checkNewAttachments<T extends { name: string; size: number; type
   for (const f of adding) {
     const contentType = resolveAttachmentType(f.name, f.type);
     if (!contentType) {
-      errors.push(`${f.name}: PDF・JPG・PNG 以外は添付できません`);
+      errors.push(`${f.name}: ${MAIL_ATTACHMENT_KINDS_LABEL} 以外は添付できません`);
     } else if (f.size <= 0) {
       errors.push(`${f.name}: 空のファイルは添付できません`);
     } else if (f.size > MAIL_ATTACHMENT_MAX_FILE_BYTES) {
@@ -229,6 +262,52 @@ export function sniffAttachmentType(bytes: Uint8Array): MailAttachmentType | nul
   return null;
 }
 
+const ZIP_SIG = [0x50, 0x4b, 0x03, 0x04];
+/** 古い Office 文書(.doc / .xls / .ppt)の入れ物(OLE)の先頭の印 */
+const OLE_SIG = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+/** 新しい Office 文書(ZIP)の中にある、それぞれの本体のファイル名 */
+const OOXML_MAIN_PART: Record<string, string> = {
+  [DOCX_TYPE]: 'word/document.xml',
+  [XLSX_TYPE]: 'xl/workbook.xml',
+  [PPTX_TYPE]: 'ppt/presentation.xml',
+};
+const OLE_TYPES = new Set<string>([
+  'application/msword',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+]);
+
+function startsWith(bytes: Uint8Array, sig: number[]): boolean {
+  return sig.every((b, i) => bytes[i] === b);
+}
+
+function containsAscii(bytes: Uint8Array, text: string): boolean {
+  const needle = Array.from(text, (c) => c.charCodeAt(0));
+  outer: for (let i = 0; i + needle.length <= bytes.length; i++) {
+    for (let j = 0; j < needle.length; j++) if (bytes[i + j] !== needle[j]) continue outer;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 送る前に、ファイルの中身が登録した種類と合うか確かめる(拡張子だけ変えたファイルを送らないため)。
+ * PDF・JPG・PNG は先頭の印、新しい Office 文書は ZIP の印 + 中の本体のファイル名(ZIP のファイル名は圧縮されない)、
+ * 古い Office 文書は OLE の先頭の印(Word / Excel / PowerPoint の区別まではしない)。
+ */
+export function contentMatchesType(bytes: Uint8Array, type: string): boolean {
+  const mainPart = OOXML_MAIN_PART[type];
+  if (mainPart) {
+    return (
+      startsWith(bytes, ZIP_SIG) &&
+      containsAscii(bytes, '[Content_Types].xml') &&
+      containsAscii(bytes, mainPart)
+    );
+  }
+  if (OLE_TYPES.has(type)) return startsWith(bytes, OLE_SIG);
+  return sniffAttachmentType(bytes) === type;
+}
+
 /** 相手に見えるファイル名を整える: 制御文字・パス区切りを "_" に、前後の空白を落とし、200 文字まで */
 function sanitizeFilename(name: string): string {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: 制御文字を取り除くため
@@ -281,7 +360,8 @@ export function planOutboxAttachments(
     const m = meta.get(it.path);
     if (!m) return { error: `${filename}: アップロードが完了していません。添付し直してください` };
     const contentType = resolveAttachmentType(filename, m.contentType);
-    if (!contentType) return { error: `${filename}: PDF・JPG・PNG 以外は添付できません` };
+    if (!contentType)
+      return { error: `${filename}: ${MAIL_ATTACHMENT_KINDS_LABEL} 以外は添付できません` };
     if (m.size <= 0) return { error: `${filename}: 空のファイルは添付できません` };
     if (m.size > MAIL_ATTACHMENT_MAX_FILE_BYTES)
       return { error: `${filename}: 1 ファイル ${MAIL_ATTACHMENT_MAX_FILE_BYTES / MB}MB までです` };
