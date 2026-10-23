@@ -15,8 +15,9 @@
 import { sesMessageIdHeader } from '@/lib/domain/mail_compose';
 import { MAIL_THREAD_STATUS_AFTER_SEND } from '@/lib/domain/mail_outbox';
 import {
+  MAIL_ATTACHMENT_KINDS_LABEL,
   buildHtmlBody,
-  sniffAttachmentType,
+  contentMatchesType,
   usedInlineAttachments,
 } from '@/lib/domain/mail_outgoing_attachments';
 import type { MailAwsConfig } from '@/lib/mail/aws';
@@ -85,8 +86,11 @@ async function loadAttachmentsToSend(
       .download(r.storage_path);
     if (dlErr || !blob) return { items: [], error: `添付「${r.filename}」を取り出せませんでした` };
     const content = Buffer.from(await blob.arrayBuffer());
-    if (sniffAttachmentType(content) !== r.content_type)
-      return { items: [], error: `添付「${r.filename}」の中身が PDF・JPG・PNG ではありません` };
+    if (!contentMatchesType(content, r.content_type))
+      return {
+        items: [],
+        error: `添付「${r.filename}」の中身が ${MAIL_ATTACHMENT_KINDS_LABEL} のファイルではありません`,
+      };
     items.push({
       filename: r.filename,
       contentType: r.content_type,

@@ -9,6 +9,7 @@ import {
   MAIL_ATTACHMENT_MAX_TOTAL_BYTES,
   buildHtmlBody,
   checkNewAttachments,
+  contentMatchesType,
   draftStoragePath,
   inlineMarker,
   insertMarkerAt,
@@ -31,8 +32,34 @@ describe('resolveAttachmentType', () => {
     expect(resolveAttachmentType('a.jpeg', 'image/jpeg')).toBe('image/jpeg');
     expect(resolveAttachmentType('a.png', 'image/png')).toBe('image/png');
   });
-  it('それ以外(Excel・GIF・拡張子なし・種類と拡張子の食い違い)は null', () => {
-    expect(resolveAttachmentType('a.xlsx', '')).toBeNull();
+  it('Word・Excel・PowerPoint(新旧の形式)も送れる(2026-10-23 ユーザー要望)', () => {
+    expect(resolveAttachmentType('見積.xlsx', '')).toBe(
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    expect(
+      resolveAttachmentType(
+        'a.docx',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ),
+    ).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    expect(resolveAttachmentType('a.PPTX', '')).toBe(
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    );
+    expect(resolveAttachmentType('a.xls', 'application/vnd.ms-excel')).toBe(
+      'application/vnd.ms-excel',
+    );
+    expect(resolveAttachmentType('a.doc', '')).toBe('application/msword');
+    expect(resolveAttachmentType('a.ppt', '')).toBe('application/vnd.ms-powerpoint');
+  });
+  it('ブラウザが種類を「不明(application/octet-stream)」にした場合は拡張子で判断する', () => {
+    expect(resolveAttachmentType('a.xlsx', 'application/octet-stream')).toBe(
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+  });
+  it('それ以外(マクロ付き・GIF・拡張子なし・種類と拡張子の食い違い)は null', () => {
+    expect(resolveAttachmentType('a.xlsm', '')).toBeNull();
+    expect(resolveAttachmentType('a.docm', '')).toBeNull();
+    expect(resolveAttachmentType('a.csv', 'text/csv')).toBeNull();
     expect(resolveAttachmentType('a.gif', 'image/gif')).toBeNull();
     expect(resolveAttachmentType('a', 'application/pdf')).toBeNull();
     expect(resolveAttachmentType('a.png', 'application/pdf')).toBeNull();
@@ -45,12 +72,12 @@ describe('checkNewAttachments', () => {
       [],
       [
         { name: 'a.pdf', size: 1 * MB, type: 'application/pdf' },
-        { name: 'b.xlsx', size: 1 * MB, type: '' },
+        { name: 'b.gif', size: 1 * MB, type: 'image/gif' },
       ],
     );
     expect(r.accepted.map((a) => a.name)).toEqual(['a.pdf']);
     expect(r.accepted[0]?.contentType).toBe('application/pdf');
-    expect(r.errors.join()).toContain('b.xlsx');
+    expect(r.errors.join()).toContain('b.gif');
   });
   it('1 ファイル 10MB を超えるもの・空のものは弾く', () => {
     const r = checkNewAttachments(
@@ -278,5 +305,35 @@ describe('planOutboxAttachments(承認依頼のときにサーバーで確かめ
       cid,
     );
     expect(r.rows?.[0]?.filename).toBe('.._a_b.pdf');
+  });
+});
+
+describe('contentMatchesType(送る前に中身が申告どおりか確かめる)', () => {
+  // 意図: 拡張子だけ変えたファイル(実行形式など)を Office 文書として送らない。
+  // 新しい形式(.docx など)は ZIP で、中に Word / Excel / PowerPoint それぞれの本体のファイルがある。
+  // 古い形式(.doc など)は共通の入れ物(OLE)で、先頭の印だけで見分ける(中身の種類までは見ない)。
+  const enc = (s: string) => new TextEncoder().encode(s);
+  const zip = (inner: string) => enc(`PK\x03\x04....[Content_Types].xml....${inner}....`);
+  const ole = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0]);
+  const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  const PPTX = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+  it('PDF・JPG・PNG は先頭の印で確かめる(これまでどおり)', () => {
+    expect(contentMatchesType(enc('%PDF-1.7'), 'application/pdf')).toBe(true);
+    expect(contentMatchesType(enc('%PDF-1.7'), 'image/png')).toBe(false);
+  });
+  it('新しい形式は ZIP で、中の本体のファイルが種類と合うときだけ認める', () => {
+    expect(contentMatchesType(zip('xl/workbook.xml'), XLSX)).toBe(true);
+    expect(contentMatchesType(zip('word/document.xml'), DOCX)).toBe(true);
+    expect(contentMatchesType(zip('ppt/presentation.xml'), PPTX)).toBe(true);
+    expect(contentMatchesType(zip('word/document.xml'), XLSX)).toBe(false);
+    // 普通の ZIP を .xlsx にしたもの
+    expect(contentMatchesType(enc('PK\x03\x04 something.txt'), XLSX)).toBe(false);
+  });
+  it('古い形式は OLE の先頭の印があれば認める', () => {
+    expect(contentMatchesType(ole, 'application/vnd.ms-excel')).toBe(true);
+    expect(contentMatchesType(ole, 'application/msword')).toBe(true);
+    expect(contentMatchesType(ole, 'application/vnd.ms-powerpoint')).toBe(true);
+    expect(contentMatchesType(enc('MZ\x90\x00'), 'application/msword')).toBe(false);
   });
 });

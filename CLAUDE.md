@@ -1115,12 +1115,12 @@ M3 の対応歴自動記録は 2026-09-16 に実装(migration 93。会員に紐�
   (`SendConfirmDialog`)で送信元・宛先・CC・件名・送信日時・本文を見せてから確定する(ブラウザ標準の確認ダイアログから変更)。
   文言は純粋関数 `outboxConfirmTexts`(予約なし・予約日時を過ぎていればすぐ送る、先なら予約日時に送る旨を出し分ける)。
 
-**送信メールの添付** (2026-10-21 追加, migration 128。ユーザー決定: **種類は PDF・JPG・PNG のみ / 1 通の合計 15MB まで(1 ファイル 10MB・10 ファイルまで)/
+**送信メールの添付** (2026-10-21 追加, migration 128。ユーザー決定: **種類は PDF・JPG・PNG のみ**(2026-10-23 に **Word・Excel・PowerPoint**(.docx / .xlsx / .pptx と旧形式 .doc / .xls / .ppt)を追加。migration 131。マクロ付き .docm / .xlsm / .pptm は送らない。送る前に中身が種類と合うかを確かめる `contentMatchesType`: 新形式は ZIP の印と中の本体のファイル名、旧形式は OLE の印)** / 1 通の合計 15MB まで(1 ファイル 10MB・10 ファイルまで)/
 本文の欄に落とした画像は本文のその位置に表示**):
 - 返信・新規作成のフォームに添付欄(「ファイルを添付」ボタンと欄へのドラッグ&ドロップ)を置く。**本文の欄に画像をドラッグ&ドロップ / 貼り付け**すると、
   カーソルの位置に目印「[画像: 名前]」を入れ、相手には本文のその位置に画像を出す(HTML メールの `<img src="cid:…">`。テキスト版には目印の文字が残る)。
   目印を消した画像は送らない。PDF は本文に落としても通常の添付。同じ名前のファイルは「名前 (2).png」のようにずらす(目印で区別するため)。
-- `mail_outbox_attachments` — `id` uuid PK / `outbox_id` FK → mail_outbox / `filename`(相手に見える名前)/ `content_type`(check: application/pdf・image/jpeg・image/png)/
+- `mail_outbox_attachments` — `id` uuid PK / `outbox_id` FK → mail_outbox / `filename`(相手に見える名前)/ `content_type`(check: application/pdf・image/jpeg・image/png と Office 文書 6 種。migration 131)/
   `size_bytes` / `storage_path`(非公開バケット `mail-attachments`)/ `content_id`(本文中の画像の cid。NULL = 通常の添付)/ `sort_order` / `created_by` / `created_at`。
   RLS: SELECT 全ロール、書込みポリシーなし(Server Action がサービスロールで書く)。物理削除はしない。
 - アップロード: ファイルはサーバーを通さず、画面から Storage へ直接アップロードする(Vercel の 1 リクエスト約 4.5MB の上限を避けるため)。
@@ -1128,7 +1128,7 @@ M3 の対応歴自動記録は 2026-09-16 に実装(migration 93。会員に紐�
   一時的なアップロード URL(トークン)を発行する。承認依頼のときに、Storage に実際に置かれたファイルの大きさ・種類で確かめ直して登録する
   (`prepareOutboxAttachments` / 純粋関数 `planOutboxAttachments`。他人の置き場のファイルは受け付けない)。登録に失敗したらその送信待ちは取消にする。
   アップロードしたまま送らなかったファイルは置き場に残る(削除の仕組みは未実装)。
-- 送信(`lib/mail/outbox_deliver.ts`): 添付があれば Storage から取り出し、ファイルの先頭の印で中身が PDF・JPG・PNG かを確かめ(`sniffAttachmentType`)、
+- 送信(`lib/mail/outbox_deliver.ts`): 添付があれば Storage から取り出し、ファイルの中身が登録した種類と合うかを確かめ(`contentMatchesType`)、
   nodemailer の MailComposer で MIME を組み立てて(`lib/mail/raw_message.ts`)SES の Raw 送信(`sendRawViaSes`)で送る。添付なしは従来どおり Simple 送信。
   HTML 本文は純粋関数 `buildHtmlBody`(利用者の文字はエスケープ、URL はリンク化)。送ったメールは `mail_messages.html_body` にも保存し、
   添付は `mail_attachments` に同じ実体で登録してスレッドの画面に出す。
