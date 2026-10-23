@@ -8,6 +8,7 @@ import { loadMoreMailThreads } from '@/lib/domain/list_more_actions';
 import { deleteMailThreads } from '@/lib/domain/mail_actions';
 import type { MailCategory, MailStatus, MailThreadListItem } from '@/lib/domain/mail_types';
 import { formatDateTime } from '@/lib/utils/date';
+import { Paperclip } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ApplyImportRuleCell } from './ApplyImportRuleCell';
@@ -103,13 +104,24 @@ export function MailInfinite({
         )}
       </TableCell>,
       <TableCell key="subject" className="max-w-[480px] py-2 text-sm">
-        <Link
-          href={href}
-          className={`sf-link block truncate ${unread ? 'font-semibold' : ''}`}
-          title={t.subject ?? ''}
-        >
-          {t.subject || '(件名なし)'}
-        </Link>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Link
+            href={href}
+            className={`sf-link block min-w-0 truncate ${unread ? 'font-semibold' : ''}`}
+            title={t.subject ?? ''}
+          >
+            {t.subject || '(件名なし)'}
+          </Link>
+          {(t.attachment_count ?? 0) > 0 && (
+            <span
+              className="inline-flex shrink-0 items-center gap-0.5 rounded bg-sky-100 px-1 py-0.5 text-[11px] font-semibold text-sky-800"
+              title={`添付ファイル ${t.attachment_count} 件`}
+            >
+              <Paperclip className="h-3.5 w-3.5" aria-label="添付あり" />
+              {t.attachment_count}
+            </span>
+          )}
+        </div>
         {t.member && (
           <span className="block truncate text-[11px] text-muted-foreground">
             会員: {t.member.name}({t.member.id})

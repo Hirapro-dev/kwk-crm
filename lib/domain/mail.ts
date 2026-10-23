@@ -7,6 +7,7 @@
  * - 型・定数は mail_types.ts(クライアントからも参照できるようサーバー依存なし)。
  */
 
+import { attachmentCountsByThread } from '@/lib/domain/mail_attachment_view';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { cache } from 'react';
 import type { MailBoxCount, MailUserFolder } from './mail_folders';
@@ -194,7 +195,10 @@ export async function listMailThreads(
     }
     const byId = new Map(((data ?? []) as unknown as MailThreadListItem[]).map((r) => [r.id, r]));
     const rows = ids.map((id) => byId.get(id)).filter((r): r is MailThreadListItem => !!r);
-    await attachLatestInbound(supabase, rows, params);
+    await Promise.all([
+      attachLatestInbound(supabase, rows, params),
+      attachAttachmentCounts(supabase, rows),
+    ]);
     return { rows, total: hits.length, page, pageSize, searchNote: note };
   }
 
@@ -219,8 +223,35 @@ export async function listMailThreads(
   }
 
   const rows = (data ?? []) as unknown as MailThreadListItem[];
-  await attachLatestInbound(supabase, rows, params);
+  await Promise.all([
+    attachLatestInbound(supabase, rows, params),
+    attachAttachmentCounts(supabase, rows),
+  ]);
   return { rows, total: count ?? 0, page, pageSize };
+}
+
+/**
+ * 一覧の件名にクリップを出すため、各スレッドの添付ファイルの数をまとめて引いて行に付ける(2026-10-23)。
+ * 添付のあるメッセージだけを内部結合で引く。電子署名などの部品は数えない(attachmentCountsByThread)。
+ * 失敗しても一覧は出す(クリップが出ないだけ)。
+ */
+async function attachAttachmentCounts(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  rows: MailThreadListItem[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  const { data, error } = await supabase
+    .from('mail_messages')
+    .select('thread_id, attachments:mail_attachments!inner(content_type)')
+    .in(
+      'thread_id',
+      rows.map((r) => r.id),
+    );
+  if (error || !data) return;
+  const counts = attachmentCountsByThread(
+    data as unknown as { thread_id: string; attachments: { content_type: string | null }[] }[],
+  );
+  for (const r of rows) r.attachment_count = counts.get(r.id) ?? 0;
 }
 
 /** 一覧に差出人を出すため、各スレッドの最新の受信メッセージをまとめて引いて行に付ける */

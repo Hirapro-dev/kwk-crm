@@ -115,6 +115,8 @@ export interface MailThreadListItem {
   last_lp_entry_id?: string | null;
   /** 取込候補の一覧用: 最新の受信メッセージに一致する取込ルール(無ければ null。§5.16) */
   last_import_rule?: { id: number; name: string } | null;
+  /** 一覧のクリップ用: スレッドの添付ファイルの数(電子署名などは数えない。2026-10-23) */
+  attachment_count?: number;
 }
 
 export interface MailAttachment {
