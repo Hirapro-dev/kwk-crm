@@ -25,16 +25,18 @@
 import { isImportCandidate } from '@/lib/domain/mail_import_candidates';
 import { fetchMailImportRules, importMailMessage } from '@/lib/domain/mail_import_exec';
 import {
+  INBOUND_MAX_ATTACHMENT_BYTES,
   classifyInbound,
   ensureMessageId,
   extractReferencedMessageIds,
   headerLinesToRecord,
+  inboundAttachmentFilename,
+  inboundAttachmentStoragePath,
   isBlockedAttachment,
   isInboundTarget,
   matchMailBox,
   normalizeSubject,
   parseAddress,
-  safeFilename,
 } from '@/lib/domain/mail_inbound';
 import { MAIL_THREAD_STATUS_ON_INBOUND, OTHER_MAILBOX_ADDRESS } from '@/lib/domain/mail_types';
 import { createS3Client, getMailAwsConfig } from '@/lib/mail/aws';
@@ -43,9 +45,6 @@ import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { type AddressObject, type ParsedMail, simpleParser } from 'mailparser';
 import { NextResponse } from 'next/server';
 import MessageValidator from 'sns-validator';
-
-/** 保存する添付の上限。これを超えるものは本文だけ取り込み、添付は保存しない。 */
-const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 // 設定セット経由(eventType)と ID 通知経由(notificationType)の両方の名前に対応する
 const DELIVERY_STATUS_BY_TYPE: Record<string, string> = {
@@ -438,13 +437,18 @@ export async function POST(request: Request): Promise<Response> {
   let skippedAttachments = 0;
   for (const att of parsed.attachments ?? []) {
     const size = att.size ?? att.content?.byteLength ?? 0;
-    if (isBlockedAttachment(att.filename) || size > MAX_ATTACHMENT_BYTES || !att.content) {
+    if (isBlockedAttachment(att.filename) || size > INBOUND_MAX_ATTACHMENT_BYTES || !att.content) {
       skippedAttachments++;
       continue;
     }
     try {
-      const filename = safeFilename(att.filename);
-      const storagePath = `${threadId}/${messageRowId}/${att.checksum ?? savedAttachments}_${filename}`;
+      // キーは ASCII だけにする(日本語名だと Storage が "Invalid key" で拒否し、添付が消えていた)
+      const storagePath = inboundAttachmentStoragePath(
+        threadId,
+        messageRowId,
+        String(att.checksum ?? savedAttachments),
+        att.filename,
+      );
       const { error: upErr } = await supabase.storage
         .from('mail-attachments')
         .upload(storagePath, att.content, {
@@ -452,12 +456,14 @@ export async function POST(request: Request): Promise<Response> {
           upsert: true,
         });
       if (upErr) {
+        // ファイル名など個人情報になりうる内容は出さない
+        console.error('[mail inbound] 添付の保存に失敗しました', { messageRowId });
         skippedAttachments++;
         continue;
       }
       await supabase.from('mail_attachments').insert({
         message_id: messageRowId,
-        filename: att.filename || filename,
+        filename: inboundAttachmentFilename(att.filename),
         content_type: att.contentType || null,
         size_bytes: size,
         storage_path: storagePath,

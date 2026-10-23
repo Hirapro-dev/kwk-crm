@@ -884,7 +884,7 @@ IMAP ポーリング・独自メールサーバーは持たない。
   (スパム・ウイルス判定を有効化) → **S3 バケット** (`MAIL_INBOUND_BUCKET`) に生 MIME を保存 → **SNS トピック**
   (`MAIL_SNS_TOPIC_ARN`) から HTTPS 通知 → `POST /api/mail/inbound`。
   Webhook は SNS の署名を検証し、`TopicArn` が一致する通知だけ処理する (SubscriptionConfirmation は自動確認)。
-  S3 から MIME を取得して `mailparser` で解析し、添付は Supabase Storage へ保存する。S3 側の生 MIME は
+  S3 から MIME を取得して `mailparser` で解析し、添付は Supabase Storage へ保存する(保存先のキーは ASCII だけ `inboundAttachmentStoragePath`。元のファイル名は `mail_attachments.filename`。2026-10-23 まで、日本語など ASCII 以外の文字を含むファイル名の添付は Storage に "Invalid key" で拒否され、保存されずに消えていた。消えた分は `/mail/settings` の「受信添付の取り直し」(admin。S3 に残る直近 30 日分の元のメールから、欠けている添付だけを保存。何度実行しても増えない。`lib/mail/inbound_attachment_backfill.ts`)で取り直す)。S3 側の生 MIME は
   ライフサイクル (30日) で削除する (CRM が正本)。
   どの受信箱 (`mail_boxes`) のメールかは、**元の宛先** (`To` / `Cc` / `Delivered-To` / `X-Original-To` /
   `XSRV-Filter` ヘッダ) と `mail_boxes.address` の一致で判定する。複数の受信箱に一致するときは**宛先の並び
