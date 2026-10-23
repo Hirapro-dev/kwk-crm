@@ -23,7 +23,8 @@
       "Effect": "Allow",
       "Action": [
         "ses:GetEmailIdentity",
-        "ses:CreateEmailIdentity"
+        "ses:CreateEmailIdentity",
+        "ses:ListEmailIdentities"
       ],
       "Resource": "*"
     }
