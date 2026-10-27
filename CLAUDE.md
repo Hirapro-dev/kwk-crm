@@ -730,6 +730,7 @@ Salesforce の「広告IDマスタ」(広告一覧 CSV 4 ファイル: KAWARA版
 - **【取得】ボタン**(2026-09-16): 会員の編集ダイアログと問合せからの新規会員登録の「広告ID」「広告媒体名」に【取得】を置き、
   広告マスタの選択ダイアログ(`components/masters/AdMasterPicker.tsx`。検索・種別絞り込み)で 1 件選ぶと**両方の欄に反映**する
   (Server Action `searchAdMasters`)
+- **最近選んだ広告**(2026-10-27 追加, migration 132。ユーザー決定: 全員分を対象・記録用テーブルを追加): 【取得】のダイアログで、直近 1 か月(`RECENT_AD_PICK_DAYS` = 30 日)に**全員の誰かが選んだ広告**を「最近選んだ広告」として上にまとめ、最後に選ばれた順に並べる。残りは「すべての広告」として従来の並び。検索・種別の絞り込みは両方に効く。選んだ記録は `ad_master_picks`(`id` bigserial / `ad_id` FK → ad_masters / `picked_by` uuid FK → users / `picked_at`。追記のみ。RLS: SELECT 全ロール、INSERT は admin / manager / sales / support が自分の行だけ)に、ダイアログで 1 件選んだ時点で 1 行残す(フォームを保存しなかった選択も数える)。並べ方は純粋関数 `splitRecentAds`(`lib/domain/ad_recent_picks.ts`)、記録は Server Action `recordAdMasterPick`(失敗しても選択は止めない)。テーブル未適用なら「最近」は出さず一覧は従来どおり
 - **表示**(2026-09-16): 問合せ・会員・LP の一覧と詳細で、広告ID の列に媒体名を併記する(「N0000003 【KAWARA版広告】…」。
   マスタに無い ID はそのまま)。純粋関数 `adLabel`(`lib/domain/ad_label.ts`)、対応表は `getAdNameMap()`(無効な広告も含む)
 

@@ -9,13 +9,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { searchAdMasters } from '@/lib/domain/master_actions';
-import { useEffect, useState } from 'react';
+import { recordAdMasterPick, searchAdMasters } from '@/lib/domain/master_actions';
+import { type ReactNode, useEffect, useState } from 'react';
 
 /**
  * 広告マスタから 1 件選ぶダイアログ(CLAUDE.md §5.18)。
  * 会員の編集・新規登録フォームの「広告媒体名 / 広告ID」の【取得】ボタンから開き、
  * 選んだ広告の ID と媒体名を呼び出し側の両方の欄に反映する。
+ * 直近 1 か月に(全員の誰かが)選んだ広告は「最近選んだ広告」として上にまとめる(2026-10-27)。
  */
 export interface PickedAd {
   id: string;
@@ -36,6 +37,7 @@ export function AdMasterPicker({ open, onOpenChange, onPick }: Props) {
   const [q, setQ] = useState('');
   const [adType, setAdType] = useState('');
   const [adTypes, setAdTypes] = useState<string[]>([]);
+  const [recent, setRecent] = useState<PickedAd[]>([]);
   const [rows, setRows] = useState<PickedAd[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,15 +48,24 @@ export function AdMasterPicker({ open, onOpenChange, onPick }: Props) {
       const r = await searchAdMasters({ q, adType: adType || undefined });
       if (r.error) {
         setError(r.error);
+        setRecent([]);
         setRows([]);
         return;
       }
       setError(null);
+      setRecent(r.recent ?? []);
       setRows(r.rows ?? []);
       if (r.adTypes) setAdTypes(r.adTypes);
     }, 300);
     return () => clearTimeout(t);
   }, [open, q, adType]);
+
+  const select = (ad: PickedAd) => {
+    // 「最近選んだ広告」用の記録。失敗しても選択は止めない(結果は待たない)
+    void recordAdMasterPick(ad.id).catch(() => undefined);
+    onPick(ad);
+    onOpenChange(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -89,27 +100,19 @@ export function AdMasterPicker({ open, onOpenChange, onPick }: Props) {
           <div className="max-h-[50vh] overflow-y-auto rounded border">
             {rows === null ? (
               <p className="p-3 text-xs text-muted-foreground">読み込み中…</p>
-            ) : rows.length === 0 ? (
+            ) : rows.length === 0 && recent.length === 0 ? (
               <p className="p-3 text-xs text-muted-foreground">該当する広告がありません</p>
             ) : (
-              <ul className="text-xs">
-                {rows.map((ad) => (
-                  <li key={ad.id} className="border-t first:border-t-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onPick(ad);
-                        onOpenChange(false);
-                      }}
-                      className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent"
-                    >
-                      <span className="w-24 shrink-0 font-mono">{ad.id}</span>
-                      <span className="w-28 shrink-0 text-muted-foreground">{ad.ad_type}</span>
-                      <span className="min-w-0 flex-1 truncate">{ad.name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <>
+                {recent.length > 0 && (
+                  <>
+                    <AdListHeading>最近選んだ広告(直近 1 か月)</AdListHeading>
+                    <AdList ads={recent} onSelect={select} />
+                    {rows.length > 0 && <AdListHeading>すべての広告</AdListHeading>}
+                  </>
+                )}
+                <AdList ads={rows} onSelect={select} />
+              </>
             )}
           </div>
           <p className="text-[11px] text-muted-foreground">
@@ -123,5 +126,33 @@ export function AdMasterPicker({ open, onOpenChange, onPick }: Props) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function AdListHeading({ children }: { children: ReactNode }) {
+  return (
+    <p className="sticky top-0 border-b bg-muted px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
+function AdList({ ads, onSelect }: { ads: PickedAd[]; onSelect: (ad: PickedAd) => void }) {
+  return (
+    <ul className="text-xs">
+      {ads.map((ad) => (
+        <li key={ad.id} className="border-t first:border-t-0">
+          <button
+            type="button"
+            onClick={() => onSelect(ad)}
+            className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent"
+          >
+            <span className="w-24 shrink-0 font-mono">{ad.id}</span>
+            <span className="w-28 shrink-0 text-muted-foreground">{ad.ad_type}</span>
+            <span className="min-w-0 flex-1 truncate">{ad.name}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

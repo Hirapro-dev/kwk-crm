@@ -8,6 +8,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { type AdPick, RECENT_AD_PICK_DAYS, splitRecentAds } from './ad_recent_picks';
 import { getCurrentUser } from './auth';
 
 export interface MasterActionResult {
@@ -100,11 +101,14 @@ export async function searchAdMasters(input: {
   adType?: string;
 }): Promise<{
   error?: string;
+  /** 直近 1 か月に(全員の誰かが)選んだ広告。最近選ばれた順(§5.18) */
+  recent?: Array<{ id: string; ad_type: string; name: string }>;
   rows?: Array<{ id: string; ad_type: string; name: string }>;
   adTypes?: string[];
 }> {
   await getCurrentUser();
   const supabase = await createClient();
+  const since = new Date(Date.now() - RECENT_AD_PICK_DAYS * 86_400_000).toISOString();
   let query = supabase
     .from('ad_masters')
     .select('id, ad_type, name')
@@ -115,18 +119,43 @@ export async function searchAdMasters(input: {
   if (input.adType) query = query.eq('ad_type', input.adType);
   const q = (input.q ?? '').trim().replace(/[%_]/g, '\\$&');
   if (q) query = query.or(`id.ilike.%${q}%,name.ilike.%${q}%`);
-  const [{ data, error }, { data: types }] = await Promise.all([
+  const [{ data, error }, { data: types }, { data: picks }] = await Promise.all([
     query,
     supabase.from('ad_masters').select('ad_type').eq('is_active', true),
+    // 選んだ記録(migration 132)。テーブル未適用・取得失敗なら「最近」は空にして一覧は壊さない
+    supabase
+      .from('ad_master_picks')
+      .select('ad_id, picked_at')
+      .gte('picked_at', since)
+      .order('picked_at', { ascending: false })
+      .limit(1000),
   ]);
   if (error) return { error: `広告マスタの取得に失敗しました: ${error.message}` };
   const adTypes = [
     ...new Set(((types ?? []) as unknown as Array<{ ad_type: string }>).map((t) => t.ad_type)),
   ].sort();
-  return {
-    rows: (data ?? []) as unknown as Array<{ id: string; ad_type: string; name: string }>,
-    adTypes,
-  };
+  const { recent, others } = splitRecentAds(
+    (data ?? []) as unknown as Array<{ id: string; ad_type: string; name: string }>,
+    (picks ?? []) as AdPick[],
+  );
+  return { recent, rows: others, adTypes };
+}
+
+/**
+ * 広告マスタの【取得】で広告を選んだことを記録する(「最近選んだ広告」用。§5.18)。
+ * viewer は編集画面を使わないので記録しない。記録に失敗しても選択自体は止めない(呼び出し側は結果を見ない)。
+ */
+export async function recordAdMasterPick(adId: string): Promise<MasterActionResult> {
+  const me = await getCurrentUser();
+  if (me.role === 'viewer') return { ok: false, error: '閲覧専用ユーザーは記録しません' };
+  const id = z.string().trim().min(1).max(50).safeParse(adId);
+  if (!id.success) return { ok: false, error: '広告IDが不正です' };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('ad_master_picks')
+    .insert({ ad_id: id.data, picked_by: me.id });
+  if (error) return { ok: false, error: `選んだ記録の保存に失敗しました: ${error.message}` };
+  return { ok: true };
 }
 
 /** 顧客情報取得ポイントマスタの有効な名前一覧(会員の新規登録フォームの選択肢用。全ロール) */
