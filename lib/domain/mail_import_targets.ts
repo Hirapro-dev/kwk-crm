@@ -102,3 +102,22 @@ export function filterTargetOptions(
     newExtra,
   };
 }
+
+/**
+ * ルールの対応(field_map)のうち、項目管理(field_definitions)にまだ無い可変項目のキー(重複なし・出てきた順)。
+ * 「<キー>(新規)」を選んで保存したときに項目管理へ足すために使う(足さないと、値は問合せの extra に入るのに
+ * オブジェクト管理にも詳細画面にも出ない。2026-10-28)。
+ */
+export function newExtraFieldKeys(
+  fieldMap: Readonly<Record<string, string>>,
+  definedFieldNames: Iterable<string>,
+): string[] {
+  const defined = new Set(definedFieldNames);
+  const out: string[] = [];
+  for (const target of Object.values(fieldMap)) {
+    if (!target.startsWith('extra:')) continue;
+    const key = target.slice('extra:'.length).trim();
+    if (key && !defined.has(key) && !out.includes(key)) out.push(key);
+  }
+  return out;
+}

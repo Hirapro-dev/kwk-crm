@@ -14,12 +14,15 @@ import {
   type ImportTarget,
   normalizeFieldMap,
 } from '@/lib/domain/mail_import_rules';
+import { newExtraFieldKeys } from '@/lib/domain/mail_import_targets';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
 export interface MailImportRuleActionResult {
   error?: string;
   id?: number;
+  /** 保存のときに項目管理(問合せの可変項目)へ足した項目(「<キー>(新規)」を選んだもの) */
+  addedFields?: string[];
 }
 
 export interface SaveMailImportRuleInput {
@@ -56,6 +59,60 @@ function trimOrNull(v: string | null | undefined, max = MAX_TEXT): string | null
 function revalidate() {
   revalidatePath('/mail', 'layout');
   revalidatePath('/mail/settings');
+}
+
+/**
+ * 「<キー>(新規)」で選んだ可変項目を、項目管理(問合せ)に足す。足さないと値は問合せの extra に入るのに、
+ * オブジェクト管理にも問合せの詳細画面にも出ない(2026-10-28)。セクション「その他」の末尾に、詳細だけ表示で入れる
+ * (並びや表示はオブジェクト管理で直せる)。取込先が LP のルールは可変項目を入れないので対象外。
+ */
+async function registerNewExtraFields(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  fieldMap: Record<string, string>,
+  ruleName: string,
+): Promise<{ added: string[]; error?: string }> {
+  const candidates = newExtraFieldKeys(fieldMap, []);
+  if (candidates.length === 0) return { added: [] };
+  const { data: existing, error: selErr } = await supabase
+    .from('field_definitions')
+    .select('field_name')
+    .eq('object_id', 'inquiries')
+    .in('field_name', candidates);
+  if (selErr) return { added: [], error: selErr.message };
+  const keys = newExtraFieldKeys(
+    fieldMap,
+    ((existing ?? []) as Array<{ field_name: string }>).map((r) => r.field_name),
+  );
+  if (keys.length === 0) return { added: [] };
+  const { data: last } = await supabase
+    .from('field_definitions')
+    .select('sort_order_detail, sort_order_list')
+    .eq('object_id', 'inquiries')
+    .order('sort_order_detail', { ascending: false })
+    .limit(1);
+  const top = (last?.[0] ?? {}) as { sort_order_detail?: number; sort_order_list?: number };
+  const baseDetail = (top.sort_order_detail ?? 0) + 10;
+  const baseList = (top.sort_order_list ?? 0) + 10;
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const rows = keys.map((k, i) => ({
+    object_id: 'inquiries',
+    field_name: k,
+    label: k,
+    csv_column_name: k,
+    data_type: 'text',
+    is_in_db: false,
+    is_custom: true,
+    is_system: false,
+    is_visible_list: false,
+    is_visible_detail: true,
+    section_name: 'その他',
+    sort_order_detail: baseDetail + i * 10,
+    sort_order_list: baseList + i * 10,
+    description: `メール取込ルール「${ruleName}」で追加(${today})`,
+  }));
+  const { error } = await supabase.from('field_definitions').insert(rows);
+  if (error) return { added: [], error: error.message };
+  return { added: keys };
 }
 
 /** ルールを追加(id 無し)または更新(id あり)する */
@@ -109,8 +166,9 @@ export async function saveMailImportRule(
       .update({ ...row, updated_at: new Date().toISOString() })
       .eq('id', input.id);
     if (error) return { error: `ルールの更新に失敗しました: ${error.message}` };
+    const fields = await registerFieldsAfterSave(supabase, row);
     revalidate();
-    return { id: input.id };
+    return { id: input.id, ...fields };
   }
   const { data, error } = await supabase
     .from('mail_import_rules')
@@ -118,8 +176,24 @@ export async function saveMailImportRule(
     .select('id')
     .single();
   if (error) return { error: `ルールの追加に失敗しました: ${error.message}` };
+  const fields = await registerFieldsAfterSave(supabase, row);
   revalidate();
-  return { id: (data as { id: number }).id };
+  return { id: (data as { id: number }).id, ...fields };
+}
+
+/** 保存の後に新しい可変項目を項目管理へ足す。失敗してもルールの保存は成功のまま、理由だけ返す */
+async function registerFieldsAfterSave(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  row: { name: string; target: ImportTarget; field_map: Record<string, string> },
+): Promise<Pick<MailImportRuleActionResult, 'addedFields' | 'error'>> {
+  if (row.target !== 'inquiry') return {};
+  const r = await registerNewExtraFields(supabase, row.field_map, row.name);
+  if (r.error) {
+    return {
+      error: `ルールは保存しましたが、項目管理への項目の追加に失敗しました: ${r.error}`,
+    };
+  }
+  return r.added.length > 0 ? { addedFields: r.added } : {};
 }
 
 export async function setMailImportRuleActive(
