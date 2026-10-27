@@ -1,20 +1,22 @@
 'use client';
 
 import {
+  type CollisionDetection,
   closestCenter,
   DndContext,
   type DragEndEvent,
   KeyboardSensor,
   MouseSensor,
+  pointerWithin,
   TouchSensor,
   useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
 import {
+  rectSortingStrategy,
   SortableContext,
   useSortable,
-  verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -33,6 +35,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
+  DETAIL_FULL_WIDTH_CLASS,
+  DETAIL_GRID_COLUMN_CLASSES,
+  type DetailLayout,
+  detailLayoutFor,
+} from '@/lib/domain/detail_layout';
+import {
   createPlaceholder,
   deletePlaceholder,
   reorderFields,
@@ -47,6 +55,8 @@ import type { FieldDefinition } from '@/lib/domain/object_metadata';
  *   - DnD でフィールドをセクション内/間で並び替え
  *   - セクションの ▲▼ ボタンで縦方向の並び替え
  *   - 「+ 空白を追加」ボタンで空のセル (is_placeholder=true) を挿入
+ *   - プレビューは詳細画面と同じ列数・全幅項目で並べる (lib/domain/detail_layout.ts)。
+ *     空白セルで段をそろえる調整を、実際の見た目のまま行えるようにするため
  *
  * 保存:
  *   - reorderFields('detail', items) で sort_order_detail + section_name を更新
@@ -70,6 +80,8 @@ interface Section {
 export function DetailLayoutEditor({ objectId, allFields }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // 詳細画面と同じ列数・全幅項目
+  const layout = detailLayoutFor(objectId);
   const [saveMsg, setSaveMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   // Hydration 対策: クライアントマウント後にのみ DnD を有効化
@@ -117,6 +129,27 @@ export function DetailLayoutEditor({ objectId, allFields }: Props) {
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
     useSensor(KeyboardSensor),
   );
+
+  // 当たり判定: セクション全体の受け皿とフィールドの受け皿が重なっているため、
+  // 中心距離だけで選ぶと複数列のグリッドではセクションが選ばれ、末尾に入ってしまう。
+  // ① ポインタの真下のフィールド → ② ポインタのあるセクションが空ならそのセクション
+  // → ③ いちばん近いフィールド、の順で決める。
+  const collisionDetection: CollisionDetection = (args) => {
+    const fieldTargets = args.droppableContainers.filter((c) => String(c.id).startsWith('f-'));
+    const underPointer = pointerWithin({ ...args, droppableContainers: fieldTargets });
+    if (underPointer.length > 0) return underPointer;
+    const emptySectionIds = new Set(
+      sections.filter((s) => s.fieldIds.length === 0).map((s) => s.id),
+    );
+    const emptySections = pointerWithin({
+      ...args,
+      droppableContainers: args.droppableContainers.filter((c) =>
+        emptySectionIds.has(String(c.id)),
+      ),
+    });
+    if (emptySections.length > 0) return emptySections;
+    return closestCenter({ ...args, droppableContainers: fieldTargets });
+  };
 
   const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
@@ -284,9 +317,9 @@ export function DetailLayoutEditor({ objectId, allFields }: Props) {
 
   // ----- レンダリング -----
   const layoutBody = (
-    <div className="grid gap-3 lg:grid-cols-3">
-      {/* 左ペイン */}
-      <Card className="lg:col-span-1">
+    <div className="grid gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
+      {/* 左ペイン(プレビューを詳細画面に近い幅で見せるため細めにする) */}
+      <Card>
         <CardHeader className="border-b py-3">
           <CardTitle className="text-sm">
             利用可能フィールド ({availableFields.length}件)
@@ -321,10 +354,15 @@ export function DetailLayoutEditor({ objectId, allFields }: Props) {
       </Card>
 
       {/* 右ペイン */}
-      <div className="space-y-3 lg:col-span-2">
+      <div className="min-w-0 space-y-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between border-b py-3">
-            <CardTitle className="text-sm">レイアウト (プレビュー)</CardTitle>
+            <div>
+              <CardTitle className="text-sm">レイアウト (プレビュー)</CardTitle>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {`詳細画面と同じ ${layout.columns} 列で表示しています(左から右へ、上の段から順に並びます)。画面の幅が狭いと列が減るのも詳細画面と同じです。`}
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={addSection}>
                 <Plus className="h-3.5 w-3.5" /> セクション追加
@@ -353,6 +391,7 @@ export function DetailLayoutEditor({ objectId, allFields }: Props) {
                 key={sec.id}
                 section={sec}
                 fieldMap={fieldMap}
+                layout={layout}
                 isFirst={secIdx === 0}
                 isLast={secIdx === sections.length - 1}
                 onRename={(name) => renameSection(sec.id, name)}
@@ -375,7 +414,7 @@ export function DetailLayoutEditor({ objectId, allFields }: Props) {
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragEnd={onDragEnd}>
       {layoutBody}
     </DndContext>
   );
@@ -387,6 +426,7 @@ export function DetailLayoutEditor({ objectId, allFields }: Props) {
 function SectionPanel({
   section,
   fieldMap,
+  layout,
   isFirst,
   isLast,
   onRename,
@@ -398,6 +438,7 @@ function SectionPanel({
 }: {
   section: Section;
   fieldMap: Map<number, FieldDefinition>;
+  layout: DetailLayout;
   isFirst: boolean;
   isLast: boolean;
   onRename: (name: string) => void;
@@ -501,14 +542,15 @@ function SectionPanel({
       >
         <SortableContext
           items={section.fieldIds.map((id) => `f-${id}`)}
-          strategy={verticalListSortingStrategy}
+          // 複数列のグリッドなので、縦一列用ではなく矩形用の並べ方で動かす
+          strategy={rectSortingStrategy}
         >
           {section.fieldIds.length === 0 ? (
             <p className="p-2 text-center text-xs text-muted-foreground">
               ここにフィールドをドロップ
             </p>
           ) : (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className={`grid gap-2 ${DETAIL_GRID_COLUMN_CLASSES[layout.columns]}`}>
               {section.fieldIds.map((fid) => {
                 const f = fieldMap.get(fid);
                 if (!f) return null;
@@ -521,7 +563,13 @@ function SectionPanel({
                     />
                   );
                 }
-                return <SortableFieldItem key={fid} field={f} />;
+                return (
+                  <SortableFieldItem
+                    key={fid}
+                    field={f}
+                    fullWidth={layout.fullWidthFields.includes(f.field_name)}
+                  />
+                );
               })}
             </div>
           )}
@@ -534,7 +582,14 @@ function SectionPanel({
 // ----------------------------------------------------------------------------
 // ドラッグ可能なフィールド項目
 // ----------------------------------------------------------------------------
-function SortableFieldItem({ field }: { field: FieldDefinition }) {
+function SortableFieldItem({
+  field,
+  fullWidth,
+}: {
+  field: FieldDefinition;
+  /** 詳細画面で全幅表示の項目(備考など)。プレビューでも全幅にする */
+  fullWidth: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `f-${field.id}` });
 
@@ -546,7 +601,7 @@ function SortableFieldItem({ field }: { field: FieldDefinition }) {
         transition,
         opacity: isDragging ? 0.5 : 1,
       }}
-      className="flex items-center gap-2 rounded border bg-card p-2 text-sm shadow-sm"
+      className={`flex min-w-0 items-center gap-2 rounded border bg-card p-2 text-sm shadow-sm ${fullWidth ? DETAIL_FULL_WIDTH_CLASS : ''}`}
     >
       <button
         type="button"
@@ -557,20 +612,29 @@ function SortableFieldItem({ field }: { field: FieldDefinition }) {
       >
         <GripVertical className="h-4 w-4" />
       </button>
-      <div className="flex-1">
-        <div className="font-medium text-foreground">
+      {/* 4 列だと 1 マスが狭いので名前は省略表示にし、全文はマウスを乗せると出す */}
+      <div
+        className="min-w-0 flex-1"
+        title={`${field.label ?? field.field_name} (${field.field_name})`}
+      >
+        <div className="truncate font-medium text-foreground">
           {field.label ?? field.field_name}
         </div>
-        <div className="font-mono text-[10px] text-muted-foreground">
-          {field.field_name}
+        <div className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
+          <span className="truncate font-mono">{field.field_name}</span>
           {!field.is_in_db && (
-            <Badge variant="secondary" className="ml-1 text-[9px]">
+            <Badge variant="secondary" className="shrink-0 px-1 py-0 text-[9px]">
               extra
             </Badge>
           )}
+          {fullWidth && (
+            <Badge variant="secondary" className="shrink-0 px-1 py-0 text-[9px]">
+              全幅
+            </Badge>
+          )}
+          <span className="ml-auto shrink-0">{field.data_type}</span>
         </div>
       </div>
-      <span className="text-[10px] text-muted-foreground">{field.data_type}</span>
     </div>
   );
 }
@@ -596,7 +660,7 @@ function SortablePlaceholderItem({
         transition,
         opacity: isDragging ? 0.5 : 1,
       }}
-      className="flex items-center gap-2 rounded border border-dashed bg-gray-50 p-2 text-sm"
+      className="flex min-w-0 items-center gap-2 rounded border border-dashed bg-gray-50 p-2 text-sm"
     >
       <button
         type="button"

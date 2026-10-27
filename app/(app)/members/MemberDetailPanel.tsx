@@ -35,6 +35,7 @@ import { adLabel } from '@/lib/domain/ad_label';
 import { listApplications } from '@/lib/domain/applications';
 import { getReactionsByMember } from '@/lib/domain/article_reactions';
 import { getCurrentUser } from '@/lib/domain/auth';
+import { detailLayoutFor } from '@/lib/domain/detail_layout';
 import { listInquiries } from '@/lib/domain/inquiries';
 import { getLegacyBondsByMember } from '@/lib/domain/legacy_bonds';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
@@ -210,7 +211,8 @@ export async function MemberDetailPanel({ memberId, backTo, backLabel, embedded 
               <DynamicDetailFields
                 record={member as unknown as Record<string, unknown>}
                 fields={detailFields}
-                fullWidthFields={['remarks']}
+                columns={detailLayoutFor('members').columns}
+                fullWidthFields={detailLayoutFor('members').fullWidthFields}
                 fieldOverrides={{
                   // 広告ID: 広告マスタの媒体名を併記(§5.18)
                   ad_id: adLabel(member.ad_id, adNames),

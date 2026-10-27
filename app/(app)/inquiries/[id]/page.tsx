@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { adLabel } from '@/lib/domain/ad_label';
 import { getCurrentUser } from '@/lib/domain/auth';
+import { detailLayoutFor } from '@/lib/domain/detail_layout';
 import { getInquiry, listForms } from '@/lib/domain/inquiries';
 import { getAdNameMap } from '@/lib/domain/masters';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
@@ -123,8 +124,8 @@ export default async function InquiryDetailPage({ params }: PageProps) {
           <DynamicDetailFields
             record={inquiry as unknown as Record<string, unknown>}
             fields={detailFields}
-            columns={4}
-            fullWidthFields={['備考']}
+            columns={detailLayoutFor('inquiries').columns}
+            fullWidthFields={detailLayoutFor('inquiries').fullWidthFields}
             fieldOverrides={{
               // 備考 (extra->'備考'): 全ロールがインライン編集可能 (migration 72)
               備考: (
