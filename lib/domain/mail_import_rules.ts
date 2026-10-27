@@ -116,6 +116,11 @@ const LABEL_LINE = /^([^:：]{1,40}?)\s*[:：]\s*(.+)$/;
 const EMPTY_LABEL_LINE = /^([^:：]{1,40}?)\s*[:：]\s*$/;
 /** 複数行の値の先頭にある見出し行(「▼リクエストいただいた銘柄」など)は値に含めない */
 const HEADING_LINE = /^[▼▽■□◆◇●○★☆]/;
+/** 行全体が「【見出し】」の行(例: 「【お問い合わせ内容】」)。その下の複数行を見出し名のラベルの値にする */
+const BRACKET_HEADING_LINE = /^【([^】]{1,40})】$/;
+/** 区切り線(「────」「____」「----」「====」など、同じ種類の記号だけが 3 文字以上) */
+const SEPARATOR_LINE =
+  /^(?:─{3,}|━{3,}|_{3,}|＿{3,}|-{3,}|－{3,}|={3,}|＝{3,}|\*{3,}|＊{3,}|~{3,}|〜{3,})$/;
 
 /**
  * 普通の「ラベル: 値」/「ラベル:」の行か(ラベルに空白を含まず、番号付きの明細ではない)。
@@ -157,6 +162,27 @@ export function parseMailBody(
   for (let i = 0; i < rawLines.length; i++) {
     const line = rawLines[i] ?? '';
     if (line === '') continue;
+    // 「【見出し】」だけの行は、次の区切り線・次の「【見出し】」・本文の終わりまでを見出し名のラベルの値にする
+    // (段落の間の空行は 1 つに詰め、前後の空行は除く。2026-10-27)。
+    // 下の行は読み飛ばさず、これまでどおり各ラベルとしても読む(「【電話予約サービス】」の下の「第1希望 ：」など、
+    // 既存のルールが使っているラベルを取りこぼさないため)。見出しのすぐ下が普通のラベル行なら「【お客様情報】」のような
+    // 項目の見出しなので、見出し自体はラベルにしない
+    const h = line.match(BRACKET_HEADING_LINE);
+    if (h) {
+      const block: string[] = [];
+      let j = i + 1;
+      for (; j < rawLines.length; j++) {
+        const l = rawLines[j] ?? '';
+        if (SEPARATOR_LINE.test(l) || BRACKET_HEADING_LINE.test(l)) break;
+        if (l === '' && (block.length === 0 || block[block.length - 1] === '')) continue;
+        block.push(l);
+      }
+      while (block[block.length - 1] === '') block.pop();
+      if (block.length > 0 && !isPlainLabelLine(block[0] ?? '')) {
+        setLabel((h[1] ?? '').trim(), block.join('\n'));
+      }
+      continue;
+    }
     const m = line.match(LABEL_LINE);
     if (m) {
       setLabel((m[1] ?? '').trim(), (m[2] ?? '').trim());

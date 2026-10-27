@@ -566,7 +566,8 @@ export function MailImportRulePanel({
           </h3>
           {labelNames.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              本文に「ラベル: 値」の形の行がありません。このメールの型はルールで取り込めません。
+              本文に「ラベル:
+              値」や「【見出し】」の形の行がありません。このメールの型はルールで取り込めません。
             </p>
           ) : (
             <div className="overflow-x-auto rounded border">
@@ -584,7 +585,10 @@ export function MailImportRulePanel({
                     return (
                       <tr key={l} className="border-t">
                         <td className="whitespace-nowrap px-2 py-1.5">{l}</td>
-                        <td className="max-w-[260px] truncate px-2 py-1.5 text-muted-foreground">
+                        <td
+                          className="max-w-[260px] truncate px-2 py-1.5 text-muted-foreground"
+                          title={parsed.labels[l]}
+                        >
                           {parsed.labels[l]}
                         </td>
                         <td className="px-2 py-1.5">
@@ -629,7 +633,8 @@ export function MailImportRulePanel({
             {Object.entries(preview.extra).map(([k, v]) => (
               <div key={k} className="contents">
                 <dt className="text-muted-foreground">{extraLabel(k)}</dt>
-                <dd>{v}</dd>
+                {/* 「【お問い合わせ内容】」のような複数行の値は改行を残して見せる */}
+                <dd className="whitespace-pre-wrap break-words">{v}</dd>
               </div>
             ))}
           </dl>
