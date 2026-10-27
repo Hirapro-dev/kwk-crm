@@ -510,6 +510,7 @@ CREATE INDEX idx_act_date        ON activities(registered_date);
 
 **初期データ(seed)** : 各オブジェクトの主要カラムを登録 (is_system=true)。
 **Phase 1.5 同期** : `npm run seed:fields` で全CSVヘッダーから自動投入。マッピング表は `scripts/seed/sync_csv_fields.ts`。
+**詳細レイアウトのプレビュー**(2026-10-27): レイアウトエディタ(`/settings/objects/[id]/layout-editor` の「詳細レイアウト」)のプレビューは、詳細画面の「基本情報」と**同じ列数・同じ全幅項目**で並べる(問合せ・申込は 4 列、会員は 2 列、備考は全幅。それ以外は 2 列)。列数と全幅項目は `lib/domain/detail_layout.ts`(`detailLayoutFor`)の 1 か所で持ち、詳細画面(`DynamicDetailFields`)とエディタの両方がここを読む(それまでエディタは常に 2 列で、空白セルで段をそろえても詳細画面と並びが合わなかった)。列数は画面幅で減る(sm 未満 1 列 / sm 2 列 / lg 以上で指定の列数)。ドラッグの当たり判定はポインタの真下のフィールドを優先する(セクション全体の受け皿が選ばれて末尾に入ってしまうのを防ぐ)。列数を画面から変える機能は無い(必要なら object_definitions に列を追加)
 
 ### 5.10b nav_items (ナビゲーション項目マスタ) ★2026-06 追加
 メニューバー(上部横タブ `TabsNav`)の表示順・表示有無を管理者が `/settings/navigation` で

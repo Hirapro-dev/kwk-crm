@@ -1,3 +1,8 @@
+import {
+  DETAIL_FULL_WIDTH_CLASS,
+  DETAIL_GRID_COLUMN_CLASSES,
+  type DetailColumns,
+} from '@/lib/domain/detail_layout';
 import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import { formatFieldValue, getFieldValue } from '@/lib/utils/format_field';
 import type { ReactNode } from 'react';
@@ -37,7 +42,7 @@ interface Props {
    * 1 / 2 / 3 / 4 のいずれかを指定可能(Tailwind の Just-in-Time が静的に解析できるよう
    * クラス文字列はマップで持つ)。
    */
-  columns?: 1 | 2 | 3 | 4;
+  columns?: DetailColumns;
   /**
    * 指定された field_name のフィールドはグリッド全幅 (列数分) で表示する。
    * 例: 備考など長文フィールドを2列分の幅で見せたいときに使う。
@@ -95,11 +100,12 @@ function groupBySection(fields: FieldDefinition[]): GroupedSection[] {
   return groups;
 }
 
-const COLUMN_CLASSES: Record<1 | 2 | 3 | 4, string> = {
-  1: 'grid min-w-0 grid-cols-1 gap-x-6 gap-y-3',
-  2: 'grid min-w-0 grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2',
-  3: 'grid min-w-0 grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3',
-  4: 'grid min-w-0 grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4',
+// 列数のクラスはレイアウトエディタのプレビューと共通(lib/domain/detail_layout.ts)
+const COLUMN_CLASSES: Record<DetailColumns, string> = {
+  1: `grid min-w-0 gap-x-6 gap-y-3 ${DETAIL_GRID_COLUMN_CLASSES[1]}`,
+  2: `grid min-w-0 gap-x-6 gap-y-3 ${DETAIL_GRID_COLUMN_CLASSES[2]}`,
+  3: `grid min-w-0 gap-x-6 gap-y-3 ${DETAIL_GRID_COLUMN_CLASSES[3]}`,
+  4: `grid min-w-0 gap-x-6 gap-y-3 ${DETAIL_GRID_COLUMN_CLASSES[4]}`,
 };
 
 export function DynamicDetailFields({
@@ -162,7 +168,7 @@ export function DynamicDetailFields({
                   resolvedName ?? formatFieldValue(raw, f.data_type, f.label ?? f.field_name);
               }
               const cellClass = fullWidthSet.has(f.field_name)
-                ? 'flex min-w-0 flex-col border-b pb-2 last:border-b-0 sm:col-span-full'
+                ? `flex min-w-0 flex-col border-b pb-2 last:border-b-0 ${DETAIL_FULL_WIDTH_CLASS}`
                 : 'flex min-w-0 flex-col border-b pb-2 last:border-b-0';
               return (
                 <div key={f.id} className={cellClass}>

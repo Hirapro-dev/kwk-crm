@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatApplicationUnitValue } from '@/lib/domain/application_units';
 import { getApplication } from '@/lib/domain/applications';
 import { getCurrentUser } from '@/lib/domain/auth';
+import { detailLayoutFor } from '@/lib/domain/detail_layout';
 import { getVisibleFields } from '@/lib/domain/object_metadata';
 import { listProjects } from '@/lib/domain/projects';
 import { listAllUsers } from '@/lib/domain/users_admin';
@@ -117,7 +118,8 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           <DynamicDetailFields
             record={app as unknown as Record<string, unknown>}
             fields={detailFields}
-            columns={4}
+            columns={detailLayoutFor('applications').columns}
+            fullWidthFields={detailLayoutFor('applications').fullWidthFields}
             // ID カラムは「氏名/案件名/ユーザー名」で見せたいので上書き表示する。
             // 表示/非表示・並び順・セクション・ラベルはすべてオブジェクトマネージャー
             // (/settings/objects/applications) のレイアウトエディタで制御する。
