@@ -37,6 +37,7 @@ import { NewMailBoxForm } from './NewMailBoxForm';
 import { NewMailSignatureForm } from './NewMailSignatureForm';
 import { ProcessCandidatesButton } from './ProcessCandidatesButton';
 import { ReassignOtherButton } from './ReassignOtherButton';
+import { RebuildCountsButton } from './RebuildCountsButton';
 
 /** 受信添付の取り直し(Server Action)で S3 から元のメールを読むため、実行時間を長めにとる */
 export const maxDuration = 60;
@@ -134,6 +135,14 @@ export default async function MailSettingsPage() {
               30 日分)から、欠けている添付を取り直します。何度実行しても重複しません。
             </p>
             <BackfillAttachmentsButton />
+          </div>
+          <div className="space-y-1 border-t pt-2">
+            <p>
+              件数の数え直し:
+              タブと左のフォルダに出す件数は、件数表に持って自動で足し引きしています。件数が実際と合わないときに、
+              実際の件数で数え直します。何度実行しても結果は同じです。
+            </p>
+            <RebuildCountsButton />
           </div>
         </div>
       </CollapsibleCard>

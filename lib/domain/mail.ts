@@ -21,6 +21,12 @@ import {
   parseMailSearch,
 } from './mail_search';
 import {
+  type MailThreadCountGroup,
+  canCountFromGroups,
+  countBoxIds,
+  countFromGroups,
+} from './mail_thread_counts';
+import {
   MAIL_STATUSES,
   type MailBox,
   type MailMessage,
@@ -71,7 +77,7 @@ export async function listMailSignatures(): Promise<MailSignature[]> {
 
 /**
  * 受信箱ごとの件数(未対応 / 未読。通常分類のみ)。メーラー左ペインのフォルダ表示用。
- * migration 77 の mail_box_counts() を1回呼ぶ(受信箱が数百件でも1クエリ)。
+ * migration 77 の mail_box_counts() を1回呼ぶ(受信箱が数百件でも1クエリ)。2026-10-29 から関数の中身は件数表(migration 136)を読む。
  * 関数未適用(migration 77 前)のときは空配列を返し、件数なしで画面を出す。
  */
 export async function listMailBoxCounts(): Promise<MailBoxCount[]> {
@@ -146,11 +152,31 @@ async function filteredSearchHits(params: ThreadFilterParams) {
 }
 
 /**
+ * 件数表(migration 136)から、受信箱で絞った区分ごとの件数を読む(CLAUDE.md §5.15「件数表」)。
+ * 1 回の表示で左フォルダ・タブ・一覧の総件数が何度も使うため、リクエスト内で使い回す(React の cache)。
+ * boxKey は受信箱 ID のカンマ区切り('all' = 全受信箱、'' = 0 件)。読めない(未適用など)ときは null。
+ */
+const threadCountGroups = cache(async (boxKey: string): Promise<MailThreadCountGroup[] | null> => {
+  const supabase = await createClient();
+  const boxIds = boxKey === 'all' ? null : boxKey === '' ? [] : boxKey.split(',').map(Number);
+  const { data, error } = await supabase.rpc('mail_thread_count_groups', { p_box_ids: boxIds });
+  if (error) return null;
+  return (data ?? []) as unknown as MailThreadCountGroup[];
+});
+
+/**
  * 条件に一致するスレッド件数だけを返す(行は取得しない)。
- * メーラーの状態タブ(新着 / 対応中 / 完了 …)に件数を出すために使う。
+ * メーラーの状態タブ(新着 / 対応中 / 完了 …)・左フォルダ・一覧の総件数に使う。
+ * 受信箱・状態・分類・未読・取込候補だけの絞り込みは件数表から合計する(2026-10-29。表示のたびに
+ * 約 117 万件を数え直していたため)。担当・会員で絞るとき、件数表が読めないときは、その場で数える。
  */
 export async function countMailThreads(params: ThreadFilterParams = {}): Promise<number> {
   if (params.q?.trim()) return (await filteredSearchHits(params)).hits.length;
+  if (canCountFromGroups(params)) {
+    const ids = countBoxIds(params);
+    const groups = await threadCountGroups(ids === null ? 'all' : ids.join(','));
+    if (groups) return countFromGroups(groups, params);
+  }
   const supabase = await createClient();
   const query = applyThreadFilters(
     supabase
@@ -202,11 +228,13 @@ export async function listMailThreads(
     return { rows, total: hits.length, page, pageSize, searchNote: note };
   }
 
-  // 総件数は初回(1ページ目)だけ数える。追加読み込みでは不要で、数十万件の候補では数え直しが重いため
+  // 総件数は初回(1ページ目)だけ数える。追加読み込みでは不要で、数十万件の候補では数え直しが重いため。
+  // 件数表から数えられる条件なら、一覧と一緒に数えず件数表から出す(2026-10-29。タブの件数と同じ数)
+  const fastCount = page === 1 && canCountFromGroups(params);
   const query = applyThreadFilters(
     supabase
       .from('mail_threads')
-      .select(THREAD_SELECT, page === 1 ? { count: 'exact' } : undefined)
+      .select(THREAD_SELECT, page === 1 && !fastCount ? { count: 'exact' } : undefined)
       .is('deleted_at', null)
       .order('last_message_at', { ascending: false, nullsFirst: false })
       .order('id', { ascending: false })
@@ -214,7 +242,10 @@ export async function listMailThreads(
     params,
   );
 
-  const { data, error, count } = await query;
+  const [{ data, error, count }, fastTotal] = await Promise.all([
+    query,
+    fastCount ? countMailThreads(params) : Promise.resolve(null),
+  ]);
   if (error) {
     // 追加読み込みでは失敗を画面に伝える(空を返すと「全件表示」と誤解される)
     if (params.strict) throw new Error(`メール一覧の取得に失敗しました: ${error.message}`);
@@ -227,7 +258,7 @@ export async function listMailThreads(
     attachLatestInbound(supabase, rows, params),
     attachAttachmentCounts(supabase, rows),
   ]);
-  return { rows, total: count ?? 0, page, pageSize };
+  return { rows, total: fastTotal ?? count ?? 0, page, pageSize };
 }
 
 /**
