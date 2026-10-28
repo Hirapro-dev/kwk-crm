@@ -70,7 +70,7 @@ export function MailReplyForm({
   signatures: SignatureOption[];
   /** 返信本文に最初から入れる引用 */
   initialQuote: string;
-  /** 返信の件名(確認画面に出す。実際の件名はサーバーで同じ規則で決める) */
+  /** 返信の件名の初期値(「Re: 元の件名」)。画面で書き換えられる(2026-10-28) */
   replySubject: string;
   /** 承認者(admin / manager)なら true。「そのまま送信する」を選べる */
   canDirectSend?: boolean;
@@ -92,6 +92,7 @@ export function MailReplyForm({
   const [signatureTouched, setSignatureTouched] = useState(false);
   const [text, setText] = useState('');
   const [quote, setQuote] = useState(initialQuote);
+  const [subject, setSubject] = useState(replySubject);
   const [cc, setCc] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [sendMode, setSendMode] = useState<MailSendMode>(
@@ -132,6 +133,7 @@ export function MailReplyForm({
       const r = await replyToMailThread({
         threadId,
         body,
+        subject,
         cc,
         fromName,
         mailBoxId: Number(boxId),
@@ -152,6 +154,7 @@ export function MailReplyForm({
       setText('');
       att.reset();
       setCc('');
+      setSubject(replySubject);
       setScheduledAt('');
       setSendMode(canDirectSend ? 'direct' : 'approval');
       setSent(r.message ?? '承認依頼を出しました');
@@ -228,6 +231,17 @@ export function MailReplyForm({
               disabled={pending}
             />
           </div>
+        </div>
+
+        <div className="block text-xs">
+          件名
+          <Input
+            aria-label="件名"
+            className="mt-1"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            disabled={pending}
+          />
         </div>
 
         <div className="block text-xs">
@@ -330,7 +344,7 @@ export function MailReplyForm({
             : '',
           to: replyTo ?? '(不明)',
           cc,
-          subject: replySubject,
+          subject: subject.replace(/\s+/g, ' ').trim(),
           scheduledAt,
           mode: sendMode,
           body: outgoingBody,
