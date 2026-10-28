@@ -6,6 +6,7 @@ import {
   buildReplySubject,
   formatFromAddress,
   parseAddressList,
+  resolveReplySubject,
   sanitizeDisplayName,
   sesMessageIdHeader,
 } from '../../lib/domain/mail_compose';
@@ -139,5 +140,26 @@ describe('sanitizeDisplayName(差出人表示名の正規化)', () => {
     const long = 'あ'.repeat(100);
     const result = sanitizeDisplayName(long);
     expect(result).toHaveLength(80);
+  });
+});
+
+describe('resolveReplySubject(返信の件名を画面で直したとき)', () => {
+  // 意図: 返信の件名は画面で書き換えられる(2026-10-28 ユーザー要望)。送らなかったとき(古い画面など)は
+  // これまでどおり「Re: 元の件名」。空にしたら送らない。改行は送るメールのヘッダーを壊すので 1 つの空白にする。
+  it('指定が無ければ元の件名から作る(Re: を付ける)', () => {
+    expect(resolveReplySubject(undefined, '口座について')).toEqual({ subject: 'Re: 口座について' });
+  });
+  it('指定があればその件名を使う(Re: を勝手に付けない)', () => {
+    expect(resolveReplySubject('【再送】口座について', '口座について')).toEqual({
+      subject: '【再送】口座について',
+    });
+  });
+  it('前後の空白・改行を除き、連続した空白は 1 つにする', () => {
+    expect(resolveReplySubject('  Re:  口座\r\nについて ', 'x')).toEqual({
+      subject: 'Re: 口座 について',
+    });
+  });
+  it('空白だけなら件名の入力を求める', () => {
+    expect(resolveReplySubject('   ', '口座について').error).toBeTruthy();
   });
 });

@@ -23,6 +23,20 @@ export function buildReplySubject(subject: string | null | undefined): string {
 }
 
 /**
+ * 返信で送る件名。画面で書き換えた件名(input)があればそれを使い、無ければ元の件名から `buildReplySubject` で作る
+ * (2026-10-28。返信の件名を画面で直せるようにした)。改行・連続した空白は 1 つの空白にする(ヘッダーを壊さないため)。
+ * 空白だけなら送らない。
+ */
+export function resolveReplySubject(
+  input: string | undefined,
+  original: string | null | undefined,
+): { subject?: string; error?: string } {
+  if (input === undefined) return { subject: buildReplySubject(original) };
+  const s = input.replace(/\s+/g, ' ').trim();
+  return s ? { subject: s } : { error: '件名を入力してください' };
+}
+
+/**
  * 返信時のスレッド用ヘッダ。
  * References は親の References に親の Message-ID を足したもの(RFC 5322 の慣例)。
  * これを付けると顧客側のメーラーでも同じスレッドにぶら下がる。

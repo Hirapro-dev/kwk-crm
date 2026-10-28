@@ -23,8 +23,8 @@ import { getMailThread } from '@/lib/domain/mail';
 import {
   MAX_RECIPIENTS,
   buildReplyHeaders,
-  buildReplySubject,
   parseAddressList,
+  resolveReplySubject,
   sanitizeDisplayName,
 } from '@/lib/domain/mail_compose';
 import {
@@ -145,6 +145,8 @@ async function loadSendableBox(boxId: number): Promise<{ box?: BoxRow; error?: s
 export async function replyToMailThread(input: {
   threadId: string;
   body: string;
+  /** 件名(画面で書き換えたもの)。未指定なら「Re: 元の件名」(2026-10-28) */
+  subject?: string;
   cc?: string;
   /** 差出人表示名の上書き。未指定(undefined)なら送信元受信箱の既定値を使う */
   fromName?: string;
@@ -186,6 +188,9 @@ export async function replyToMailThread(input: {
     return { error: `宛先が多すぎます(${MAX_RECIPIENTS} 件まで)` };
   }
 
+  const subject = resolveReplySubject(input.subject, thread.subject ?? parent.subject);
+  if (!subject.subject) return { error: subject.error };
+
   const headers = buildReplyHeaders(parent);
   const fromName =
     input.fromName !== undefined ? sanitizeDisplayName(input.fromName) : box.display_name;
@@ -202,7 +207,7 @@ export async function replyToMailThread(input: {
       from_name: fromName,
       to_addresses: to,
       cc_addresses: cc.addresses,
-      subject: buildReplySubject(thread.subject ?? parent.subject),
+      subject: subject.subject,
       text_body: `${input.body.replace(/\s+$/, '')}\n`,
       in_reply_to: headers.inReplyTo,
       references_header: headers.references,
