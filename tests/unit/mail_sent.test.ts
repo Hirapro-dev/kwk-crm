@@ -3,7 +3,13 @@
  * 意図: 送信メールは約 22 万通あり件数を数えると重いため、「次の 50 件」は送信日時と ID の続き位置(カーソル)で読む。
  * URL から来る値なので、形の違うものは捨てて先頭から読み直す(DB に変な値を送らない)。
  */
-import { parseSentCursor, sentCursorOf, sentFolderHref } from '@/lib/domain/mail_sent';
+import {
+  boxSentTabHref,
+  isBoxSentView,
+  parseSentCursor,
+  sentCursorOf,
+  sentFolderHref,
+} from '@/lib/domain/mail_sent';
 import { describe, expect, it } from 'vitest';
 
 const ID = '0bb98130-24e3-4623-8c0a-24deabdb26e4';
@@ -28,5 +34,21 @@ describe('sentFolderHref', () => {
     expect(sentFolderHref({ mine: false })).toBe('/mail/sent');
     expect(sentFolderHref({ mine: true })).toBe('/mail/sent?mine=1');
     expect(sentFolderHref({ mine: true, before: 'x_y' })).toBe('/mail/sent?mine=1&before=x_y');
+  });
+});
+
+describe('受信箱ごとの「送信済み」タブ(2026-10-28 ユーザー指定)', () => {
+  // 意図: 送信済みは受信箱(アドレス)ごとに見る。受信箱を選んでいるときだけタブを出し、
+  // 「すべての受信箱」「取込候補」「その他」では出さない(どのアドレスの送信か決まらないため)。
+  it('受信箱を選んで tab=sent のときだけ送信済みの表示にする', () => {
+    expect(isBoxSentView({ tab: 'sent', boxId: 3 })).toBe(true);
+    expect(isBoxSentView({ tab: 'sent', boxId: undefined })).toBe(false);
+    expect(isBoxSentView({ tab: 'all', boxId: 3 })).toBe(false);
+    expect(isBoxSentView({ tab: 'sent', boxId: 3, folder: 'candidates' })).toBe(false);
+    expect(isBoxSentView({ tab: 'sent', boxId: 3, folder: 'unsorted' })).toBe(false);
+  });
+  it('タブの URL(続きの位置付き)', () => {
+    expect(boxSentTabHref(3)).toBe('/mail?box=3&tab=sent');
+    expect(boxSentTabHref(3, 'x_y')).toBe('/mail?box=3&tab=sent&before=x_y');
   });
 });

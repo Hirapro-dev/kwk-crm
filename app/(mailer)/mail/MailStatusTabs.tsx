@@ -1,3 +1,4 @@
+import { SENT_TAB_KEY, boxSentTabHref } from '@/lib/domain/mail_sent';
 import { MAIL_TABS } from '@/lib/domain/mail_tabs';
 import { cn } from '@/lib/utils/cn';
 import Link from 'next/link';
@@ -10,8 +11,11 @@ export function MailStatusTabs({
   current,
   counts,
   searchParams,
+  showSentTab = false,
 }: {
   current: string;
+  /** 受信箱を選んでいるときだけ「送信済み」タブ(そのアドレスから送ったメール。2026-10-28)を出す */
+  showSentTab?: boolean;
   counts: Record<string, number>;
   searchParams: { q?: string; assignee?: string; box?: string; unread?: string; folder?: string };
 }) {
@@ -60,6 +64,22 @@ export function MailStatusTabs({
                 {n > 999 ? '999+' : n}
               </span>
             </Link>
+            {/* 「すべて」の後ろに、受信箱の「送信済み」(件数は出さない。2026-10-28) */}
+            {t.key === 'all' && showSentTab && searchParams.box && (
+              <Link
+                href={boxSentTabHref(Number(searchParams.box))}
+                className={cn(
+                  'ml-1 flex items-center gap-1.5 whitespace-nowrap rounded px-2.5 py-1 text-xs',
+                  current === SENT_TAB_KEY
+                    ? 'bg-primary/10 font-semibold text-primary'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                )}
+                aria-current={current === SENT_TAB_KEY ? 'page' : undefined}
+                title="このアドレスから送ったメール"
+              >
+                送信済み
+              </Link>
+            )}
           </span>
         );
       })}

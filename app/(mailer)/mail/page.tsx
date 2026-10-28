@@ -17,12 +17,21 @@ import {
   listMyMailUserFolders,
 } from '@/lib/domain/mail';
 import { unsortedBoxIds } from '@/lib/domain/mail_folders';
+import {
+  SENT_PAGE_SIZE,
+  SENT_TAB_KEY,
+  boxSentTabHref,
+  isBoxSentView,
+  parseSentCursor,
+} from '@/lib/domain/mail_sent';
+import { listSentMessages } from '@/lib/domain/mail_sent_queries';
 import { MAIL_TABS, mailTabFilter, resolveMailTab } from '@/lib/domain/mail_tabs';
 import { canDeleteMailThreads } from '@/lib/domain/mail_types';
 import { listAllUsers } from '@/lib/domain/users_admin';
 import { MailFilterBar } from './MailFilterBar';
 import { MailInfinite } from './MailInfinite';
 import { MailStatusTabs } from './MailStatusTabs';
+import { SentMessagesTable } from './SentMessagesTable';
 
 interface PageProps {
   searchParams: Promise<{
@@ -33,6 +42,8 @@ interface PageProps {
     unread?: string;
     /** 'candidates' = 左フォルダ「取込候補」(migration 82) */
     folder?: string;
+    /** 受信箱の「送信済み」タブの続き位置(2026-10-28) */
+    before?: string;
   }>;
 }
 
@@ -82,6 +93,19 @@ export default async function MailPage({ searchParams }: PageProps) {
 
   const assigneeOptions = users.map((u) => ({ id: u.id, name: u.full_name ?? u.email }));
   const currentBox = mailBoxId ? boxes.find((b) => b.id === mailBoxId) : undefined;
+  // 受信箱の「送信済み」タブ: そのアドレスから送ったメールを 1 通ずつ(2026-10-28 ユーザー指定。§5.15)
+  const sentBox =
+    currentBox && isBoxSentView({ tab: sp.tab, boxId: mailBoxId, folder: sp.folder })
+      ? currentBox
+      : undefined;
+  const sentBefore = sentBox ? parseSentCursor(sp.before) : null;
+  const sent = sentBox
+    ? await listSentMessages({
+        fromAddress: sentBox.address,
+        before: sentBefore,
+        limit: SENT_PAGE_SIZE,
+      })
+    : null;
   const title = importCandidate
     ? '取込候補'
     : unsorted
@@ -101,8 +125,9 @@ export default async function MailPage({ searchParams }: PageProps) {
         <div className="min-w-0">
           <h1 className="truncate text-sm font-bold">{title}</h1>
           <p className="text-[11px] text-muted-foreground">
-            {sp.q ? '検索結果 / ' : ''}
-            {importCandidate ? 'すべて' : tab.label}: {result.total.toLocaleString()} 件
+            {sent
+              ? 'このアドレスから送ったメール(新しい順)'
+              : `${sp.q ? '検索結果 / ' : ''}${importCandidate ? 'すべて' : tab.label}: ${result.total.toLocaleString()} 件`}
           </p>
         </div>
         <MailFilterBar
@@ -128,26 +153,41 @@ export default async function MailPage({ searchParams }: PageProps) {
 
       {!importCandidate && (
         <MailStatusTabs
-          current={tab.key}
+          current={sent ? SENT_TAB_KEY : tab.key}
+          showSentTab={!!currentBox && !unsorted}
           counts={Object.fromEntries(MAIL_TABS.map((t, i) => [t.key, tabCounts[i] ?? 0]))}
           searchParams={sp}
         />
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <MailInfinite
-          key={listKey}
-          initialRows={result.rows}
-          total={result.total}
-          params={listParams}
-          showBoxColumn={unsorted || !mailBoxId}
-          boxAddresses={Object.fromEntries(boxes.map((b) => [b.id, b.address]))}
-          canEdit={me.role !== 'viewer'}
-          canDelete={canDeleteMailThreads(me.role)}
-          assigneeOptions={assigneeOptions}
-          importRules={importRules}
-        />
-      </div>
+      {sent && sentBox ? (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <SentMessagesTable
+            rows={sent.rows}
+            hasMore={sent.hasMore}
+            error={sent.error}
+            isContinued={sentBefore !== null}
+            firstHref={boxSentTabHref(sentBox.id)}
+            nextHref={(b) => boxSentTabHref(sentBox.id, b)}
+            emptyText="このアドレスから送ったメールはありません"
+          />
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <MailInfinite
+            key={listKey}
+            initialRows={result.rows}
+            total={result.total}
+            params={listParams}
+            showBoxColumn={unsorted || !mailBoxId}
+            boxAddresses={Object.fromEntries(boxes.map((b) => [b.id, b.address]))}
+            canEdit={me.role !== 'viewer'}
+            canDelete={canDeleteMailThreads(me.role)}
+            assigneeOptions={assigneeOptions}
+            importRules={importRules}
+          />
+        </div>
+      )}
     </div>
   );
 }
