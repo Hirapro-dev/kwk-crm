@@ -3,6 +3,7 @@ import {
   FORM_TARGET,
   buildTargetOptions,
   filterTargetOptions,
+  newExtraFieldKeys,
   targetLabel,
 } from '../../lib/domain/mail_import_targets';
 
@@ -62,5 +63,32 @@ describe('filterTargetOptions', () => {
       'extra:IPアドレス',
     );
     expect(filterTargetOptions(options, '住所', 'IPアドレス').newExtra).toBeNull();
+  });
+});
+
+describe('newExtraFieldKeys(ルールの保存で項目管理に足す可変項目)', () => {
+  // 意図: 「入れる項目」で「<キー>(新規)」を選んだまま保存すると、値は問合せの extra に入るのに
+  // 項目管理(field_definitions)に無いため、オブジェクト管理にも問合せの詳細画面にも出なかった(2026-10-28)。
+  // 保存のときに、まだ定義の無い可変項目を足す。
+  it('項目管理に無い extra: のキーだけを、重複なく返す', () => {
+    expect(
+      newExtraFieldKeys(
+        {
+          お名前: 'name',
+          ご相談項目: 'extra:ご相談項目',
+          お問い合わせ内容: 'extra:詳細',
+          ご相談項目2: 'extra:ご相談項目',
+          流入元: 'extra:流入元',
+        },
+        ['詳細', '備考'],
+      ),
+    ).toEqual(['ご相談項目', '流入元']);
+  });
+  it('すべて定義済み・可変項目が無いときは空', () => {
+    expect(newExtraFieldKeys({ お問い合わせ内容: 'extra:詳細' }, ['詳細'])).toEqual([]);
+    expect(newExtraFieldKeys({ お名前: 'name' }, [])).toEqual([]);
+  });
+  it('キーの前後の空白は除き、空のキーは足さない', () => {
+    expect(newExtraFieldKeys({ a: 'extra: 流入元 ', b: 'extra:' }, [])).toEqual(['流入元']);
   });
 });

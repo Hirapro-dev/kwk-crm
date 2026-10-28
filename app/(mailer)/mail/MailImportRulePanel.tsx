@@ -294,9 +294,12 @@ export function MailImportRulePanel({
         setMessage({ kind: 'error', text: r.error });
         return;
       }
+      const added = r.addedFields?.length
+        ? `。項目管理(問合せ)に「${r.addedFields.join('」「')}」を追加しました`
+        : '';
       setMessage({
         kind: 'ok',
-        text: existingRule ? 'ルールを更新しました' : 'ルールを保存しました',
+        text: `${existingRule ? 'ルールを更新しました' : 'ルールを保存しました'}${added}`,
       });
       router.refresh();
     });
