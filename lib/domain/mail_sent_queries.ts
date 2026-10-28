@@ -19,11 +19,13 @@ export interface SentMessageRow {
 }
 
 /**
- * 送信メールを新しい順に limit 件読む。senderUserId を渡すとその人が CRM から送ったものだけ
+ * 送信メールを新しい順に limit 件読む。fromAddress を渡すとそのアドレスから送ったものだけ、senderUserId を渡すとその人が CRM から送ったものだけ
  * (メールディーラーから取り込んだ分は送信者の記録が無いため出ない)。before は前のページの最後の行の位置。
  */
 export async function listSentMessages(opts: {
   senderUserId?: string;
+  /** 差出人のアドレス(受信箱の「送信済み」タブ。小文字。migration 134 の索引) */
+  fromAddress?: string;
   before?: { sentAt: string; id: string } | null;
   limit: number;
 }): Promise<{ rows: SentMessageRow[]; hasMore: boolean; error?: string }> {
@@ -37,6 +39,7 @@ export async function listSentMessages(opts: {
     .not('sent_at', 'is', null)
     .is('thread.deleted_at', null);
   if (opts.senderUserId) q = q.eq('sender_user_id', opts.senderUserId);
+  if (opts.fromAddress) q = q.eq('from_address', opts.fromAddress.trim().toLowerCase());
   if (opts.before) {
     // before の値は parseSentCursor で ISO 日時と UUID に限定したもの
     q = q.or(

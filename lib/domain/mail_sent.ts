@@ -37,3 +37,21 @@ export function sentFolderHref(opts: { mine: boolean; before?: string }): string
   const q = p.toString();
   return q ? `/mail/sent?${q}` : '/mail/sent';
 }
+
+/** 受信箱の状態タブの「送信済み」のキー(?tab=sent) */
+export const SENT_TAB_KEY = 'sent';
+
+/**
+ * 受信箱の「送信済み」タブを表示するか(2026-10-28 ユーザー指定: 送信済みは受信箱ごと)。
+ * 受信箱を選んでいるときだけ。「すべての受信箱」「取込候補」「その他」ではどのアドレスの送信か決まらないので出さない。
+ */
+export function isBoxSentView(p: { tab?: string; boxId?: number; folder?: string }): boolean {
+  return p.tab === SENT_TAB_KEY && p.boxId !== undefined && !p.folder;
+}
+
+/** 受信箱の「送信済み」タブの URL */
+export function boxSentTabHref(boxId: number, before?: string): string {
+  const p = new URLSearchParams({ box: String(boxId), tab: SENT_TAB_KEY });
+  if (before) p.set('before', before);
+  return `/mail?${p.toString()}`;
+}

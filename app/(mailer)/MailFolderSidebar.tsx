@@ -26,7 +26,6 @@ import {
   History,
   Import,
   Inbox,
-  MailCheck,
   PanelLeft,
   Pencil,
   Pin,
@@ -337,16 +336,6 @@ function FolderTree({
         <Send className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
         <span className="truncate">送信待ち</span>
         <CountBadge n={outboxPendingCount} strong />
-      </Link>
-
-      <Link
-        href="/mail/sent"
-        onClick={onNavigate}
-        className={itemClass(pathname === '/mail/sent' && searchParams.get('mine') !== '1')}
-        title="送ったメール(メールディーラーから取り込んだ過去分を含む)。1 通ずつ新しい順に並びます"
-      >
-        <MailCheck className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
-        <span className="truncate">送信済み</span>
       </Link>
 
       <Link
