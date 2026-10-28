@@ -468,6 +468,9 @@ CREATE INDEX idx_act_member_date ON activities(member_id, registered_datetime DE
 CREATE INDEX idx_act_owner_date  ON activities(owner_id,  registered_datetime DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_act_bunrui      ON activities(d_bunrui, m_bunrui, s_bunrui);
 CREATE INDEX idx_act_date        ON activities(registered_date);
+-- 2026-10-29 追加(migration 135): 画面の並び「新しい順・日時が空の行は最後」に完全一致する索引。
+-- 既存の (registered_datetime DESC) は NULLS FIRST で使われず、会員詳細・対応歴一覧が毎回 78 万件を並べ替えていた
+CREATE INDEX idx_act_reg_dt_nulls_last ON activities(registered_datetime DESC NULLS LAST, id DESC) WHERE deleted_at IS NULL;
 -- 全文検索(将来):
 -- CREATE INDEX idx_act_desc_trgm ON activities USING gin(description gin_trgm_ops);
 ```
