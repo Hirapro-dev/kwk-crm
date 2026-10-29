@@ -4,9 +4,11 @@ import {
   buildQuotedBody,
   buildReplyHeaders,
   buildReplySubject,
+  findAddressesInText,
   formatFromAddress,
   parseAddressList,
   resolveReplySubject,
+  resolveReplyTo,
   sanitizeDisplayName,
   sesMessageIdHeader,
 } from '../../lib/domain/mail_compose';
@@ -86,6 +88,59 @@ describe('parseAddressList', () => {
   it('空は空配列', () => {
     expect(parseAddressList('')).toEqual({ addresses: [] });
     expect(parseAddressList(null)).toEqual({ addresses: [] });
+  });
+});
+
+// フォーム通知の差出人はフォームの送信システムで、お客様のアドレスは本文にある。
+// 返信先を画面で 1 件に書き換えられるようにした(2026-10-29)
+describe('resolveReplyTo(返信先の上書き)', () => {
+  it('入力が無ければ既定(直近の受信メールの差出人)を使う', () => {
+    expect(resolveReplyTo(undefined, ['form@x.com'])).toEqual({ addresses: ['form@x.com'] });
+  });
+
+  it('既定も無ければエラー', () => {
+    expect(resolveReplyTo(undefined, []).error).toBeTruthy();
+  });
+
+  it('入力があればそれを使う(表示名付きはアドレスだけ)', () => {
+    expect(resolveReplyTo(' 顧客 <c@y.jp> ', ['form@x.com'])).toEqual({ addresses: ['c@y.jp'] });
+  });
+
+  it('空・不正な形式・2 件以上は黙って既定に戻さずエラーにする(誤送信を防ぐ)', () => {
+    expect(resolveReplyTo('  ', ['form@x.com']).error).toBe('返信先を入力してください');
+    expect(resolveReplyTo('notanaddress', ['form@x.com']).error).toContain(
+      '返信先の形式が不正です',
+    );
+    expect(resolveReplyTo('a@x.com, b@x.com', ['form@x.com']).error).toBe(
+      '返信先は 1 件だけ指定してください',
+    );
+  });
+});
+
+describe('findAddressesInText(本文から返信先の候補を拾う)', () => {
+  it('出てきた順・小文字・重複なしで、差出人や自社のアドレスは除く', () => {
+    const body = [
+      'お名前 : 架空 太郎',
+      'メール : Kaku.Taro+1@Example.com',
+      '控え: kaku.taro+1@example.com',
+      '差出人: support@ours.example',
+    ].join('\n');
+    expect(findAddressesInText(body, ['SUPPORT@ours.example'])).toEqual([
+      'kaku.taro+1@example.com',
+    ]);
+  });
+
+  it('文末の句点は含めない', () => {
+    expect(findAddressesInText('連絡先は a@b.co.jp.', [])).toEqual(['a@b.co.jp']);
+  });
+
+  it('本文が無ければ空', () => {
+    expect(findAddressesInText(null, [])).toEqual([]);
+  });
+
+  it('候補は最大 5 件', () => {
+    const body = Array.from({ length: 8 }, (_, i) => `u${i}@x.com`).join(' ');
+    expect(findAddressesInText(body, [])).toHaveLength(5);
   });
 });
 
