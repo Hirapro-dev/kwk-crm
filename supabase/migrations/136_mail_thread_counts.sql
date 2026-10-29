@@ -9,13 +9,22 @@
 --
 -- 1. mail_thread_counts(件数表)と RLS
 -- 2. トリガー(文単位。1 回の操作で何行変えても件数表の更新は 1 回)
--- 3. rebuild_mail_thread_counts(): 実際の件数で数え直す(サービスロールのみ)。最後に 1 回呼んで中身を作る
+-- 3. rebuild_mail_thread_counts(): 実際の件数で数え直す(サービスロールのみ。ロックを取らず、差だけを足す)
 -- 4. mail_thread_count_groups(): 受信箱で絞った合計(画面用)
 -- 5. mail_box_counts(): 件数表から読むように作り直す(戻り値は migration 77 と同じ)
 --
--- 適用: SQL Editor でこのファイルをまとめて実行する(最後の数え直しで数秒〜数十秒かかる。その間メールの受信は待たされるだけで失われない)。
+-- 適用(2 回に分ける。トリガーの作成で mail_threads の書込みを止める時間を短くするため):
+--   (1) SQL Editor でこのファイルをまとめて実行する(すぐ終わる)
+--   (2) 続けて SELECT public.rebuild_mail_thread_counts(); を実行して件数表の中身を作る(数秒。書込みは止めない)
+--   (1) と (2) の間に変わったスレッドの分は (2) で正しくなる。画面は件数表が空のあいだ従来の数え方で数える。
 -- 戻すとき: トリガー 3 つを DROP し、mail_box_counts() を migration 77 の定義に戻す(画面は件数表が読めなければ従来の数え方に戻る)。
+-- 注意: トリガーを通らない書き換え(TRUNCATE、トリガーを止めた作業など)をしたら、その後に (2) を実行する。
+--       mail_threads の区分(状態・分類・既読・受信箱など)を、1 つの長いトランザクションで何度も一括変更しない
+--       (件数表の行の書込みロックをトランザクションの終わりまで持ち、ほかの更新を待たせるため。文ごとにコミットする)。
 -- ============================================================================
+
+-- 先に長い処理がいると、トリガーの作成がその終わりを待って後ろの処理を詰まらせるため、待つのは 5 秒まで
+SET lock_timeout = '5s';
 
 -- 1. 件数表 ---------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.mail_thread_counts (
@@ -28,12 +37,17 @@ CREATE TABLE IF NOT EXISTS public.mail_thread_counts (
   created_at          timestamptz NOT NULL DEFAULT now(),
   updated_at          timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (mail_box_id, category, status, is_read, is_import_candidate)
-);
+) WITH (fillfactor = 70);  -- 同じ行を何度も書き換える小さな表のため、空きを残して HOT 更新を効かせる
 
 COMMENT ON TABLE public.mail_thread_counts IS
   'メーラーのタブ・左フォルダの件数(削除済みを除くスレッド数)。mail_threads のトリガーで更新する。CLAUDE.md §5.15';
 
 ALTER TABLE public.mail_thread_counts ENABLE ROW LEVEL SECURITY;
+
+-- 既定で付く権限(書込み・TRUNCATE など)を外し、読むだけにする。書込みはトリガー関数(所有者の権限)だけ
+REVOKE ALL ON public.mail_thread_counts FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.mail_thread_counts TO authenticated;
+GRANT ALL ON public.mail_thread_counts TO service_role;
 
 -- メールは全ロールが閲覧できる(mail_threads_select)ので、件数も全ロールが読める。書込みのポリシーは設けない
 DROP POLICY IF EXISTS mail_thread_counts_select ON public.mail_thread_counts;
@@ -47,7 +61,7 @@ CREATE OR REPLACE FUNCTION public.trg_mail_thread_counts()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = ''
 AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
@@ -92,37 +106,38 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS mail_thread_counts_ins ON public.mail_threads;
-CREATE TRIGGER mail_thread_counts_ins
+REVOKE ALL ON FUNCTION public.trg_mail_thread_counts() FROM PUBLIC, anon, authenticated;
+
+-- CREATE OR REPLACE TRIGGER は DROP TRIGGER と違い、作成中も mail_threads の読み出しを止めない
+CREATE OR REPLACE TRIGGER mail_thread_counts_ins
   AFTER INSERT ON public.mail_threads
   REFERENCING NEW TABLE AS new_rows
   FOR EACH STATEMENT EXECUTE FUNCTION public.trg_mail_thread_counts();
 
-DROP TRIGGER IF EXISTS mail_thread_counts_upd ON public.mail_threads;
-CREATE TRIGGER mail_thread_counts_upd
+CREATE OR REPLACE TRIGGER mail_thread_counts_upd
   AFTER UPDATE ON public.mail_threads
   REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
   FOR EACH STATEMENT EXECUTE FUNCTION public.trg_mail_thread_counts();
 
-DROP TRIGGER IF EXISTS mail_thread_counts_del ON public.mail_threads;
-CREATE TRIGGER mail_thread_counts_del
+CREATE OR REPLACE TRIGGER mail_thread_counts_del
   AFTER DELETE ON public.mail_threads
   REFERENCING OLD TABLE AS old_rows
   FOR EACH STATEMENT EXECUTE FUNCTION public.trg_mail_thread_counts();
 
 -- 3. 数え直し ------------------------------------------------------------
--- 件数表を排他ロックしてから実際の件数を数える。数えている間のスレッドの変更はトリガーがロック待ちになり、
--- 数え直しの後に足し引きされるので取りこぼさない。違っていた区分だけを書き換え、その数を返す(0 = 一致していた)。
+-- ロックは取らない。件数表はスレッドの変更と同じトランザクションで書かれるので、1 つの文(= 1 つのスナップショット)の中では
+-- 「実際の件数」と「件数表」は、ずれが無ければ必ず一致する。その差(ずれ)だけを件数表に足すので、数えている間に
+-- 同時に起きた更新(トリガーの足し引き)とぶつからず、取りこぼしも二重計上もしない。違っていた区分の数を返す(0 = 一致)。
+-- 全体を 1 文で書くこと(文を分けるとスナップショットが変わり、この前提が崩れる)。
 CREATE OR REPLACE FUNCTION public.rebuild_mail_thread_counts()
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = ''
 AS $$
 DECLARE
   v_changed integer;
 BEGIN
-  LOCK TABLE public.mail_thread_counts IN EXCLUSIVE MODE;
   WITH fresh AS (
     SELECT mail_box_id, category, status, is_read, is_import_candidate, count(*)::bigint AS n
       FROM public.mail_threads
@@ -130,7 +145,8 @@ BEGIN
      GROUP BY 1, 2, 3, 4, 5
   ),
   diff AS (
-    SELECT mail_box_id, category, status, is_read, is_import_candidate, coalesce(f.n, 0) AS n
+    SELECT mail_box_id, category, status, is_read, is_import_candidate,
+           coalesce(f.n, 0) - coalesce(c.n, 0) AS d
       FROM fresh f
       FULL JOIN public.mail_thread_counts c
       USING (mail_box_id, category, status, is_read, is_import_candidate)
@@ -139,11 +155,11 @@ BEGIN
   up AS (
     INSERT INTO public.mail_thread_counts AS c
       (mail_box_id, category, status, is_read, is_import_candidate, n)
-    SELECT mail_box_id, category, status, is_read, is_import_candidate, n
+    SELECT mail_box_id, category, status, is_read, is_import_candidate, d
       FROM diff
      ORDER BY 1, 2, 3, 4, 5
     ON CONFLICT (mail_box_id, category, status, is_read, is_import_candidate)
-      DO UPDATE SET n = EXCLUDED.n, updated_at = now()
+      DO UPDATE SET n = c.n + EXCLUDED.n, updated_at = now()
     RETURNING 1
   )
   SELECT count(*) INTO v_changed FROM up;
@@ -177,6 +193,7 @@ $$;
 COMMENT ON FUNCTION public.mail_thread_count_groups(integer[]) IS
   'メーラーのタブ・取込候補の件数用: 受信箱で絞った分類・状態・既読・取込候補ごとのスレッド数(件数表から)';
 
+REVOKE ALL ON FUNCTION public.mail_thread_count_groups(integer[]) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.mail_thread_count_groups(integer[]) TO authenticated;
 
 -- 5. 左フォルダの件数(migration 77 と同じ戻り値) ----------------------------
@@ -203,5 +220,5 @@ $$;
 COMMENT ON FUNCTION public.mail_box_counts() IS
   'メーラーのフォルダ一覧用: 受信箱ごとの未対応件数・未読件数(通常分類のみ。2026-10-29 から件数表 mail_thread_counts から読む)';
 
--- 6. 中身を作る(最後に 1 回) -----------------------------------------------
-SELECT public.rebuild_mail_thread_counts() AS initial_keys;
+-- 6. 中身を作るのは別に実行する(冒頭の「適用」の (2))。
+--    SELECT public.rebuild_mail_thread_counts();

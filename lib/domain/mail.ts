@@ -154,14 +154,15 @@ async function filteredSearchHits(params: ThreadFilterParams) {
 /**
  * 件数表(migration 136)から、受信箱で絞った区分ごとの件数を読む(CLAUDE.md §5.15「件数表」)。
  * 1 回の表示で左フォルダ・タブ・一覧の総件数が何度も使うため、リクエスト内で使い回す(React の cache)。
- * boxKey は受信箱 ID のカンマ区切り('all' = 全受信箱、'' = 0 件)。読めない(未適用など)ときは null。
+ * boxKey は受信箱 ID のカンマ区切り('all' = 全受信箱、'' = 0 件)。読めない(未適用など)ときと、
+ * 1 行も無いとき(中身を作る前。受信箱にスレッドが無いだけのこともあるが、その場で数えても軽い)は null。
  */
 const threadCountGroups = cache(async (boxKey: string): Promise<MailThreadCountGroup[] | null> => {
   const supabase = await createClient();
   const boxIds = boxKey === 'all' ? null : boxKey === '' ? [] : boxKey.split(',').map(Number);
   const { data, error } = await supabase.rpc('mail_thread_count_groups', { p_box_ids: boxIds });
-  if (error) return null;
-  return (data ?? []) as unknown as MailThreadCountGroup[];
+  if (error || !data || data.length === 0) return null;
+  return data as unknown as MailThreadCountGroup[];
 });
 
 /**
