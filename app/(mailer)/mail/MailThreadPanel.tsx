@@ -19,9 +19,9 @@ import {
   listMailSignatures,
 } from '@/lib/domain/mail';
 import { splitVisibleAttachments } from '@/lib/domain/mail_attachment_view';
-import { buildReplySubject } from '@/lib/domain/mail_compose';
+import { buildReplySubject, findAddressesInText } from '@/lib/domain/mail_compose';
 import { splitOtherMailBox } from '@/lib/domain/mail_folders';
-import { findMatchingRule } from '@/lib/domain/mail_import_rules';
+import { findMatchingRule, mailBodyText } from '@/lib/domain/mail_import_rules';
 import { MAIL_OUTBOX_STATUS_LABELS, canDirectSend } from '@/lib/domain/mail_outbox';
 import { listThreadOutbox } from '@/lib/domain/mail_outbox_queries';
 import { buildThreadQuote } from '@/lib/domain/mail_text';
@@ -107,6 +107,13 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
       sendable: !!d && sendableByDomain.get(d) === true,
     };
   });
+  // 返信先の候補: 直近の受信メールの本文にあるアドレス(フォーム通知の「メール : …」など。差出人と自社の受信箱は除く)
+  const replyToCandidates = lastInbound
+    ? findAddressesInText(mailBodyText(lastInbound.text_body, lastInbound.html_body), [
+        lastInbound.from_address,
+        ...allBoxes.map((b) => b.address),
+      ])
+    : [];
   // 返信本文に最初から入れる引用: スレッドのやり取り全部を新しい順に(2026-10-20。各メールの中の既存の引用は外す)
   const initialQuote = buildThreadQuote(thread.messages);
 
@@ -304,6 +311,7 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
         <MailReplyForm
           threadId={thread.id}
           replyTo={lastInbound?.from_address ?? null}
+          replyToCandidates={replyToCandidates}
           sendable={sendable}
           disabledReason={disabledReason}
           defaultBoxId={thread.mail_box_id}

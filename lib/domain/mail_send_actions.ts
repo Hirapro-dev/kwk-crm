@@ -25,6 +25,7 @@ import {
   buildReplyHeaders,
   parseAddressList,
   resolveReplySubject,
+  resolveReplyTo,
   sanitizeDisplayName,
 } from '@/lib/domain/mail_compose';
 import {
@@ -147,6 +148,8 @@ export async function replyToMailThread(input: {
   body: string;
   /** 件名(画面で書き換えたもの)。未指定なら「Re: 元の件名」(2026-10-28) */
   subject?: string;
+  /** 返信先(1 件)。未指定なら直近の受信メールの差出人(2026-10-29。フォーム通知でお客様へ返すため) */
+  to?: string;
   cc?: string;
   /** 差出人表示名の上書き。未指定(undefined)なら送信元受信箱の既定値を使う */
   fromName?: string;
@@ -175,12 +178,13 @@ export async function replyToMailThread(input: {
   const { box, error: boxErr } = await loadSendableBox(input.mailBoxId ?? thread.mail_box_id);
   if (!box) return { error: boxErr };
 
-  // 返信先 = 直近の受信メールの差出人。無ければ直近のメッセージ
+  // 返信先 = 画面で指定したアドレス(1 件)。未指定なら直近の受信メールの差出人、無ければ直近のメッセージの宛先
   const inbound = [...thread.messages].reverse().find((m) => m.direction === 'in');
   const parent = inbound ?? thread.messages[thread.messages.length - 1];
   if (!parent) return { error: '返信対象のメールがありません' };
-  const to = inbound ? [inbound.from_address] : parent.to_addresses;
-  if (to.length === 0) return { error: '返信先アドレスが特定できません' };
+  const replyTo = resolveReplyTo(input.to, inbound ? [inbound.from_address] : parent.to_addresses);
+  if (replyTo.error) return { error: replyTo.error };
+  const to = replyTo.addresses;
 
   const cc = parseAddressList(input.cc);
   if (cc.error) return { error: cc.error };

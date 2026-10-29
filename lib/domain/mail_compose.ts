@@ -7,6 +7,7 @@
  *   - 顧客側でもスレッド化されるための In-Reply-To / References
  *   - 署名・引用・本文合成(実体は mail_text.ts)
  *   - 宛先入力(カンマ・改行区切り)の解析と上限
+ *   - 返信先の上書き(1 件)と、本文から拾う返信先の候補
  *   - 差出人表示名の MIME エンコード(SES は非 ASCII の表示名を encoded-word で要求する)
  */
 
@@ -81,6 +82,47 @@ export function parseAddressList(input: string | null | undefined): {
     out.push(addr);
   }
   return { addresses: out };
+}
+
+/**
+ * 返信先の決定(2026-10-29。フォーム通知の差出人はお客様ではないため、画面で書き換えられるようにした)。
+ * 入力が無い(undefined)なら既定(直近の受信メールの差出人)を使う。入力があれば 1 件のアドレスに限る。
+ */
+export function resolveReplyTo(
+  input: string | null | undefined,
+  fallback: string[],
+): { addresses: string[]; error?: string } {
+  if (input === undefined || input === null) {
+    return fallback.length > 0
+      ? { addresses: fallback }
+      : { addresses: [], error: '返信先アドレスが特定できません' };
+  }
+  const parsed = parseAddressList(input);
+  if (parsed.error) return { addresses: [], error: parsed.error.replace('宛先', '返信先') };
+  if (parsed.addresses.length === 0) return { addresses: [], error: '返信先を入力してください' };
+  if (parsed.addresses.length > 1) {
+    return { addresses: [], error: '返信先は 1 件だけ指定してください' };
+  }
+  return { addresses: parsed.addresses };
+}
+
+/** 本文から拾う返信先の候補の上限 */
+const MAX_BODY_ADDRESS_CANDIDATES = 5;
+
+/**
+ * 本文中のメールアドレス(返信先の候補。フォーム通知の「メール : …」など)。
+ * 出てきた順・小文字・重複なし。除外アドレス(差出人・自社の受信箱)は外す。
+ */
+export function findAddressesInText(text: string | null | undefined, exclude: string[]): string[] {
+  const skip = new Set(exclude.map((a) => a.toLowerCase()));
+  const out: string[] = [];
+  for (const m of (text ?? '').matchAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g)) {
+    const addr = m[0].replace(/\.+$/, '').toLowerCase();
+    if (!ADDRESS_RE.test(addr) || skip.has(addr) || out.includes(addr)) continue;
+    out.push(addr);
+    if (out.length >= MAX_BODY_ADDRESS_CANDIDATES) break;
+  }
+  return out;
 }
 
 /** 差出人表示名の上限文字数。長すぎる表示名を防ぐ */
