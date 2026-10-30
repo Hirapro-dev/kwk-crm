@@ -38,6 +38,7 @@ export interface ReplyBoxOption {
 
 /**
  * スレッドへの返信フォーム(M2)。
+ * - 返信先: 既定は直近の受信メールの差出人。1 件に書き換えられ、本文中のアドレスをボタンで入れられる(2026-10-29)
  * - 送信元: 既定はスレッドの受信箱。送信可能な受信箱をプルダウンで選べる
  * - 差出人表示名: 既定は送信元の設定値。その場で書き換え可
  * - 署名: 署名マスタ(有効なもの)から名前で選ぶ(既定は送信元の受信箱の既定署名)。「署名なし」も可
@@ -50,6 +51,7 @@ export interface ReplyBoxOption {
 export function MailReplyForm({
   threadId,
   replyTo,
+  replyToCandidates = [],
   sendable,
   disabledReason,
   defaultBoxId,
@@ -61,8 +63,10 @@ export function MailReplyForm({
   canDirectSend = false,
 }: {
   threadId: string;
-  /** 返信先(表示用) */
+  /** 返信先の既定値(直近の受信メールの差出人) */
   replyTo: string | null;
+  /** 返信先の候補(直近の受信メールの本文にあるアドレス) */
+  replyToCandidates?: string[];
   /** スレッドの受信箱から送れるか */
   sendable: boolean;
   disabledReason?: string;
@@ -99,6 +103,7 @@ export function MailReplyForm({
   const hasQuote = initialQuote.trim() !== '' || initialQuoteHtml.trim() !== '';
   const [includeQuote, setIncludeQuote] = useState(hasQuote);
   const [subject, setSubject] = useState(replySubject);
+  const [to, setTo] = useState(replyTo ?? '');
   const [cc, setCc] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [sendMode, setSendMode] = useState<MailSendMode>(
@@ -141,6 +146,7 @@ export function MailReplyForm({
         threadId,
         body,
         subject,
+        to,
         cc,
         fromName,
         mailBoxId: Number(boxId),
@@ -163,6 +169,7 @@ export function MailReplyForm({
       att.reset();
       setCc('');
       setSubject(replySubject);
+      setTo(replyTo ?? '');
       setScheduledAt('');
       setSendMode(canDirectSend ? 'direct' : 'approval');
       setSent(r.message ?? '承認依頼を出しました');
@@ -181,12 +188,51 @@ export function MailReplyForm({
           setConfirmOpen(true);
         }}
       >
-        <div className="text-xs text-muted-foreground">
-          返信先: <span className="font-mono">{replyTo ?? '(不明)'}</span>
+        <div className="block text-xs">
+          返信先(1 件)
+          <Input
+            aria-label="返信先"
+            className="mt-1 font-mono"
+            placeholder="例: customer@example.com"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            disabled={pending}
+          />
+          {/* フォーム通知は差出人がフォームの送信システムのため、本文にあるお客様のアドレスを選べるようにする */}
+          {(replyToCandidates.length > 0 || (replyTo && to.trim() !== replyTo)) && (
+            <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+              {replyToCandidates.length > 0 && <span>本文のアドレス:</span>}
+              {replyToCandidates.map((a) => (
+                <Button
+                  key={a}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 font-mono text-[11px]"
+                  disabled={pending || to.trim() === a}
+                  onClick={() => setTo(a)}
+                >
+                  {a} を使う
+                </Button>
+              ))}
+              {replyTo && to.trim() !== replyTo && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[11px]"
+                  disabled={pending}
+                  onClick={() => setTo(replyTo)}
+                >
+                  差出人({replyTo})に戻す
+                </Button>
+              )}
+            </div>
+          )}
           {!sendable && defaultBox && (
-            <span className="ml-2 text-amber-700">
+            <p className="mt-1 text-amber-700">
               ※ {defaultBox.address} は受信専用のため、別の送信元を選んでいます
-            </span>
+            </p>
           )}
         </div>
 
@@ -337,7 +383,11 @@ export function MailReplyForm({
             type="submit"
             size="sm"
             disabled={
-              pending || !text.trim() || !boxId || attachmentBlockReason(att.items) !== null
+              pending ||
+              !text.trim() ||
+              !to.trim() ||
+              !boxId ||
+              attachmentBlockReason(att.items) !== null
             }
           >
             {sendMode === 'direct' ? '送信内容を確認' : '承認依頼の内容を確認'}
@@ -361,7 +411,7 @@ export function MailReplyForm({
           from: selectedBox
             ? `${fromName.trim() ? `${fromName.trim()} ` : ''}<${selectedBox.address}>`
             : '',
-          to: replyTo ?? '(不明)',
+          to: to.trim(),
           cc,
           subject: subject.replace(/\s+/g, ' ').trim(),
           scheduledAt,
