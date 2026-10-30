@@ -23,6 +23,7 @@ import { inlineMarker } from '@/lib/domain/mail_outgoing_attachments';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { MailBodyViewer } from '../../MailBodyViewer';
 import { OutboxActions } from '../../OutboxActions';
 
 interface PageProps {
@@ -37,6 +38,11 @@ export default async function MailOutboxDetailPage({ params }: PageProps) {
     listMailOutboxAttachments(id),
   ]);
   if (!o) notFound();
+  // 返信の引用(migration 138)。無ければ引用なし(2026-10-30 より前の行は本文に含む)
+  const quote =
+    o.quote_text?.trim() || o.quote_html?.trim()
+      ? { text: o.quote_text ?? '', html: o.quote_html?.trim() ? o.quote_html : null }
+      : null;
   // 添付(migration 128)。承認者が中身を確かめられるよう、短期の閲覧 URL を付ける
   const attachmentViews = await Promise.all(
     attachments.map(async (a) => ({
@@ -154,6 +160,16 @@ export default async function MailOutboxDetailPage({ params }: PageProps) {
           <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded border bg-gray-50 p-3 font-sans text-sm">
             {o.text_body}
           </pre>
+          {quote && (
+            <details className="rounded border p-2 text-xs">
+              <summary className="cursor-pointer text-muted-foreground">
+                引用(本文の後ろに付けます。HTML のメールソフトでは HTML 版が表示されます)
+              </summary>
+              <div className="mt-2 max-h-[50vh] overflow-auto">
+                <MailBodyViewer text={quote.text} html={quote.html} />
+              </div>
+            </details>
+          )}
           {attachmentViews.length > 0 && (
             <div className="text-xs">
               <div className="text-muted-foreground">添付({attachmentViews.length} 件)</div>
@@ -192,6 +208,7 @@ export default async function MailOutboxDetailPage({ params }: PageProps) {
               cc: o.cc_addresses.join(', '),
               subject: o.subject,
               body: o.text_body,
+              quote,
               scheduledLabel: o.scheduled_at ? formatDateTime(o.scheduled_at) : null,
               dueNow: isDueNow(o.scheduled_at, new Date()),
               attachments: attachmentViews

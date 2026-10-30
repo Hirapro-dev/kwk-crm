@@ -24,7 +24,7 @@ export interface RawMessageInput {
   cc?: string[];
   subject: string;
   text: string;
-  /** 本文中の画像があるときの HTML 本文。無ければテキストだけ */
+  /** HTML 本文(本文中の画像・返信の HTML 引用があるとき)。無ければテキストだけ */
   html?: string | null;
   inReplyTo?: string | null;
   references?: string | null;

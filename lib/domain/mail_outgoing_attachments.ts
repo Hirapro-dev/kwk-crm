@@ -169,7 +169,7 @@ export function usedInlineAttachments<T extends { filename: string }>(
     .map((x) => x.it);
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -179,7 +179,7 @@ function escapeHtml(s: string): string {
 }
 
 /** 文字の部分を HTML にする: エスケープ・URL のリンク化・改行 → <br>・行頭の空白を保つ */
-function textToHtml(text: string): string {
+export function textToHtml(text: string): string {
   return splitLinks(text.replace(/\r\n?/g, '\n'))
     .map((seg) =>
       seg.kind === 'link'
@@ -193,12 +193,14 @@ function textToHtml(text: string): string {
 }
 
 /**
- * 送るメールの HTML 本文を作る(本文中の画像があるときだけ使う)。テキスト本文と同じ内容で、
+ * 送るメールの HTML 本文を作る(本文中の画像があるとき、または返信に HTML の引用を付けるときに使う)。テキスト本文と同じ内容で、
  * 目印「[画像: 名前]」を <img src="cid:…"> に置き換える。対応する画像の無い目印は文字のまま残す。
+ * quoteHtml(mail_quote_html.ts の buildThreadQuoteHtml。無害化済み)があれば本文の下に付ける。
  */
 export function buildHtmlBody(
   text: string,
   inline: ReadonlyArray<{ filename: string; cid: string }>,
+  quoteHtml?: string | null,
 ): string {
   const byMarker = new Map(inline.map((i) => [inlineMarker(i.filename), i]));
   const markers = [...byMarker.keys()].sort((a, b) => b.length - a.length);
@@ -228,7 +230,9 @@ export function buildHtmlBody(
     '<!DOCTYPE html><html><head><meta charset="utf-8"></head>',
     '<body><div style="font-family:sans-serif;font-size:14px;line-height:1.6;">',
     parts.join(''),
-    '</div></body></html>',
+    '</div>',
+    quoteHtml ? `<br>${quoteHtml}` : '',
+    '</body></html>',
   ].join('');
 }
 

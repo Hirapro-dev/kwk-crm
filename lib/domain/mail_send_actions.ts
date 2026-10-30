@@ -12,7 +12,10 @@
  * - From は受信箱(mail_boxes)の公開アドレス。送れるのは SES でドメイン検証済みの受信箱だけ(未検証は「受信専用」)
  * - 返信は直近の受信メールの差出人へ。In-Reply-To / References は申請時に決めて保存する
  * - 送信元はスレッドの受信箱が既定。フォームで送信可能な別の受信箱を選ぶこともできる(スレッドの受信箱は変えない)
- * - 署名・引用はフォーム側で本文に含めて送る(画面で見えるもの = 送るもの)。ここでは付け足さない
+ * - 署名はフォーム側で本文に含めて送る(画面で見えるもの = 送るもの)。ここでは付け足さない
+ * - 返信の引用(2026-10-30〜)は、フォームの「引用を付ける」が ON ならここでスレッドから作る(テキスト版 + HTML 版。
+ *   mail_text.ts の buildThreadQuote / mail_quote_html.ts の buildThreadQuoteHtml。画面のプレビューも同じ関数)。
+ *   本文とは別に mail_outbox.quote_text / quote_html(migration 138)に保存し、送るときに本文の後ろに付ける
  * - 添付(PDF・JPG・PNG・Word・Excel・PowerPoint。migration 128 / 131)は画面から Storage へ直接アップロードしたものを、ここで確かめて送信待ちメールに登録する
  *   (lib/mail/outbox_attachments.ts)。本文中の画像は本文の目印「[画像: 名前]」の位置に出す
  * - 権限: viewer は不可。本文・アドレスはログに出さない(§12.4)
@@ -37,6 +40,8 @@ import {
   submittedMessage,
 } from '@/lib/domain/mail_outbox';
 import type { SubmittedAttachment } from '@/lib/domain/mail_outgoing_attachments';
+import { buildThreadQuoteHtml } from '@/lib/domain/mail_quote_html';
+import { buildThreadQuote } from '@/lib/domain/mail_text';
 import { getMailAwsConfig } from '@/lib/mail/aws';
 import { insertOutboxAttachments, prepareOutboxAttachments } from '@/lib/mail/outbox_attachments';
 import { deliverOutboxItem } from '@/lib/mail/outbox_deliver';
@@ -161,6 +166,8 @@ export async function replyToMailThread(input: {
   sendMode?: MailSendMode;
   /** 添付(画面から Storage へアップロード済みのもの) */
   attachments?: SubmittedAttachment[];
+  /** スレッドのやり取りを引用として付けるか(テキスト版 + HTML 版。2026-10-30) */
+  includeQuote?: boolean;
 }): Promise<SendResult> {
   const me = await getCurrentUser();
   if (me.role === 'viewer') return { error: '閲覧専用ユーザーは送信できません' };
@@ -196,6 +203,9 @@ export async function replyToMailThread(input: {
   if (!subject.subject) return { error: subject.error };
 
   const headers = buildReplyHeaders(parent);
+  // 引用は依頼した時点のスレッドから作って保存する(承認者が見る内容 = 送る内容)
+  const quoteText = input.includeQuote ? buildThreadQuote(thread.messages) || null : null;
+  const quoteHtml = input.includeQuote ? buildThreadQuoteHtml(thread.messages) || null : null;
   const fromName =
     input.fromName !== undefined ? sanitizeDisplayName(input.fromName) : box.display_name;
 
@@ -213,6 +223,8 @@ export async function replyToMailThread(input: {
       cc_addresses: cc.addresses,
       subject: subject.subject,
       text_body: `${input.body.replace(/\s+$/, '')}\n`,
+      quote_text: quoteText,
+      quote_html: quoteHtml,
       in_reply_to: headers.inReplyTo,
       references_header: headers.references,
       scheduled_at: schedule.at,

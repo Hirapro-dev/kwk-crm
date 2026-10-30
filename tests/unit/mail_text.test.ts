@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { composeOutgoingBody, htmlToPlainText, quoteSourceText } from '../../lib/domain/mail_text';
+import {
+  composeOutgoingBody,
+  htmlToPlainText,
+  outboxTextWithQuote,
+  quoteSourceText,
+} from '../../lib/domain/mail_text';
 
 /**
  * 返信フォームの本文合成(CLAUDE.md §5.15)。
@@ -39,5 +44,18 @@ describe('composeOutgoingBody', () => {
   });
   it('本文が空でも引用だけ送れる形にはならない(呼び出し側で本文必須にする前提)', () => {
     expect(composeOutgoingBody({ text: '', quote: '> 元' })).toBe('> 元\n');
+  });
+});
+
+// 送信待ちメールの送る本文: 引用を別に持つ行(migration 138)は本文の後ろに付け、旧形式はそのまま
+describe('outboxTextWithQuote', () => {
+  it('引用があれば本文の後ろに空行 1 つを挟んで付ける', () => {
+    expect(outboxTextWithQuote('本文\n', '日時 誰か:\n> 前の文')).toBe(
+      '本文\n\n日時 誰か:\n> 前の文\n',
+    );
+  });
+  it('引用が無い(旧形式・新規メール)なら text_body のまま', () => {
+    expect(outboxTextWithQuote('本文\n\n> 旧形式の引用\n', null)).toBe('本文\n\n> 旧形式の引用\n');
+    expect(outboxTextWithQuote('本文\n', '  ')).toBe('本文\n');
   });
 });
