@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { type MailSendMode, scheduleInputLabel } from '@/lib/domain/mail_outbox';
 import { formatAttachmentSize } from './MailAttachments';
+import { MailBodyViewer } from './MailBodyViewer';
 
 export interface SendConfirmSummary {
   /** 送信元(表示名 <アドレス>) */
@@ -20,8 +21,10 @@ export interface SendConfirmSummary {
   /** 送信予約(datetime-local の値。空なら予約なし) */
   scheduledAt: string;
   mode: MailSendMode;
-  /** 実際に送る本文(署名・引用を含めた完成形) */
+  /** 実際に送る本文(署名を含めた形。旧形式・新規メールでは引用も含む) */
   body: string;
+  /** 本文の後ろに付ける返信の引用(テキスト版・HTML 版。2026-10-30)。null / 省略は引用なし */
+  quote?: { text: string; html: string | null } | null;
   /** 送る添付(本文中の画像は目印が本文に残っているものだけ) */
   attachments?: Array<{ filename: string; size: number; inline: boolean }>;
 }
@@ -109,6 +112,16 @@ export function SendConfirmDialog({
         <pre className="mt-3 max-h-[45vh] overflow-auto whitespace-pre-wrap rounded border bg-gray-50 p-3 font-sans text-sm">
           {summary.body}
         </pre>
+        {summary.quote && (summary.quote.text.trim() || summary.quote.html) && (
+          <details className="mt-2 rounded border p-2 text-xs">
+            <summary className="cursor-pointer text-muted-foreground">
+              引用(本文の後ろに付けます。HTML のメールソフトでは HTML 版が表示されます)
+            </summary>
+            <div className="mt-2 max-h-[35vh] overflow-auto">
+              <MailBodyViewer text={summary.quote.text} html={summary.quote.html} />
+            </div>
+          </details>
+        )}
         {summary.attachments && summary.attachments.length > 0 && (
           <div className="mt-2 text-xs">
             <div className="text-muted-foreground">添付({summary.attachments.length} 件)</div>

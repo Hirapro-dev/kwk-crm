@@ -24,6 +24,7 @@ import { splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { findMatchingRule } from '@/lib/domain/mail_import_rules';
 import { MAIL_OUTBOX_STATUS_LABELS, canDirectSend } from '@/lib/domain/mail_outbox';
 import { listThreadOutbox } from '@/lib/domain/mail_outbox_queries';
+import { buildThreadQuoteHtml } from '@/lib/domain/mail_quote_html';
 import { buildThreadQuote } from '@/lib/domain/mail_text';
 import { listFieldDefinitions } from '@/lib/domain/object_metadata';
 import { listAllUsers } from '@/lib/domain/users_admin';
@@ -107,8 +108,10 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
       sendable: !!d && sendableByDomain.get(d) === true,
     };
   });
-  // 返信本文に最初から入れる引用: スレッドのやり取り全部を新しい順に(2026-10-20。各メールの中の既存の引用は外す)
+  // 返信に付ける引用: スレッドのやり取り全部を新しい順に(2026-10-20。各メールの中の既存の引用は外す)。
+  // テキスト版と HTML 版(2026-10-30)。フォームではプレビューだけで、送るときはサーバーが同じ関数で作り直す
   const initialQuote = buildThreadQuote(thread.messages);
+  const initialQuoteHtml = buildThreadQuoteHtml(thread.messages);
 
   // 取込候補から開いたとき(showReply=false)は、返信の代わりに取込ルール(§5.16)のパネルを出す。
   // このメールに一致するルールがあれば編集、無ければ新規作成になる。
@@ -310,6 +313,7 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
           boxes={fromOptions}
           signatures={allSignatures.filter((s) => s.is_active)}
           initialQuote={initialQuote}
+          initialQuoteHtml={initialQuoteHtml}
           replySubject={buildReplySubject(thread.subject ?? lastInbound?.subject)}
           canDirectSend={canDirectSend(me.role)}
         />

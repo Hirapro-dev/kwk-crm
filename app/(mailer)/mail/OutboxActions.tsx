@@ -55,6 +55,8 @@ export interface OutboxConfirmInfo {
   dueNow: boolean;
   /** 送る添付(本文中の画像は本文に目印が残っているものだけ) */
   attachments?: Array<{ filename: string; size: number; inline: boolean }>;
+  /** 本文の後ろに付ける返信の引用(migration 138)。null は引用なし(旧形式は本文に含む) */
+  quote?: { text: string; html: string | null } | null;
 }
 
 export function OutboxActions({
@@ -272,7 +274,9 @@ export function OutboxActions({
             </div>
           </div>
           <div>
-            本文(署名・引用を含む)
+            {confirmInfo.quote
+              ? '本文(署名を含む。引用は変わらずそのまま付けます)'
+              : '本文(署名・引用を含む)'}
             <Textarea
               aria-label="本文"
               className="mt-1"
@@ -324,6 +328,7 @@ export function OutboxActions({
             scheduledAt: '',
             mode: 'direct',
             body: confirmInfo.body,
+            quote: confirmInfo.quote,
             attachments: confirmInfo.attachments,
           }}
         />

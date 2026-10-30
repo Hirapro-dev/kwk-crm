@@ -82,16 +82,30 @@ export async function countMailOutboxByStatus(): Promise<
   return out;
 }
 
-export async function getMailOutbox(id: string): Promise<MailOutboxItem | null> {
+/** 詳細では返信の引用(migration 138)も読む。一覧は HTML の引用が大きくなりうるので読まない */
+export interface MailOutboxDetail extends MailOutboxItem {
+  quote_text: string | null;
+  quote_html: string | null;
+}
+
+export async function getMailOutbox(id: string): Promise<MailOutboxDetail | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const supabase = await createClient();
+  const first = await supabase
+    .from('mail_outbox')
+    .select(`${OUTBOX_SELECT}, quote_text, quote_html`)
+    .eq('id', id)
+    .maybeSingle();
+  if (first.data) return first.data as unknown as MailOutboxDetail;
+  // migration 138 の適用前(列が無い)なら引用なしとして読む
+  if (first.error?.code !== '42703') return null;
   const { data, error } = await supabase
     .from('mail_outbox')
     .select(OUTBOX_SELECT)
     .eq('id', id)
     .maybeSingle();
   if (error || !data) return null;
-  return data as unknown as MailOutboxItem;
+  return { ...(data as unknown as MailOutboxItem), quote_text: null, quote_html: null };
 }
 
 /** スレッドの送信待ち(まだ送っていない返信)。スレッド画面に出す */

@@ -55,6 +55,19 @@ export function quoteSourceText(m: {
   return m.html_body ? htmlToPlainText(m.html_body) : '';
 }
 
+/** 引用の見出し行「日時 差出人:」(テキスト版・HTML 版の引用で共通) */
+export function quoteHeadLine(original: {
+  from_address: string;
+  from_name: string | null;
+  sent_at: string | null;
+}): string {
+  const who = original.from_name
+    ? `${original.from_name} <${original.from_address}>`
+    : original.from_address;
+  const when = formatDateTime(original.sent_at);
+  return when ? `${when} ${who}:` : `${who}:`;
+}
+
 /** 返信本文の下に付ける引用(テキスト)。"> " を各行の先頭に付ける */
 export function buildQuotedBody(original: {
   from_address: string;
@@ -63,11 +76,7 @@ export function buildQuotedBody(original: {
   text_body: string | null;
   html_body?: string | null;
 }): string {
-  const who = original.from_name
-    ? `${original.from_name} <${original.from_address}>`
-    : original.from_address;
-  const when = formatDateTime(original.sent_at);
-  const head = when ? `${when} ${who}:` : `${who}:`;
+  const head = quoteHeadLine(original);
   const lines = quoteSourceText(original).replace(/\r\n/g, '\n').split('\n');
   return [head, ...lines.map((l) => (l ? `> ${l}` : '>'))].join('\n');
 }
@@ -150,4 +159,15 @@ export function composeOutgoingBody(parts: {
   if (sig) out = `${out}\n\n${sig}`;
   if (quote) out = `${out}\n\n${quote}`;
   return `${out.replace(/^\n+/, '')}\n`;
+}
+
+/**
+ * 送信待ちメール(mail_outbox)の、実際に送るテキスト本文。引用を別に持つ行(quote_text。migration 138)は
+ * 本文(+ 署名)の後ろに空行 1 つを挟んで付ける。quote_text が無い行は text_body のまま(旧形式は引用を含んでいる)。
+ */
+export function outboxTextWithQuote(
+  textBody: string,
+  quoteText: string | null | undefined,
+): string {
+  return quoteText?.trim() ? composeOutgoingBody({ text: textBody, quote: quoteText }) : textBody;
 }

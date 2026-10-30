@@ -22,6 +22,7 @@ import {
   bodyFileHandlers,
   useMailAttachments,
 } from './MailAttachments';
+import { MailBodyViewer } from './MailBodyViewer';
 import { ScheduleField, SendModeField } from './ScheduleField';
 import { SendConfirmDialog } from './SendConfirmDialog';
 
@@ -40,8 +41,9 @@ export interface ReplyBoxOption {
  * - 送信元: 既定はスレッドの受信箱。送信可能な受信箱をプルダウンで選べる
  * - 差出人表示名: 既定は送信元の設定値。その場で書き換え可
  * - 署名: 署名マスタ(有効なもの)から名前で選ぶ(既定は送信元の受信箱の既定署名)。「署名なし」も可
- * - 引用: 直近の受信メールを最初から入れる(編集可)
- * 送る本文は 本文 → 署名 → 引用 の順に合成し、画面のとおりに送る(サーバーは付け足さない)。
+ * - 引用: スレッドのやり取りを全部、新しい順に付ける(2026-10-30 から HTML のまま。編集はできず「引用を付ける」で付ける / 付けないを選ぶ)。
+ *   引用はサーバーが依頼の時点のスレッドから作る(テキスト版 + HTML 版。画面のプレビューも同じ関数)
+ * 送る本文は 本文 → 署名 → 引用 の順。本文と署名はここで合成し、画面のとおりに送る。
  * 送信ボタンではすぐに送らず「承認待ち」にする(migration 124)。送信日時を指定すると承認後その日時に送る。
  * 承認者(admin / manager)は「承認を依頼する / そのまま送信する」を選べる。送信ボタンの後に確認画面を出して確定する(2026-10-16)。
  */
@@ -54,6 +56,7 @@ export function MailReplyForm({
   boxes,
   signatures,
   initialQuote,
+  initialQuoteHtml,
   replySubject,
   canDirectSend = false,
 }: {
@@ -68,8 +71,10 @@ export function MailReplyForm({
   boxes: ReplyBoxOption[];
   /** 選べる署名(署名マスタの有効なもの) */
   signatures: SignatureOption[];
-  /** 返信本文に最初から入れる引用 */
+  /** 返信に付ける引用(テキスト版。プレビュー用) */
   initialQuote: string;
+  /** 返信に付ける引用(HTML 版。プレビュー用。2026-10-30) */
+  initialQuoteHtml: string;
   /** 返信の件名の初期値(「Re: 元の件名」)。画面で書き換えられる(2026-10-28) */
   replySubject: string;
   /** 承認者(admin / manager)なら true。「そのまま送信する」を選べる */
@@ -91,7 +96,8 @@ export function MailReplyForm({
   );
   const [signatureTouched, setSignatureTouched] = useState(false);
   const [text, setText] = useState('');
-  const [quote, setQuote] = useState(initialQuote);
+  const hasQuote = initialQuote.trim() !== '' || initialQuoteHtml.trim() !== '';
+  const [includeQuote, setIncludeQuote] = useState(hasQuote);
   const [subject, setSubject] = useState(replySubject);
   const [cc, setCc] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
@@ -122,7 +128,8 @@ export function MailReplyForm({
       setSignatureId(defaultSignatureValue(box?.default_signature_id, signatures));
   };
 
-  const outgoingBody = composeOutgoingBody({ text, signature: signatureText, quote });
+  // 本文 + 署名(引用はサーバーが別に付ける。確認画面では下に引用を並べて見せる)
+  const outgoingBody = composeOutgoingBody({ text, signature: signatureText });
   const selectedBox = boxes.find((b) => String(b.id) === boxId);
 
   const submit = () => {
@@ -140,6 +147,7 @@ export function MailReplyForm({
         scheduledAt,
         sendMode,
         attachments: att.submitted,
+        includeQuote,
       });
       if (r.error) {
         setError(r.error);
@@ -291,17 +299,28 @@ export function MailReplyForm({
           )}
         </div>
 
-        <div className="block text-xs">
-          引用(このスレッドのやり取りを新しい順に入れています。不要な部分は消してください)
-          <Textarea
-            aria-label="引用"
-            className="mt-1 text-muted-foreground"
-            rows={6}
-            value={quote}
-            onChange={(e) => setQuote(e.target.value)}
-            disabled={pending}
-          />
-        </div>
+        {hasQuote && (
+          <div className="block text-xs">
+            <label className="inline-flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={includeQuote}
+                onChange={(e) => setIncludeQuote(e.target.checked)}
+                disabled={pending}
+              />
+              引用を付ける(このスレッドのやり取りを新しい順に、HTML
+              のまま付けます。引用は編集できません)
+            </label>
+            {includeQuote && (
+              <details className="mt-1 rounded border bg-gray-50 p-2">
+                <summary className="cursor-pointer text-muted-foreground">引用を表示</summary>
+                <div className="mt-2 max-h-80 overflow-auto">
+                  <MailBodyViewer text={initialQuote} html={initialQuoteHtml || null} />
+                </div>
+              </details>
+            )}
+          </div>
+        )}
 
         {canDirectSend && (
           <SendModeField value={sendMode} onChange={setSendMode} disabled={pending} />
@@ -348,6 +367,7 @@ export function MailReplyForm({
           scheduledAt,
           mode: sendMode,
           body: outgoingBody,
+          quote: includeQuote ? { text: initialQuote, html: initialQuoteHtml || null } : null,
           attachments: attachmentsToSend(att.items, outgoingBody),
         }}
       />

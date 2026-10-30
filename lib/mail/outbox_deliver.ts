@@ -10,6 +10,8 @@
  * - 本文・アドレスはログに出さない(§12.4)
  * - 添付(mail_outbox_attachments。migration 128)があれば Storage から取り出して MIME を組み立て、SES の Raw 送信で送る。
  *   本文中の画像は本文に目印が残っているものだけを HTML 本文に入れる。送った添付は mail_attachments にも登録してスレッドに出す
+ * - 返信の引用を別に持つ行(quote_text / quote_html。migration 138)は、テキスト本文の後ろにテキスト版の引用を、
+ *   HTML 本文の後ろに HTML 版の引用を付け、テキスト版 + HTML 版の 2 本立て(Raw 送信)で送る
  */
 
 import { sesMessageIdHeader } from '@/lib/domain/mail_compose';
@@ -20,6 +22,7 @@ import {
   contentMatchesType,
   usedInlineAttachments,
 } from '@/lib/domain/mail_outgoing_attachments';
+import { outboxTextWithQuote } from '@/lib/domain/mail_text';
 import type { MailAwsConfig } from '@/lib/mail/aws';
 import { syncThreadStatusWithOutbox } from '@/lib/mail/outbox_thread_status';
 import { type RawAttachment, buildRawMessage } from '@/lib/mail/raw_message';
@@ -44,6 +47,8 @@ interface OutboxRow {
   cc_addresses: string[];
   subject: string;
   text_body: string;
+  quote_text: string | null;
+  quote_html: string | null;
   in_reply_to: string | null;
   references_header: string | null;
   created_by: string;
@@ -153,7 +158,7 @@ export async function deliverOutboxItem(
     .eq('id', id)
     .eq('status', 'approved')
     .select(
-      'id, kind, thread_id, mail_box_id, from_name, to_addresses, cc_addresses, subject, text_body, in_reply_to, references_header, created_by',
+      'id, kind, thread_id, mail_box_id, from_name, to_addresses, cc_addresses, subject, text_body, quote_text, quote_html, in_reply_to, references_header, created_by',
     );
   if (claimErr)
     return { ok: false, error: `送信待ちメールの更新に失敗しました: ${claimErr.message}` };
@@ -185,26 +190,29 @@ export async function deliverOutboxItem(
     return { ok: false, error: att.error };
   }
   const inlineSent = att.items.filter((a) => a.cid);
+  const quoteHtml = row.quote_html?.trim() ? row.quote_html : null;
+  const textBody = outboxTextWithQuote(row.text_body, row.quote_text);
   const htmlBody =
-    inlineSent.length > 0
+    inlineSent.length > 0 || quoteHtml
       ? buildHtmlBody(
           row.text_body,
           inlineSent.map((a) => ({ filename: a.filename, cid: a.cid as string })),
+          quoteHtml,
         )
       : null;
 
-  // 4) 送信(添付なしは従来の Simple 送信、添付ありは MIME を組み立てて Raw 送信)
+  // 4) 送信(添付も HTML 本文も無ければ従来の Simple 送信、あれば MIME を組み立てて Raw 送信)
   let sesMessageId: string;
   try {
     sesMessageId =
-      att.items.length === 0
+      att.items.length === 0 && !htmlBody
         ? await sendViaSes(cfg, {
             fromAddress: box.address,
             fromName: row.from_name,
             to: row.to_addresses,
             cc: row.cc_addresses,
             subject: row.subject,
-            text: row.text_body,
+            text: textBody,
             headers:
               row.kind === 'reply'
                 ? { 'In-Reply-To': row.in_reply_to ?? '', References: row.references_header ?? '' }
@@ -217,7 +225,7 @@ export async function deliverOutboxItem(
               to: row.to_addresses,
               cc: row.cc_addresses,
               subject: row.subject,
-              text: row.text_body,
+              text: textBody,
               html: htmlBody,
               inReplyTo: row.kind === 'reply' ? row.in_reply_to : null,
               references: row.kind === 'reply' ? row.references_header : null,
@@ -273,7 +281,7 @@ export async function deliverOutboxItem(
         to_addresses: row.to_addresses,
         cc_addresses: row.cc_addresses,
         subject: row.subject,
-        text_body: row.text_body,
+        text_body: textBody,
         html_body: htmlBody,
         sent_at: now,
         provider_message_id: sesMessageId,
