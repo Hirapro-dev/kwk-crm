@@ -31,7 +31,7 @@ describe('sanitizeQuotedHtml', () => {
     expect(sanitizeQuotedHtml('<a href="java\tscript:alert(1)">x</a>')).toBe('<a>x</a>');
     expect(sanitizeQuotedHtml('<a href=" JAVASCRIPT:alert(1)">x</a>')).toBe('<a>x</a>');
     expect(sanitizeQuotedHtml('<img src="data:image/svg+xml,<svg onload=alert(1)>">')).toBe(
-      '<img>',
+      '[画像]',
     );
   });
 
@@ -66,6 +66,12 @@ describe('sanitizeQuotedHtml', () => {
       '<p><img src="cid:logo@x" alt="ロゴ"><img src="cid:y"><img src="https://img.example/a.png"></p>',
     );
     expect(out).toBe('<p>[画像: ロゴ][画像]<img src="https://img.example/a.png"></p>');
+  });
+
+  it('data: で埋め込まれた画像(メルマガで数 MB になる)も代替テキストにする', () => {
+    expect(
+      sanitizeQuotedHtml('<p><img src="data:image/png;base64,AAAA" alt="バナー">本文</p>'),
+    ).toBe('<p>[画像: バナー]本文</p>');
   });
 
   it('引用を外した結果、何も残らなければ空文字', () => {

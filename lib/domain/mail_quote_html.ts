@@ -9,7 +9,8 @@
  *   イベント属性(on…)・javascript: などの URL を取り除く(相手のメールソフトで動くものを送らない)
  * - 既存の引用の除去: 各メールの中に既に入っている引用(<blockquote>、Gmail の gmail_quote、Outlook の divRplyFwdMsg 以降、
  *   この CRM が付けた crm_quote)を外し、同じ文章を何重にも入れない。外しきれないものは残る(推測頼みのため)
- * - 本文に埋め込まれた画像(cid:)は相手側で表示できないので、画像の代わりに代替テキストを置く(2026-10-30 ユーザー決定)
+ * - 本文に埋め込まれた画像(cid: / data: など http(s) 以外)は相手側で表示できないので、画像の代わりに代替テキストを置く
+ *   (2026-10-30 ユーザー決定。data: はメルマガで数 MB になることがあり、Gmail も表示しない)
  * - 大きさの上限を超えたら古い方を省略してその旨を書く
  */
 
@@ -127,11 +128,13 @@ function cleanAttributes(el: Element): void {
   }
 }
 
-/** cid: の画像(本文に埋め込まれた画像)を代替テキストに置き換える。他の画像は残す */
-function replaceCidImage(el: Element): boolean {
+/**
+ * http(s) 以外の画像(cid: / data: など本文に埋め込まれた画像、src なし)を代替テキストに置き換える。http(s) の画像は残す。
+ * 空の <img> を残すと、相手のメールソフトで壊れた画像の印が出るため。
+ */
+function replaceEmbeddedImage(el: Element): boolean {
   if (el.name !== 'img') return false;
-  const src = (el.attribs.src ?? '').trim().toLowerCase();
-  if (!src.startsWith('cid:')) return false;
+  if (isSafeUrl('src', el.attribs.src ?? '')) return false;
   const alt = (el.attribs.alt ?? '').trim();
   const text = parseDocument(escapeHtml(alt ? `[画像: ${alt}]` : '[画像]')).children;
   DomUtils.replaceElement(el, text[0] as ChildNode);
@@ -164,7 +167,7 @@ function walk(nodes: ChildNode[]): void {
       if (prev && prev.name === 'hr') DomUtils.removeElement(prev);
       continue;
     }
-    if (replaceCidImage(el)) continue;
+    if (replaceEmbeddedImage(el)) continue;
     cleanAttributes(el);
     walk(el.children);
   }
