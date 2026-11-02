@@ -9,6 +9,22 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { saveReport } from '@/lib/domain/report_actions';
 import { previewReport } from '@/lib/domain/report_preview_action';
+import {
+  type FilterLogic,
+  type FilterPath,
+  addConditionTo,
+  addGroupTo,
+  countFilterConditions,
+  describeFilterGroup,
+  filterGroupFromDefinition,
+  isFilterGroupItem,
+  moveConditionTo,
+  moveTargets,
+  normalizeFilterGroup,
+  removeItemAt,
+  setGroupLogic,
+  updateConditionAt,
+} from '@/lib/reports/filter_tree';
 import { type AllowedColumnDef, REPORT_SCHEMAS } from '@/lib/reports/schema_all';
 import { SUMMARY_AGG_LABEL } from '@/lib/reports/summary';
 import type {
@@ -20,6 +36,8 @@ import type {
   ReportColumn,
   ReportDefinition,
   ReportDisplayConfig,
+  ReportFilterCondition,
+  ReportFilterGroup,
   ReportSummaryField,
   ReportTypeId,
   SummaryAggregate,
@@ -179,16 +197,10 @@ export function ReportBuilder({
       : null,
   );
 
-  // ----- フィルタ (AND / OR トグル付き) -----
-  const initialFilters =
-    initial?.definition?.filters?.conditions?.filter(
-      (c): c is { field: string; op: FilterOperator; value?: unknown } => 'field' in c,
-    ) ?? [];
-  const [filters, setFilters] = useState<
-    Array<{ field: string; op: FilterOperator; value?: unknown }>
-  >(initialFilters.map((f) => ({ field: f.field, op: f.op, value: f.value })));
-  const [filterLogic, setFilterLogic] = useState<'AND' | 'OR'>(
-    initial?.definition?.filters?.logic ?? 'AND',
+  // ----- フィルタ (全体の AND / OR + 条件グループ。§9.5.2) -----
+  // 保存済みの入れ子グループも落とさず読み込む (lib/reports/filter_tree.ts)
+  const [filterRoot, setFilterRoot] = useState<ReportFilterGroup>(() =>
+    filterGroupFromDefinition(initial?.definition?.filters),
   );
 
   // ----- グラフ設定(プレビュー SQL には影響させないため definition とは別管理) -----
@@ -219,24 +231,14 @@ export function ReportBuilder({
   const definition: ReportDefinition = useMemo(
     () => ({
       columns,
-      filters:
-        filters.length > 0
-          ? {
-              logic: filterLogic,
-              conditions: filters.map((f) => ({
-                field: f.field,
-                op: f.op,
-                value: f.value,
-              })),
-            }
-          : undefined,
+      filters: normalizeFilterGroup(filterRoot),
       group_by:
         groupBy.length > 0
           ? groupBy.map((field, i) => ({ field, level: (i + 1) as 1 | 2 | 3 }))
           : undefined,
       sort: sort ? [{ field: sort.field, direction: sort.direction }] : undefined,
     }),
-    [columns, filters, filterLogic, groupBy, sort],
+    [columns, filterRoot, groupBy, sort],
   );
 
   // ----- 表示設定(グルーピング / サマリー)。存在しない列参照は除外 -----
@@ -329,13 +331,12 @@ export function ReportBuilder({
     setColumns(next);
   };
 
+  // アウトラインの「条件」ボタンからは全体の末尾に追加する (グループへは移動で入れる)
   const addFilter = (def: AllowedColumnDef) => {
-    const op = (FILTER_OPS.find((o) => o.supports.includes(def.dataType))?.value ??
-      'equals') as FilterOperator;
-    setFilters([...filters, { field: def.source, op, value: '' }]);
+    setFilterRoot(addConditionTo(filterRoot, [], newFilterCondition(def)));
     setLeftTab('filter'); // 追加後はフィルタタブに切替
   };
-  const removeFilter = (idx: number) => setFilters(filters.filter((_, i) => i !== idx));
+  const filterCount = countFilterConditions(filterRoot);
 
   const toggleGroupBy = (source: string) => {
     if (groupBy.includes(source)) {
@@ -490,9 +491,9 @@ export function ReportBuilder({
               </LeftTabButton>
               <LeftTabButton active={leftTab === 'filter'} onClick={() => setLeftTab('filter')}>
                 フィルタ
-                {filters.length > 0 && (
+                {filterCount > 0 && (
                   <Badge variant="outline" className="ml-1 h-4 px-1 text-[10px]">
-                    {filters.length}
+                    {filterCount}
                   </Badge>
                 )}
               </LeftTabButton>
@@ -530,14 +531,7 @@ export function ReportBuilder({
             )}
 
             {leftTab === 'filter' && (
-              <FilterPanel
-                schema={schema}
-                filters={filters}
-                setFilters={setFilters}
-                filterLogic={filterLogic}
-                setFilterLogic={setFilterLogic}
-                removeFilter={removeFilter}
-              />
+              <FilterPanel schema={schema} root={filterRoot} setRoot={setFilterRoot} />
             )}
 
             {leftTab === 'chart' && (
@@ -854,132 +848,331 @@ function OutlinePanel({
 }
 
 // ============================================================================
-// フィルタパネル (AND / OR 切替)
+// フィルタパネル (全体の AND / OR + 条件グループ。§9.5.2)
+//   例: (A OR B) AND C … 全体を AND、グループ1 を OR にして A・B をグループへ
 // ============================================================================
+
+/** 値の入力が要らない演算子 */
+const VALUELESS_OPS: ReadonlySet<FilterOperator> = new Set<FilterOperator>([
+  'is_null',
+  'is_not_null',
+  'is_true',
+  'is_false',
+  'this_month',
+  'this_year',
+]);
+
+/** フィールドに合う最初の演算子で、値が空の条件を作る */
+function newFilterCondition(def: AllowedColumnDef): ReportFilterCondition {
+  const op = (FILTER_OPS.find((o) => o.supports.includes(def.dataType))?.value ??
+    'equals') as FilterOperator;
+  return { field: def.source, op, value: '' };
+}
+
+const pathKey = (p: FilterPath) => p.join('.');
+
 function FilterPanel({
   schema,
-  filters,
-  setFilters,
-  filterLogic,
-  setFilterLogic,
-  removeFilter,
+  root,
+  setRoot,
 }: {
   schema: { allowedColumns: AllowedColumnDef[] };
-  filters: Array<{ field: string; op: FilterOperator; value?: unknown }>;
-  setFilters: (next: Array<{ field: string; op: FilterOperator; value?: unknown }>) => void;
-  filterLogic: 'AND' | 'OR';
-  setFilterLogic: (v: 'AND' | 'OR') => void;
-  removeFilter: (idx: number) => void;
+  root: ReportFilterGroup;
+  setRoot: (next: ReportFilterGroup) => void;
 }) {
+  const targets = moveTargets(root);
+  const groupLabels = new Map(targets.map((t) => [pathKey(t.path), t.label]));
+  const colLabel = (field: string) =>
+    schema.allowedColumns.find((c) => c.source === field)?.label ?? field;
+  const formula = describeFilterGroup(root, (c) => {
+    const op = FILTER_OPS.find((o) => o.value === c.op)?.label ?? c.op;
+    const value = VALUELESS_OPS.has(c.op) ? '' : ` ${String(c.value ?? '') || '(未入力)'}`;
+    return `${colLabel(c.field)} ${op}${value}`;
+  });
+
   return (
     <div className="space-y-3 p-3">
-      {/* AND / OR 切替 */}
+      {/* 全体の AND / OR */}
       <div>
-        <Label className="text-[11px]">条件の結合</Label>
-        <div className="mt-1 inline-flex rounded border bg-white">
-          <button
-            type="button"
-            onClick={() => setFilterLogic('AND')}
-            className={cn(
-              'px-3 py-1 text-xs',
-              filterLogic === 'AND'
-                ? 'bg-primary font-bold text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent',
-            )}
-          >
-            AND
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterLogic('OR')}
-            className={cn(
-              'border-l px-3 py-1 text-xs',
-              filterLogic === 'OR'
-                ? 'bg-primary font-bold text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent',
-            )}
-          >
-            OR
-          </button>
+        <Label className="text-[11px]">全体の結合</Label>
+        <div className="mt-1">
+          <LogicToggle value={root.logic} onChange={(v) => setRoot(setGroupLogic(root, [], v))} />
         </div>
         <p className="mt-1 text-[10px] text-muted-foreground">
-          {filterLogic === 'AND'
-            ? 'すべての条件を満たす行を抽出'
-            : 'いずれかの条件を満たす行を抽出'}
+          {root.logic === 'AND'
+            ? 'すべての条件を満たす行を抽出(グループは 1 つの条件として扱う)'
+            : 'いずれかの条件を満たす行を抽出(グループは 1 つの条件として扱う)'}
         </p>
       </div>
 
+      {/* 組み立てた条件の式 */}
+      {formula && (
+        <div className="rounded border bg-slate-50 p-2 text-[11px]">
+          <div className="text-[10px] font-bold text-muted-foreground">条件の式</div>
+          <div className="mt-0.5 break-all">{formula}</div>
+        </div>
+      )}
+
       {/* 条件リスト */}
       <div>
-        <Label className="text-[11px]">条件 ({filters.length})</Label>
-        {filters.length === 0 ? (
+        <Label className="text-[11px]">条件 ({countFilterConditions(root)})</Label>
+        {root.conditions.length === 0 ? (
           <p className="mt-1 rounded border border-dashed p-2 text-[11px] text-muted-foreground">
-            「アウトライン」タブの利用可能フィールドから「条件」ボタンで追加
+            下の「条件を追加」か、「アウトライン」タブの利用可能フィールドの「条件」ボタンで追加
           </p>
         ) : (
-          <ul className="mt-1 space-y-2 text-xs">
-            {filters.map((f, i) => {
-              const colDef = schema.allowedColumns.find((c) => c.source === f.field);
-              const ops = FILTER_OPS.filter((o) => o.supports.includes(colDef?.dataType ?? 'text'));
-              const valueDisabled =
-                f.op === 'is_null' ||
-                f.op === 'is_not_null' ||
-                f.op === 'is_true' ||
-                f.op === 'is_false' ||
-                f.op === 'this_month' ||
-                f.op === 'this_year';
-              return (
-                <li key={i} className="space-y-1 rounded border bg-white p-2">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="truncate text-[11px] font-bold">
-                      {colDef?.label ?? f.field}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeFilter(i)}
-                      aria-label="削除"
-                      className="grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <Select
-                    className="h-7 w-full text-xs"
-                    value={f.op}
-                    onChange={(e) => {
-                      const next = [...filters];
-                      next[i] = {
-                        ...next[i]!,
-                        op: e.target.value as FilterOperator,
-                      };
-                      setFilters(next);
-                    }}
-                  >
-                    {ops.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </Select>
-                  {!valueDisabled && (
-                    <Input
-                      className="h-7 w-full text-xs"
-                      value={String(f.value ?? '')}
-                      onChange={(e) => {
-                        const next = [...filters];
-                        next[i] = { ...next[i]!, value: e.target.value };
-                        setFilters(next);
-                      }}
-                      placeholder="値"
-                    />
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <FilterItemList
+            schema={schema}
+            root={root}
+            setRoot={setRoot}
+            group={root}
+            path={[]}
+            targets={targets}
+            groupLabels={groupLabels}
+          />
         )}
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <AddConditionSelect
+          schema={schema}
+          onAdd={(def) => setRoot(addConditionTo(root, [], newFilterCondition(def)))}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() => setRoot(addGroupTo(root, []))}
+        >
+          ＋ 条件グループを追加
+        </Button>
+      </div>
     </div>
+  );
+}
+
+/** グループの中身を並べる (要素の間に結合の AND / OR を挟む) */
+function FilterItemList({
+  schema,
+  root,
+  setRoot,
+  group,
+  path,
+  targets,
+  groupLabels,
+}: {
+  schema: { allowedColumns: AllowedColumnDef[] };
+  root: ReportFilterGroup;
+  setRoot: (next: ReportFilterGroup) => void;
+  group: ReportFilterGroup;
+  path: number[];
+  targets: { path: number[]; label: string }[];
+  groupLabels: Map<string, string>;
+}) {
+  return (
+    <ul className="mt-1 space-y-1 text-xs">
+      {group.conditions.map((item, i) => {
+        const itemPath = [...path, i];
+        return (
+          <li key={pathKey(itemPath)} className="space-y-1">
+            {i > 0 && (
+              <div className="px-1 text-[10px] font-bold text-muted-foreground">{group.logic}</div>
+            )}
+            {isFilterGroupItem(item) ? (
+              <div className="space-y-2 rounded border-2 border-primary/30 bg-primary/5 p-2">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] font-bold">
+                    {groupLabels.get(pathKey(itemPath)) ?? 'グループ'}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <LogicToggle
+                      value={item.group.logic}
+                      onChange={(v) => setRoot(setGroupLogic(root, itemPath, v))}
+                    />
+                    <RemoveButton
+                      label="グループを削除"
+                      onClick={() => setRoot(removeItemAt(root, itemPath))}
+                    />
+                  </div>
+                </div>
+                {item.group.conditions.length === 0 ? (
+                  <p className="rounded border border-dashed bg-white p-2 text-[11px] text-muted-foreground">
+                    下の「条件を追加」か、各条件の「移動先」でこのグループに入れる
+                  </p>
+                ) : (
+                  <FilterItemList
+                    schema={schema}
+                    root={root}
+                    setRoot={setRoot}
+                    group={item.group}
+                    path={itemPath}
+                    targets={targets}
+                    groupLabels={groupLabels}
+                  />
+                )}
+                <AddConditionSelect
+                  schema={schema}
+                  onAdd={(def) => setRoot(addConditionTo(root, itemPath, newFilterCondition(def)))}
+                />
+              </div>
+            ) : (
+              <FilterConditionRow
+                schema={schema}
+                condition={item}
+                parentPath={path}
+                targets={targets}
+                onChange={(patch) => setRoot(updateConditionAt(root, itemPath, patch))}
+                onRemove={() => setRoot(removeItemAt(root, itemPath))}
+                onMove={(target) => setRoot(moveConditionTo(root, itemPath, target))}
+              />
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function FilterConditionRow({
+  schema,
+  condition,
+  parentPath,
+  targets,
+  onChange,
+  onRemove,
+  onMove,
+}: {
+  schema: { allowedColumns: AllowedColumnDef[] };
+  condition: ReportFilterCondition;
+  parentPath: number[];
+  targets: { path: number[]; label: string }[];
+  onChange: (patch: { op?: FilterOperator; value?: unknown }) => void;
+  onRemove: () => void;
+  onMove: (target: number[]) => void;
+}) {
+  const colDef = schema.allowedColumns.find((c) => c.source === condition.field);
+  const ops = FILTER_OPS.filter((o) => o.supports.includes(colDef?.dataType ?? 'text'));
+  const current = pathKey(parentPath);
+  // 移動先は「全体」と全体の直下のグループだけ。深い入れ子の中の条件は移動の対象外
+  const canMove = targets.length > 1 && targets.some((t) => pathKey(t.path) === current);
+  return (
+    <div className="space-y-1 rounded border bg-white p-2">
+      <div className="flex items-center justify-between gap-1">
+        <span className="truncate text-[11px] font-bold">{colDef?.label ?? condition.field}</span>
+        <RemoveButton label="削除" onClick={onRemove} />
+      </div>
+      <Select
+        className="h-7 w-full text-xs"
+        value={condition.op}
+        onChange={(e) => onChange({ op: e.target.value as FilterOperator })}
+      >
+        {ops.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </Select>
+      {!VALUELESS_OPS.has(condition.op) && (
+        <Input
+          className="h-7 w-full text-xs"
+          value={String(condition.value ?? '')}
+          onChange={(e) => onChange({ value: e.target.value })}
+          placeholder="値"
+        />
+      )}
+      {canMove && (
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <span aria-hidden="true">移動先</span>
+          <Select
+            aria-label="条件の移動先"
+            className="h-6 flex-1 text-[11px]"
+            value={current}
+            onChange={(e) => {
+              const t = targets.find((x) => pathKey(x.path) === e.target.value);
+              if (t) onMove(t.path);
+            }}
+          >
+            {targets.map((t) => (
+              <option key={pathKey(t.path)} value={pathKey(t.path)}>
+                {t.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 選んだフィールドの条件を追加するセレクト (選ぶとすぐ追加して「条件を追加…」に戻る) */
+function AddConditionSelect({
+  schema,
+  onAdd,
+}: {
+  schema: { allowedColumns: AllowedColumnDef[] };
+  onAdd: (def: AllowedColumnDef) => void;
+}) {
+  return (
+    <Select
+      aria-label="条件を追加"
+      className="h-7 w-full max-w-[14rem] text-xs"
+      value=""
+      onChange={(e) => {
+        const def = schema.allowedColumns.find((c) => c.source === e.target.value);
+        if (def) onAdd(def);
+      }}
+    >
+      <option value="">＋ 条件を追加…</option>
+      {schema.allowedColumns.map((c) => (
+        <option key={c.source} value={c.source}>
+          {c.label}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+function LogicToggle({
+  value,
+  onChange,
+}: {
+  value: FilterLogic;
+  onChange: (v: FilterLogic) => void;
+}) {
+  return (
+    <div className="inline-flex rounded border bg-white">
+      {(['AND', 'OR'] as const).map((v, i) => (
+        <button
+          key={v}
+          type="button"
+          aria-pressed={value === v}
+          onClick={() => onChange(v)}
+          className={cn(
+            'px-3 py-1 text-xs',
+            i > 0 && 'border-l',
+            value === v
+              ? 'bg-primary font-bold text-primary-foreground'
+              : 'text-muted-foreground hover:bg-accent',
+          )}
+        >
+          {v}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+    >
+      ×
+    </button>
   );
 }
 
