@@ -5,6 +5,7 @@
  * 既存の list 関数(フィルタ/ソート対応)を pageSize=50 で呼び、行だけ返す。
  */
 
+import { sanitizePaymentFilter } from '@/lib/domain/payment_list';
 import { listActivities } from './activities';
 import { parseAppStatusFilterParam, parseProjectFilterParam } from './application_list_filter';
 import { listApplications } from './applications';
@@ -48,6 +49,11 @@ export async function loadMoreApplications(
     status?: string;
     sort?: string;
     dir?: 'asc' | 'desc';
+    /** サマリの入金一覧(§8.1 `/summary`)の絞り込み */
+    paymentOnly?: boolean;
+    paymentFrom?: string;
+    paymentTo?: string;
+    acquirerIds?: string[];
   },
   page: number,
 ) {
@@ -58,6 +64,7 @@ export async function loadMoreApplications(
     status: parseAppStatusFilterParam(params.status),
     sort: params.sort,
     dir: params.dir,
+    ...sanitizePaymentFilter(params),
     page,
     pageSize: LIST_PAGE_SIZE,
   });

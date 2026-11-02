@@ -22,9 +22,16 @@ interface Props {
     status?: string;
     sort?: string;
     dir?: 'asc' | 'desc';
+    /** サマリの入金一覧(§8.1 `/summary`)で使う絞り込み */
+    paymentOnly?: boolean;
+    paymentFrom?: string;
+    paymentTo?: string;
+    acquirerIds?: string[];
   };
   /** 左端の選択チェックボックス・削除ボタンを出すか (admin のみ) */
   canDelete?: boolean;
+  /** 0 件のときの文言(既定: 該当する申込がありません) */
+  emptyMessage?: string;
 }
 
 const STATUS_VARIANT: Record<AppStatus, 'default' | 'secondary' | 'outline' | 'success'> = {
@@ -46,7 +53,14 @@ const AMOUNT_FIELDS = new Set([
   'crypto_excluded_amount',
 ]);
 
-export function ApplicationsInfinite({ initialRows, fields, total, params, canDelete }: Props) {
+export function ApplicationsInfinite({
+  initialRows,
+  fields,
+  total,
+  params,
+  canDelete,
+  emptyMessage,
+}: Props) {
   const columns: InfiniteCol[] = fields.map((f) => {
     const amount = AMOUNT_FIELDS.has(f.field_name);
     return {
@@ -172,7 +186,7 @@ export function ApplicationsInfinite({ initialRows, fields, total, params, canDe
       columns={columns}
       renderRow={renderRow}
       getKey={(a) => a.id}
-      emptyMessage="該当する申込がありません"
+      emptyMessage={emptyMessage ?? '該当する申込がありません'}
       selection={
         canDelete
           ? {
