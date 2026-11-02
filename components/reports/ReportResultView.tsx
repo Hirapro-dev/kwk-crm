@@ -26,6 +26,7 @@ import {
 import { MEMBER_LINK_ID_ALIAS } from '@/lib/reports/builder_v2';
 import { computeChartData } from '@/lib/reports/chart_data';
 import { categoryName, formatReportCell } from '@/lib/reports/format_cell';
+import { groupMemberLinkId } from '@/lib/reports/group_link';
 import { SUMMARY_AGG_LABEL, aggregateColumn, formatSummaryValue } from '@/lib/reports/summary';
 import type { ReportChartConfig, ReportDisplayConfig } from '@/lib/reports/types';
 import { cn } from '@/lib/utils/cn';
@@ -317,6 +318,39 @@ export function ReportResultView({
     </TableRow>
   );
 
+  // ----- 会員詳細へのリンク(分割ビューでは右ペインに出す) -----
+  const renderMemberLink = (memberId: string, text: string, selected = false) =>
+    splitMode ? (
+      // 分割ビュー: 遷移せず右ペインに詳細を出す(URL の selected を差し替え)
+      <Link
+        href={buildSelectHref(memberId)}
+        replace
+        scroll={false}
+        className={cn('text-primary hover:underline', selected && 'font-bold')}
+      >
+        {text}
+      </Link>
+    ) : (
+      <Link
+        href={`/members/${encodeURIComponent(memberId)}?from=${encodeURIComponent(pathname)}`}
+        className="text-primary hover:underline"
+      >
+        {text}
+      </Link>
+    );
+
+  // ----- グループのまとめ表示の名前(会員氏名でまとめたときは会員詳細へリンク) -----
+  const renderGroupKey = (g: { key: string; rows: Array<Record<string, unknown>> }) => {
+    const memberId =
+      groupCol?.source === 'm.name' ? groupMemberLinkId(g.rows, MEMBER_LINK_ID_ALIAS) : null;
+    if (!memberId || g.key === '') return g.key;
+    return renderMemberLink(
+      memberId,
+      g.key,
+      splitMode && selectedMemberId != null && memberId === selectedMemberId,
+    );
+  };
+
   // ----- 詳細セル1つ分(会員氏名・各ID はリンク) -----
   const renderDetailCell = (row: Record<string, unknown>, c: ReportColumnView) => {
     const memberId = row[MEMBER_LINK_ID_ALIAS];
@@ -346,24 +380,7 @@ export function ReportResultView({
         )}
       >
         {memberNameLinkable ? (
-          splitMode ? (
-            // 分割ビュー: 遷移せず右ペインに詳細を出す(URL の selected を差し替え)
-            <Link
-              href={buildSelectHref(String(memberId))}
-              replace
-              scroll={false}
-              className={cn('text-primary hover:underline', isSelectedCell && 'font-bold')}
-            >
-              {text}
-            </Link>
-          ) : (
-            <Link
-              href={`/members/${encodeURIComponent(String(memberId))}?from=${encodeURIComponent(pathname)}`}
-              className="text-primary hover:underline"
-            >
-              {text}
-            </Link>
-          )
+          renderMemberLink(String(memberId), text, isSelectedCell)
         ) : idLinkable ? (
           <Link
             href={`${idBase}/${encodeURIComponent(String(idVal))}?from=${encodeURIComponent(pathname)}`}
@@ -381,13 +398,16 @@ export function ReportResultView({
     columns.map((c) => renderDetailCell(row, c));
 
   // グループ結合セル(rowspan)。key は配置先のグループ列に合わせる。
-  const groupMergedCell = (g: { key: string; rows: unknown[] }, key: string) => (
+  const groupMergedCell = (
+    g: { key: string; rows: Array<Record<string, unknown>> },
+    key: string,
+  ) => (
     <TableCell
       key={key}
       rowSpan={g.rows.length}
       className="whitespace-nowrap border-r bg-slate-50/60 align-top text-xs font-semibold text-slate-800"
     >
-      {g.key}
+      {renderGroupKey(g)}
       {showCounts && (
         <span className="ml-1 font-normal text-muted-foreground">({g.rows.length}件)</span>
       )}
@@ -395,13 +415,13 @@ export function ReportResultView({
   );
 
   // グループ列が表示列に無い場合のフォールバック見出し行
-  const groupHeaderRow = (g: { key: string; rows: unknown[] }) => (
+  const groupHeaderRow = (g: { key: string; rows: Array<Record<string, unknown>> }) => (
     <TableRow className="bg-primary/5 hover:bg-primary/5">
       <TableCell
         colSpan={columns.length}
         className="whitespace-nowrap text-xs font-bold text-slate-800"
       >
-        {groupCol?.label}: {g.key}
+        {groupCol?.label}: {renderGroupKey(g)}
         {showCounts && (
           <span className="ml-2 font-normal text-muted-foreground">{g.rows.length}件</span>
         )}
@@ -598,7 +618,7 @@ export function ReportResultView({
                                       key={c.alias}
                                       className="whitespace-nowrap text-xs font-semibold text-slate-800"
                                     >
-                                      {grp.key}
+                                      {renderGroupKey(grp)}
                                       {showCounts && (
                                         <span className="ml-1 font-normal text-muted-foreground">
                                           ({grp.rows.length}件)
@@ -687,8 +707,11 @@ function GroupBlock({
   renderCells: (row: Record<string, unknown>) => React.ReactNode;
   renderDetailCell: (row: Record<string, unknown>, c: ReportColumnView) => React.ReactNode;
   renderSummaryRow: (rows: Array<Record<string, unknown>>, label: string) => React.ReactNode;
-  groupMergedCell: (g: { key: string; rows: unknown[] }, key: string) => React.ReactNode;
-  groupHeaderRow: (g: { key: string; rows: unknown[] }) => React.ReactNode;
+  groupMergedCell: (
+    g: { key: string; rows: Array<Record<string, unknown>> },
+    key: string,
+  ) => React.ReactNode;
+  groupHeaderRow: (g: { key: string; rows: Array<Record<string, unknown>> }) => React.ReactNode;
   collapsedRow: (g: { key: string; rows: Array<Record<string, unknown>> }) => React.ReactNode;
 }) {
   // 詳細行を隠す場合: グループごとに 1 行(値 + 集計)
