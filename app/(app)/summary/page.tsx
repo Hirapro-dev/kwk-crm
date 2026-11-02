@@ -10,6 +10,7 @@
 
 import { PanelFilterBar, PanelHeader } from '@/components/layout/PanelHeader';
 import { ReportChart } from '@/components/reports/ReportChart';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
   Table,
@@ -20,10 +21,18 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { getActivitySummaryByOwner } from '@/lib/domain/activity_summary';
-import { parseProjectFilterParam } from '@/lib/domain/application_list_filter';
+import { listApplications } from '@/lib/domain/applications';
 import { getCurrentUser } from '@/lib/domain/auth';
 import { getNewCustomerSummary, listInfoAcquiredPoints } from '@/lib/domain/customer_summary';
 import { getFormSummary, listFormsForSummary } from '@/lib/domain/form_summary';
+import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
+import { getVisibleFields } from '@/lib/domain/object_metadata';
+import {
+  paymentExportHref,
+  paymentListParams,
+  resolvePaymentSummaryFilter,
+  summaryUserHref,
+} from '@/lib/domain/payment_list';
 import { getProtectSummary } from '@/lib/domain/protect_summary';
 import { getSalesSummary, listProjectsForFilter } from '@/lib/domain/sales_summary';
 import { listSummaryFavorites } from '@/lib/domain/summary_favorites';
@@ -32,6 +41,7 @@ import { GRANULARITY_LABELS, normalizeGranularity } from '@/lib/utils/date_bucke
 import { normalizePreset, resolveDateRange } from '@/lib/utils/date_preset';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { ApplicationsInfinite } from '../applications/ApplicationsInfinite';
 import { ActivitySummaryFilterBar } from './ActivitySummaryFilterBar';
 import { CustomerSummaryFilterBar } from './CustomerSummaryFilterBar';
 import { FormSummaryFilterBar } from './FormSummaryFilterBar';
@@ -118,16 +128,10 @@ export default async function SummaryPage({ searchParams }: PageProps) {
 
 /* ===================== 入金タブ(既存) ===================== */
 async function PaymentTab({ sp }: { sp: SP }) {
-  const preset = sp.preset ? normalizePreset(sp.preset) : 'this_month';
-  const range = resolveDateRange(preset, sp.from ?? null, sp.to ?? null);
-  // 案件ID は T- 形式の文字列。以前は数字の ID だけを受け付けていたため絞り込めなかった(2026-10-16)
-  const projectId = parseProjectFilterParam(sp.project);
+  // 期間・案件・有効/無効の読み取りは CSV 出力と共通(案件ID は T- 形式の文字列。2026-10-16)
+  const { preset, range, projectId, activeFilter } = resolvePaymentSummaryFilter(sp);
 
-  const rawActive = sp.active ?? 'all';
-  const activeFilter: 'all' | 'active' | 'inactive' =
-    rawActive === 'active' || rawActive === 'inactive' ? rawActive : 'all';
-
-  const [summary, projects] = await Promise.all([
+  const [summary, projects, listFields] = await Promise.all([
     getSalesSummary({
       paymentFrom: range.from,
       paymentTo: range.to,
@@ -135,7 +139,26 @@ async function PaymentTab({ sp }: { sp: SP }) {
       activeFilter,
     }),
     listProjectsForFilter(),
+    // 入金一覧の列は申込一覧と同じ(オブジェクト管理の一覧表示に従う。2026-11-02)
+    getVisibleFields('applications', 'list'),
   ]);
+
+  // 入金一覧: 担当者別の合計に数えている申込を 1 件ずつ。ユーザー名を押すとその人だけ(?user=)
+  const list = paymentListParams(
+    { paymentFrom: range.from, paymentTo: range.to, projectId },
+    summary.rows.map((r) => r.user_id),
+    sp.user,
+  );
+  const { selectedUserId, ...listFilter } = list;
+  const listParams = {
+    ...listFilter,
+    sort: sp.sort,
+    dir: sp.dir === 'desc' ? ('desc' as const) : sp.sort ? ('asc' as const) : undefined,
+  };
+  const paymentList = await listApplications({ ...listParams, page: 1, pageSize: LIST_PAGE_SIZE });
+  const selectedRow = selectedUserId
+    ? summary.rows.find((r) => r.user_id === selectedUserId)
+    : undefined;
 
   return (
     <>
@@ -192,8 +215,21 @@ async function PaymentTab({ sp }: { sp: SP }) {
             </TableRow>
           ) : (
             summary.rows.map((r) => (
-              <TableRow key={r.user_id} className="sf-row-hover">
-                <TableCell className="py-2 font-medium">{r.user_name}</TableCell>
+              <TableRow
+                key={r.user_id}
+                className={cn('sf-row-hover', r.user_id === selectedUserId && 'bg-sky-50')}
+              >
+                <TableCell className="py-2 font-medium">
+                  {/* 押すとその人の入金だけを下の一覧に出す。選択中をもう一度押すと解除 */}
+                  <Link
+                    href={summaryUserHref(sp, r.user_id)}
+                    scroll={false}
+                    className="sf-link"
+                    aria-current={r.user_id === selectedUserId ? 'true' : undefined}
+                  >
+                    {r.user_name}
+                  </Link>
+                </TableCell>
                 <TableCell className="py-2 text-right tabular-nums">
                   {r.total_payment_amount > 0 ? `¥${r.total_payment_amount.toLocaleString()}` : '-'}
                 </TableCell>
@@ -205,6 +241,35 @@ async function PaymentTab({ sp }: { sp: SP }) {
           )}
         </TableBody>
       </Table>
+
+      {/* 入金一覧(2026-11-02)。列・表示は申込一覧と同じ */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-y bg-gray-50 px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-bold">入金一覧</span>
+          <span className="text-muted-foreground">{paymentList.total.toLocaleString()} 件</span>
+          {selectedRow && (
+            <span className="flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs text-sky-900">
+              {selectedRow.user_name} の入金
+              <Link href={summaryUserHref(sp, null)} scroll={false} className="ml-1 underline">
+                解除
+              </Link>
+            </span>
+          )}
+        </div>
+        <Link href={paymentExportHref(sp)} prefetch={false}>
+          <Button variant="outline" size="sm">
+            CSV出力
+          </Button>
+        </Link>
+      </div>
+      <ApplicationsInfinite
+        key={`${range.from ?? ''}|${range.to ?? ''}|${projectId ?? ''}|${activeFilter}|${selectedUserId ?? ''}|${sp.sort ?? ''}|${sp.dir ?? ''}`}
+        initialRows={paymentList.rows}
+        fields={listFields}
+        total={paymentList.total}
+        params={listParams}
+        emptyMessage="この条件の入金はありません"
+      />
     </>
   );
 }
