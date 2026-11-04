@@ -27,6 +27,8 @@ export interface ReportColumnInfo {
   /** 論理ソース名(例: 'm.name')。会員詳細リンク等の列判定に使う */
   source: string;
   dataType: string;
+  /** 集計した列(件数・合計など)。リンクにしない(§9.10b) */
+  aggregated?: boolean;
 }
 
 export interface ReportResult {

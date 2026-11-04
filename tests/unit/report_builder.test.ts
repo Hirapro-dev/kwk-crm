@@ -361,3 +361,69 @@ describe('buildReportQuery(仕様書 §9.8)', () => {
     ).toThrow(BuilderError);
   });
 });
+
+/**
+ * 会員詳細リンク用の隠し列(CLAUDE.md §9.10b)。結果の行に m_link_id として付くが、出力列(CSV など)には出さない。
+ */
+describe('会員詳細リンク用の隠し列', () => {
+  const name = { id: 'c1', source: 'm.name', label: '会員氏名' };
+
+  it('会員氏名を選ぶと隠し列を足し、出力列には含めない', () => {
+    const q = buildReportQuery('RT07', { columns: [name] }, CURRENT_USER);
+    expect(q.sql).toContain('AS m_link_id');
+    expect(q.columns.map((c) => c.source)).toEqual(['m.name']);
+  });
+
+  it('記事反応の会員氏名でも、行単位のレポートなら隠し列を足す', () => {
+    const q = buildReportQuery(
+      'RT11',
+      { columns: [{ id: 'c1', source: 'ar.member_name', label: '会員氏名' }] },
+      CURRENT_USER,
+    );
+    expect(q.sql).toContain('AS m_link_id');
+  });
+
+  it('記事反応の会員氏名の集計には足さない(同姓同名が別の行に分かれて件数が変わるため)', () => {
+    const q = buildReportQuery(
+      'RT11',
+      {
+        columns: [
+          { id: 'c1', source: 'ar.member_name', label: '会員氏名' },
+          { id: 'c2', source: 'ar.id', label: '件数', aggregate: 'count' },
+        ],
+      },
+      CURRENT_USER,
+    );
+    expect(q.sql).not.toContain('m_link_id');
+  });
+
+  it('会員ID を集計しているだけなら、氏名のリンク用に隠し列を足す', () => {
+    const q = buildReportQuery(
+      'RT02',
+      { columns: [name, { id: 'c2', source: 'm.id', label: '件数', aggregate: 'count' }] },
+      CURRENT_USER,
+    );
+    expect(q.sql).toContain('AS m_link_id');
+  });
+
+  it('会員ID をそのまま選んでいれば隠し列は足さない(その列の値を使う)', () => {
+    const q = buildReportQuery(
+      'RT07',
+      { columns: [name, { id: 'c2', source: 'm.id', label: '会員ID' }] },
+      CURRENT_USER,
+    );
+    expect(q.sql).not.toContain('m_link_id');
+  });
+
+  it('集計した列には印を付ける(画面でリンクにしないため)', () => {
+    const q = buildReportQuery(
+      'RT02',
+      {
+        columns: [name, { id: 'c2', source: 'm.id', label: '件数', aggregate: 'count' }],
+      },
+      CURRENT_USER,
+    );
+    expect(q.columns.find((c) => c.id === 'c1')?.aggregated).toBeUndefined();
+    expect(q.columns.find((c) => c.id === 'c2')?.aggregated).toBe(true);
+  });
+});

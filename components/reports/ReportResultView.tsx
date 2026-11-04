@@ -26,6 +26,14 @@ import {
 import { MEMBER_LINK_ID_ALIAS } from '@/lib/reports/builder_v2';
 import { computeChartData } from '@/lib/reports/chart_data';
 import { categoryName, formatReportCell } from '@/lib/reports/format_cell';
+import {
+  groupMemberLinkId,
+  isMemberIdColumn,
+  isMemberLinkColumn,
+  isMemberNameColumn,
+  memberIdAliases,
+  rowMemberId,
+} from '@/lib/reports/group_link';
 import { SUMMARY_AGG_LABEL, aggregateColumn, formatSummaryValue } from '@/lib/reports/summary';
 import type { ReportChartConfig, ReportDisplayConfig } from '@/lib/reports/types';
 import { cn } from '@/lib/utils/cn';
@@ -39,6 +47,8 @@ export interface ReportColumnView {
   alias: string;
   source: string;
   dataType: string;
+  /** 集計した列(件数・合計など)。リンクにしない(§9.10b) */
+  aggregated?: boolean;
 }
 
 interface Props {
@@ -60,10 +70,10 @@ const formatCell = formatReportCell;
 /**
  * ID 列 → 詳細ページのパス対応。
  * 値(ID)をそのまま `${base}/${id}` に付けて遷移する。
- * 詳細ページを持つ会員/問合せ/申込のみ。案件/フォーム/記事反応/担当者(設定配下)は対象外。
+ * 詳細ページを持つ問合せ/申込のみ。案件/フォーム/記事反応/担当者(設定配下)は対象外。
+ * 会員ID は分割ビューに対応するため別に扱う(isMemberIdColumn)。
  */
 const ID_LINK_BASE: Record<string, string> = {
-  'm.id': '/members',
   'inq.id': '/inquiries',
   'a.id': '/applications',
 };
@@ -317,22 +327,61 @@ export function ReportResultView({
     </TableRow>
   );
 
+  // 行から会員ID を探す列(隠し列 → 選んでいる会員ID の列)
+  const memberAliases = useMemo(() => memberIdAliases(columns, MEMBER_LINK_ID_ALIAS), [columns]);
+
+  // ----- 会員詳細へのリンク(分割ビューでは右ペインに出す) -----
+  const renderMemberLink = (memberId: string, text: string, selected = false) =>
+    splitMode ? (
+      // 分割ビュー: 遷移せず右ペインに詳細を出す(URL の selected を差し替え)
+      <Link
+        href={buildSelectHref(memberId)}
+        replace
+        scroll={false}
+        className={cn('text-primary hover:underline', selected && 'font-bold')}
+      >
+        {text}
+      </Link>
+    ) : (
+      <Link
+        href={`/members/${encodeURIComponent(memberId)}?from=${encodeURIComponent(pathname)}`}
+        className="text-primary hover:underline"
+      >
+        {text}
+      </Link>
+    );
+
+  // ----- グループのまとめ表示の名前(会員氏名でまとめたときは会員詳細へリンク) -----
+  const renderGroupKey = (g: { key: string; rows: Array<Record<string, unknown>> }) => {
+    const memberId =
+      groupCol && isMemberLinkColumn(groupCol) ? groupMemberLinkId(g.rows, memberAliases) : null;
+    if (!memberId || g.key === '') return g.key;
+    return renderMemberLink(
+      memberId,
+      g.key,
+      splitMode && selectedMemberId != null && memberId === selectedMemberId,
+    );
+  };
+
   // ----- 詳細セル1つ分(会員氏名・各ID はリンク) -----
   const renderDetailCell = (row: Record<string, unknown>, c: ReportColumnView) => {
-    const memberId = row[MEMBER_LINK_ID_ALIAS];
     const text = formatCell(row[c.alias], c.dataType);
-    // 会員氏名: 会員詳細へ(分割ビュー対応)
-    const memberNameLinkable = c.source === 'm.name' && memberId != null && text !== '';
-    // ID 列(会員ID/問合せID/申込ID): そのIDの詳細ページへ
-    const idBase = ID_LINK_BASE[c.source];
     const idVal = row[c.alias];
+    // 会員氏名・会員ID: 会員詳細へ(分割ビュー対応)。会員ID の列はその列の値を使う
+    const memberId = isMemberIdColumn(c)
+      ? idVal == null || String(idVal) === ''
+        ? null
+        : String(idVal)
+      : isMemberNameColumn(c)
+        ? rowMemberId(row, memberAliases)
+        : null;
+    const memberLinkable = memberId != null && text !== '';
+    // ID 列(問合せID/申込ID): そのIDの詳細ページへ。集計した列は値が ID ではないのでリンクにしない
+    const idBase = c.aggregated ? undefined : ID_LINK_BASE[c.source];
     const idLinkable = !!idBase && idVal != null && String(idVal) !== '' && text !== '';
     // 分割ビューで現在選択中の会員セルか
     const isSelectedCell =
-      splitMode &&
-      memberNameLinkable &&
-      selectedMemberId != null &&
-      String(memberId) === selectedMemberId;
+      splitMode && memberLinkable && selectedMemberId != null && memberId === selectedMemberId;
     // 改行を含む値は元の改行を保持して表示(資産状況などの複数行テキスト)
     const multiline = text.includes('\n');
     return (
@@ -345,25 +394,8 @@ export function ReportResultView({
           isSelectedCell && 'bg-primary/10',
         )}
       >
-        {memberNameLinkable ? (
-          splitMode ? (
-            // 分割ビュー: 遷移せず右ペインに詳細を出す(URL の selected を差し替え)
-            <Link
-              href={buildSelectHref(String(memberId))}
-              replace
-              scroll={false}
-              className={cn('text-primary hover:underline', isSelectedCell && 'font-bold')}
-            >
-              {text}
-            </Link>
-          ) : (
-            <Link
-              href={`/members/${encodeURIComponent(String(memberId))}?from=${encodeURIComponent(pathname)}`}
-              className="text-primary hover:underline"
-            >
-              {text}
-            </Link>
-          )
+        {memberLinkable ? (
+          renderMemberLink(memberId, text, isSelectedCell)
         ) : idLinkable ? (
           <Link
             href={`${idBase}/${encodeURIComponent(String(idVal))}?from=${encodeURIComponent(pathname)}`}
@@ -381,13 +413,16 @@ export function ReportResultView({
     columns.map((c) => renderDetailCell(row, c));
 
   // グループ結合セル(rowspan)。key は配置先のグループ列に合わせる。
-  const groupMergedCell = (g: { key: string; rows: unknown[] }, key: string) => (
+  const groupMergedCell = (
+    g: { key: string; rows: Array<Record<string, unknown>> },
+    key: string,
+  ) => (
     <TableCell
       key={key}
       rowSpan={g.rows.length}
       className="whitespace-nowrap border-r bg-slate-50/60 align-top text-xs font-semibold text-slate-800"
     >
-      {g.key}
+      {renderGroupKey(g)}
       {showCounts && (
         <span className="ml-1 font-normal text-muted-foreground">({g.rows.length}件)</span>
       )}
@@ -395,13 +430,13 @@ export function ReportResultView({
   );
 
   // グループ列が表示列に無い場合のフォールバック見出し行
-  const groupHeaderRow = (g: { key: string; rows: unknown[] }) => (
+  const groupHeaderRow = (g: { key: string; rows: Array<Record<string, unknown>> }) => (
     <TableRow className="bg-primary/5 hover:bg-primary/5">
       <TableCell
         colSpan={columns.length}
         className="whitespace-nowrap text-xs font-bold text-slate-800"
       >
-        {groupCol?.label}: {g.key}
+        {groupCol?.label}: {renderGroupKey(g)}
         {showCounts && (
           <span className="ml-2 font-normal text-muted-foreground">{g.rows.length}件</span>
         )}
@@ -598,7 +633,7 @@ export function ReportResultView({
                                       key={c.alias}
                                       className="whitespace-nowrap text-xs font-semibold text-slate-800"
                                     >
-                                      {grp.key}
+                                      {renderGroupKey(grp)}
                                       {showCounts && (
                                         <span className="ml-1 font-normal text-muted-foreground">
                                           ({grp.rows.length}件)
@@ -687,8 +722,11 @@ function GroupBlock({
   renderCells: (row: Record<string, unknown>) => React.ReactNode;
   renderDetailCell: (row: Record<string, unknown>, c: ReportColumnView) => React.ReactNode;
   renderSummaryRow: (rows: Array<Record<string, unknown>>, label: string) => React.ReactNode;
-  groupMergedCell: (g: { key: string; rows: unknown[] }, key: string) => React.ReactNode;
-  groupHeaderRow: (g: { key: string; rows: unknown[] }) => React.ReactNode;
+  groupMergedCell: (
+    g: { key: string; rows: Array<Record<string, unknown>> },
+    key: string,
+  ) => React.ReactNode;
+  groupHeaderRow: (g: { key: string; rows: Array<Record<string, unknown>> }) => React.ReactNode;
   collapsedRow: (g: { key: string; rows: Array<Record<string, unknown>> }) => React.ReactNode;
 }) {
   // 詳細行を隠す場合: グループごとに 1 行(値 + 集計)
