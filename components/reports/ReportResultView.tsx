@@ -26,7 +26,14 @@ import {
 import { MEMBER_LINK_ID_ALIAS } from '@/lib/reports/builder_v2';
 import { computeChartData } from '@/lib/reports/chart_data';
 import { categoryName, formatReportCell } from '@/lib/reports/format_cell';
-import { groupMemberLinkId } from '@/lib/reports/group_link';
+import {
+  groupMemberLinkId,
+  isMemberIdColumn,
+  isMemberLinkColumn,
+  isMemberNameColumn,
+  memberIdAliases,
+  rowMemberId,
+} from '@/lib/reports/group_link';
 import { SUMMARY_AGG_LABEL, aggregateColumn, formatSummaryValue } from '@/lib/reports/summary';
 import type { ReportChartConfig, ReportDisplayConfig } from '@/lib/reports/types';
 import { cn } from '@/lib/utils/cn';
@@ -40,6 +47,8 @@ export interface ReportColumnView {
   alias: string;
   source: string;
   dataType: string;
+  /** 集計した列(件数・合計など)。リンクにしない(§9.10b) */
+  aggregated?: boolean;
 }
 
 interface Props {
@@ -61,10 +70,10 @@ const formatCell = formatReportCell;
 /**
  * ID 列 → 詳細ページのパス対応。
  * 値(ID)をそのまま `${base}/${id}` に付けて遷移する。
- * 詳細ページを持つ会員/問合せ/申込のみ。案件/フォーム/記事反応/担当者(設定配下)は対象外。
+ * 詳細ページを持つ問合せ/申込のみ。案件/フォーム/記事反応/担当者(設定配下)は対象外。
+ * 会員ID は分割ビューに対応するため別に扱う(isMemberIdColumn)。
  */
 const ID_LINK_BASE: Record<string, string> = {
-  'm.id': '/members',
   'inq.id': '/inquiries',
   'a.id': '/applications',
 };
@@ -318,6 +327,9 @@ export function ReportResultView({
     </TableRow>
   );
 
+  // 行から会員ID を探す列(隠し列 → 選んでいる会員ID の列)
+  const memberAliases = useMemo(() => memberIdAliases(columns, MEMBER_LINK_ID_ALIAS), [columns]);
+
   // ----- 会員詳細へのリンク(分割ビューでは右ペインに出す) -----
   const renderMemberLink = (memberId: string, text: string, selected = false) =>
     splitMode ? (
@@ -342,7 +354,7 @@ export function ReportResultView({
   // ----- グループのまとめ表示の名前(会員氏名でまとめたときは会員詳細へリンク) -----
   const renderGroupKey = (g: { key: string; rows: Array<Record<string, unknown>> }) => {
     const memberId =
-      groupCol?.source === 'm.name' ? groupMemberLinkId(g.rows, MEMBER_LINK_ID_ALIAS) : null;
+      groupCol && isMemberLinkColumn(groupCol) ? groupMemberLinkId(g.rows, memberAliases) : null;
     if (!memberId || g.key === '') return g.key;
     return renderMemberLink(
       memberId,
@@ -353,20 +365,23 @@ export function ReportResultView({
 
   // ----- 詳細セル1つ分(会員氏名・各ID はリンク) -----
   const renderDetailCell = (row: Record<string, unknown>, c: ReportColumnView) => {
-    const memberId = row[MEMBER_LINK_ID_ALIAS];
     const text = formatCell(row[c.alias], c.dataType);
-    // 会員氏名: 会員詳細へ(分割ビュー対応)
-    const memberNameLinkable = c.source === 'm.name' && memberId != null && text !== '';
-    // ID 列(会員ID/問合せID/申込ID): そのIDの詳細ページへ
-    const idBase = ID_LINK_BASE[c.source];
     const idVal = row[c.alias];
+    // 会員氏名・会員ID: 会員詳細へ(分割ビュー対応)。会員ID の列はその列の値を使う
+    const memberId = isMemberIdColumn(c)
+      ? idVal == null || String(idVal) === ''
+        ? null
+        : String(idVal)
+      : isMemberNameColumn(c)
+        ? rowMemberId(row, memberAliases)
+        : null;
+    const memberLinkable = memberId != null && text !== '';
+    // ID 列(問合せID/申込ID): そのIDの詳細ページへ。集計した列は値が ID ではないのでリンクにしない
+    const idBase = c.aggregated ? undefined : ID_LINK_BASE[c.source];
     const idLinkable = !!idBase && idVal != null && String(idVal) !== '' && text !== '';
     // 分割ビューで現在選択中の会員セルか
     const isSelectedCell =
-      splitMode &&
-      memberNameLinkable &&
-      selectedMemberId != null &&
-      String(memberId) === selectedMemberId;
+      splitMode && memberLinkable && selectedMemberId != null && memberId === selectedMemberId;
     // 改行を含む値は元の改行を保持して表示(資産状況などの複数行テキスト)
     const multiline = text.includes('\n');
     return (
@@ -379,8 +394,8 @@ export function ReportResultView({
           isSelectedCell && 'bg-primary/10',
         )}
       >
-        {memberNameLinkable ? (
-          renderMemberLink(String(memberId), text, isSelectedCell)
+        {memberLinkable ? (
+          renderMemberLink(memberId, text, isSelectedCell)
         ) : idLinkable ? (
           <Link
             href={`${idBase}/${encodeURIComponent(String(idVal))}?from=${encodeURIComponent(pathname)}`}

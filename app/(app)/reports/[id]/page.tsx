@@ -18,6 +18,7 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import { logReportRun } from '@/lib/domain/report_actions';
 import { getReport } from '@/lib/domain/reports';
 import { executeReport } from '@/lib/reports/execute_v2';
+import { isMemberLinkColumn } from '@/lib/reports/group_link';
 import { SUMMARY_AGG_LABEL, aggregateColumn, formatSummaryValue } from '@/lib/reports/summary';
 import { REPORT_TYPES } from '@/lib/reports/types';
 import { formatDateTime } from '@/lib/utils/date';
@@ -57,8 +58,8 @@ export default async function ReportRunPage({ params, searchParams }: PageProps)
     });
   }
 
-  // 会員詳細へリンクできるレポートか(会員氏名 m.name 列がある)。分割ビューの可否判定に使う。
-  const hasMemberLink = res.ok && res.columns.some((c) => c.source === 'm.name');
+  // 会員詳細へリンクできるレポートか(会員氏名・会員ID の列がある)。分割ビューの可否判定に使う。
+  const hasMemberLink = res.ok && res.columns.some(isMemberLinkColumn);
   const toSplitHref = `/reports/${report.id}?view=split`;
   const toNormalHref = `/reports/${report.id}`;
 

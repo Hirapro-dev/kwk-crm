@@ -32,11 +32,21 @@ export interface BuiltQuery {
   sql: string;
   params: unknown[];
   /** 出力列のエイリアス順(SELECT に対応)。CSV/Excel 出力で使う */
-  columns: Array<{ id: string; label: string; alias: string; source: string; dataType: string }>;
+  columns: Array<{
+    id: string;
+    label: string;
+    alias: string;
+    source: string;
+    dataType: string;
+    /** 集計した列(件数・合計など)。値が ID や氏名ではないのでリンクにしない(§9.10b) */
+    aggregated?: boolean;
+  }>;
 }
 
 /** 会員氏名カラムのソース・会員ID(リンク用隠しカラム)の定義 */
 const MEMBER_NAME_SOURCE = 'm.name';
+/** 記事反応の会員氏名(スナップショット)。リンク用の m.id は行単位のレポートのときだけ足す */
+const ARTICLE_MEMBER_NAME_SOURCE = 'ar.member_name';
 const MEMBER_ID_SOURCE = 'm.id';
 /** 結果行に付与する会員IDの隠しエイリアス(出力カラムには含めない) */
 export const MEMBER_LINK_ID_ALIAS = 'm_link_id';
@@ -405,6 +415,7 @@ export function buildReportQuery(
       alias,
       source: col.source,
       dataType: colDef.displayType ?? colDef.dataType,
+      ...(col.aggregate ? { aggregated: true } : {}),
     });
   }
 
@@ -413,10 +424,17 @@ export function buildReportQuery(
   //   - 出力カラム(outputColumns)には含めないため、ヘッダー・CSV・Excel には出ない
   //   - 結果行に MEMBER_LINK_ID_ALIAS キーとして付与され、画面側がリンク生成に使う
   const hasExplicitGroupBy = !!(definition.group_by && definition.group_by.length > 0);
+  // 記事反応の会員氏名は行単位のときだけ。集計に m.id を足すと同姓同名が別の行に分かれて件数が変わるため
+  const isRowLevel = !hasExplicitGroupBy && !definition.columns.some((c) => c.aggregate);
   const selectsMemberName = definition.columns.some(
-    (c) => c.source === MEMBER_NAME_SOURCE && !c.aggregate,
+    (c) =>
+      !c.aggregate &&
+      (c.source === MEMBER_NAME_SOURCE || (isRowLevel && c.source === ARTICLE_MEMBER_NAME_SOURCE)),
   );
-  const selectsMemberId = definition.columns.some((c) => c.source === MEMBER_ID_SOURCE);
+  // 集計した m.id(件数など)は値が会員ID ではないので、選んでいることにならない
+  const selectsMemberId = definition.columns.some(
+    (c) => c.source === MEMBER_ID_SOURCE && !c.aggregate,
+  );
   // GROUP BY がある場合も m.name が非集計なら m.id を注入してリンクを生成する
   const injectMemberLinkId =
     selectsMemberName && !selectsMemberId && !!findColumn(reportType, MEMBER_ID_SOURCE);
