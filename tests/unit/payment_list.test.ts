@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { ApplicationListItem } from '../../lib/domain/applications';
+import { toApplicationsCsv } from '../../lib/domain/applications_csv';
 import {
+  PAYMENT_LIST_FIELDS,
   paymentExportHref,
   paymentListParams,
   sanitizePaymentFilter,
@@ -128,6 +131,60 @@ describe('sanitizePaymentFilter', () => {
   it('申込獲得者が配列でなければ空(= 0 件。絞り込みが外れて全件にならないように)', () => {
     expect(sanitizePaymentFilter({ paymentOnly: true, acquirerIds: 'all' }).acquirerIds).toEqual(
       [],
+    );
+  });
+});
+
+/**
+ * 入金一覧の列は固定(2026-11-06 ユーザー指定)。項目管理の設定で変わらないよう、画面と CSV で同じ定義を使う。
+ */
+describe('PAYMENT_LIST_FIELDS', () => {
+  it('列はユーザー指定の 8 項目をこの順に', () => {
+    expect(PAYMENT_LIST_FIELDS.map((f) => f.label)).toEqual([
+      '案件',
+      '申込獲得者',
+      '会員ID',
+      '会員氏名',
+      '入金日',
+      '入金額',
+      '契約期間',
+      '備考',
+    ]);
+  });
+
+  it('並び替えは DB で並べ替えられる列だけ(効かない見出しを出さない)。会員ID は member_id で並べる', () => {
+    const sortable = Object.fromEntries(
+      PAYMENT_LIST_FIELDS.map((f) => [f.label, f.sortField ?? null]),
+    );
+    expect(sortable).toEqual({
+      案件: 'project_id',
+      申込獲得者: null,
+      会員ID: 'member_id',
+      会員氏名: null,
+      入金日: 'payment_date',
+      入金額: 'payment_amount',
+      契約期間: null,
+      備考: null,
+    });
+  });
+
+  it('CSV も同じ列で、備考は可変項目から読む(名前・金額は架空)', () => {
+    const row = {
+      id: 'M-001000001',
+      member_id: 'K-000100001',
+      payment_date: '2026-10-30',
+      payment_amount: 1000000,
+      contract_period: '3',
+      acquirer_name_raw: null,
+      extra: { 備考: '架空の備考' },
+      member: { id: 'K-000100001', name: '架空 太郎' },
+      project: { id: 'T-000000001', name: '架空案件' },
+      acquirer: { id: 'u1', full_name: '担当 花子' },
+    } as unknown as ApplicationListItem;
+    const lines = toApplicationsCsv([row], PAYMENT_LIST_FIELDS).slice(1).split('\r\n');
+    expect(lines[0]).toBe('案件,申込獲得者,会員ID,会員氏名,入金日,入金額,契約期間,備考');
+    expect(lines[1]).toBe(
+      '架空案件,担当 花子,K-000100001,架空 太郎,2026/10/30,1000000,3ヶ月,架空の備考',
     );
   });
 });

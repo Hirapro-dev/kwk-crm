@@ -8,6 +8,44 @@
 
 import { normalizePreset, resolveDateRange } from '@/lib/utils/date_preset';
 import { parseProjectFilterParam } from './application_list_filter';
+import type { ApplicationListField } from './applications_csv';
+
+/**
+ * 入金一覧の列(画面と CSV で共通。2026-11-06 ユーザー指定)。項目管理の表示設定の影響を受けない固定の列。
+ * 並び替えは APPLICATION_SORTABLE にある列だけ付ける(無い列の見出しを押しても並びが変わらないため)。
+ */
+export const PAYMENT_LIST_FIELDS: readonly ApplicationListField[] = [
+  column(1, 'project_id', '案件', { sortField: 'project_id' }),
+  column(2, 'acquirer_id', '申込獲得者'),
+  column(3, 'member_code', '会員ID', { sortField: 'member_id' }),
+  column(4, 'member_name', '会員氏名'),
+  column(5, 'payment_date', '入金日', { dataType: 'date', sortField: 'payment_date' }),
+  column(6, 'payment_amount', '入金額', { dataType: 'number', sortField: 'payment_amount' }),
+  column(7, 'contract_period', '契約期間'),
+  // 備考は可変項目(extra)。項目管理の定義は migration 120
+  column(8, '備考', '備考', { isInDb: false }),
+];
+
+function column(
+  id: number,
+  fieldName: string,
+  label: string,
+  opts: {
+    dataType?: ApplicationListField['data_type'];
+    sortField?: string;
+    isInDb?: boolean;
+  } = {},
+): ApplicationListField {
+  return {
+    id,
+    field_name: fieldName,
+    label,
+    data_type: opts.dataType ?? 'text',
+    is_in_db: opts.isInDb ?? true,
+    csv_column_name: null,
+    sortField: opts.sortField ?? null,
+  };
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
