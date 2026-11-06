@@ -5,16 +5,16 @@ import { Badge } from '@/components/ui/badge';
 import { TableCell } from '@/components/ui/table';
 import { formatApplicationUnitValue } from '@/lib/domain/application_units';
 import type { AppStatus, ApplicationListItem } from '@/lib/domain/applications';
+import type { ApplicationListField } from '@/lib/domain/applications_csv';
 import { deleteRecords } from '@/lib/domain/delete_actions';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
 import { loadMoreApplications } from '@/lib/domain/list_more_actions';
-import type { FieldDefinition } from '@/lib/domain/object_metadata';
 import { formatFieldValue, getFieldValue } from '@/lib/utils/format_field';
 import Link from 'next/link';
 
 interface Props {
   initialRows: ApplicationListItem[];
-  fields: FieldDefinition[];
+  fields: readonly ApplicationListField[];
   total: number;
   params: {
     q?: string;
@@ -65,7 +65,13 @@ export function ApplicationsInfinite({
     const amount = AMOUNT_FIELDS.has(f.field_name);
     return {
       header: f.label ?? f.field_name,
-      sortField: f.is_in_db ? f.field_name : undefined,
+      // sortField の指定があれば従う(null = 並び替えなし)。無ければ DB 列はその列で並べる
+      sortField:
+        f.sortField !== undefined
+          ? (f.sortField ?? undefined)
+          : f.is_in_db
+            ? f.field_name
+            : undefined,
       headClassName: amount ? 'h-9 whitespace-nowrap text-right' : undefined,
     };
   });
@@ -93,6 +99,22 @@ export function ApplicationsInfinite({
             {a.member ? (
               <Link href={`/members/${a.member.id}`} className="sf-link">
                 {a.member.name}
+              </Link>
+            ) : (
+              '-'
+            )}
+          </TableCell>
+        );
+      }
+
+      // 入金一覧の 会員ID / 会員氏名 の列: 会員詳細リンク
+      if (f.field_name === 'member_code' || f.field_name === 'member_name') {
+        const text = f.field_name === 'member_code' ? a.member_id : a.member?.name;
+        return (
+          <TableCell key={f.id} className="whitespace-nowrap py-2 text-sm">
+            {text ? (
+              <Link href={`/members/${a.member_id}`} className="sf-link">
+                {text}
               </Link>
             ) : (
               '-'

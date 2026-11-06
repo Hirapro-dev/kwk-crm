@@ -9,8 +9,7 @@ import type { FieldDefinition } from '../../lib/domain/object_metadata';
 
 /**
  * 申込の CSV(サマリの入金一覧の CSV 出力。CLAUDE.md §8.1 `/summary`)。
- * 列は画面の申込一覧と同じ(項目管理の「一覧」表示 ON の項目)。値も画面と同じ見え方にするが、
- * 金額は Excel で計算できるよう数字だけにし、会員は突合に使えるよう 会員ID と 会員名 に分ける。
+ * 列は渡された項目のとおり。値は画面と同じ見え方にするが、金額は Excel で計算できるよう数字だけにする。
  * 名前・金額は架空。
  */
 const f = (field_name: string, label: string, data_type = 'text', is_in_db = true) =>
@@ -27,7 +26,8 @@ const FIELDS = [
   f('id', '申込ID'),
   f('project_id', '案件'),
   f('acquirer_id', '申込獲得者'),
-  f('member_id', '会員'),
+  f('member_code', '会員ID'),
+  f('member_name', '会員氏名'),
   f('status', 'ステータス'),
   f('payment_date', '入金日', 'date'),
   f('payment_amount', '入金額', 'number'),
@@ -60,13 +60,13 @@ const row = (over: Partial<ApplicationListItem> = {}): ApplicationListItem =>
   }) as unknown as ApplicationListItem;
 
 describe('applicationCsvHeaders', () => {
-  it('列名は項目管理の表示名。会員だけは 会員ID と 会員名 の 2 列', () => {
+  it('列名は項目の表示名', () => {
     expect(applicationCsvHeaders(FIELDS)).toEqual([
       '申込ID',
       '案件',
       '申込獲得者',
       '会員ID',
-      '会員名',
+      '会員氏名',
       'ステータス',
       '入金日',
       '入金額',
@@ -84,7 +84,7 @@ describe('toApplicationsCsv', () => {
     expect(csv.startsWith('﻿')).toBe(true);
     const lines = csv.slice(1).split('\r\n');
     expect(lines[0]).toBe(
-      '申込ID,案件,申込獲得者,会員ID,会員名,ステータス,入金日,入金額,利息,起算日,契約期間,備考',
+      '申込ID,案件,申込獲得者,会員ID,会員氏名,ステータス,入金日,入金額,利息,起算日,契約期間,備考',
     );
     // 起算日は日本時間の日付(UTC 15:00 = 翌日 0:00)。備考はカンマ・引用符・改行を含むので囲む
     expect(lines.slice(1).join('\r\n')).toBe(

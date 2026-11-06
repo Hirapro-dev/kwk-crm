@@ -26,8 +26,8 @@ import { getCurrentUser } from '@/lib/domain/auth';
 import { getNewCustomerSummary, listInfoAcquiredPoints } from '@/lib/domain/customer_summary';
 import { getFormSummary, listFormsForSummary } from '@/lib/domain/form_summary';
 import { LIST_PAGE_SIZE } from '@/lib/domain/list_constants';
-import { getVisibleFields } from '@/lib/domain/object_metadata';
 import {
+  PAYMENT_LIST_FIELDS,
   paymentExportHref,
   paymentListParams,
   resolvePaymentSummaryFilter,
@@ -131,7 +131,7 @@ async function PaymentTab({ sp }: { sp: SP }) {
   // 期間・案件・有効/無効の読み取りは CSV 出力と共通(案件ID は T- 形式の文字列。2026-10-16)
   const { preset, range, projectId, activeFilter } = resolvePaymentSummaryFilter(sp);
 
-  const [summary, projects, listFields] = await Promise.all([
+  const [summary, projects] = await Promise.all([
     getSalesSummary({
       paymentFrom: range.from,
       paymentTo: range.to,
@@ -139,8 +139,6 @@ async function PaymentTab({ sp }: { sp: SP }) {
       activeFilter,
     }),
     listProjectsForFilter(),
-    // 入金一覧の列は申込一覧と同じ(オブジェクト管理の一覧表示に従う。2026-11-02)
-    getVisibleFields('applications', 'list'),
   ]);
 
   // 入金一覧: 担当者別の合計に数えている申込を 1 件ずつ。ユーザー名を押すとその人だけ(?user=)
@@ -242,7 +240,7 @@ async function PaymentTab({ sp }: { sp: SP }) {
         </TableBody>
       </Table>
 
-      {/* 入金一覧(2026-11-02)。列・表示は申込一覧と同じ */}
+      {/* 入金一覧(2026-11-02)。列は固定(PAYMENT_LIST_FIELDS。2026-11-06 ユーザー指定) */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-y bg-gray-50 px-4 py-2">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-bold">入金一覧</span>
@@ -265,7 +263,7 @@ async function PaymentTab({ sp }: { sp: SP }) {
       <ApplicationsInfinite
         key={`${range.from ?? ''}|${range.to ?? ''}|${projectId ?? ''}|${activeFilter}|${selectedUserId ?? ''}|${sp.sort ?? ''}|${sp.dir ?? ''}`}
         initialRows={paymentList.rows}
-        fields={listFields}
+        fields={PAYMENT_LIST_FIELDS}
         total={paymentList.total}
         params={listParams}
         emptyMessage="この条件の入金はありません"

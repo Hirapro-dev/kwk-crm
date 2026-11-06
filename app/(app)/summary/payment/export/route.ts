@@ -5,14 +5,17 @@
  *
  * - クエリは入金タブと同じ。画面で絞り込んだ状態(担当者を選んだ状態・並び替えも)のまま出力する
  * - 対象は画面の入金一覧と同じ: 担当者別の合計に数えている申込(paymentListParams)
- * - 列は申込一覧と同じ(オブジェクト管理の一覧表示)。実行ユーザーのセッションで取得するので RLS がそのまま効く
+ * - 列は入金一覧と同じ固定の列(PAYMENT_LIST_FIELDS)。実行ユーザーのセッションで取得するので RLS がそのまま効く
  */
 
 import { APPLICATION_EXPORT_MAX_ROWS, exportApplications } from '@/lib/domain/applications';
 import { buildPaymentCsvFilename, toApplicationsCsv } from '@/lib/domain/applications_csv';
 import { getCurrentUser } from '@/lib/domain/auth';
-import { getVisibleFields } from '@/lib/domain/object_metadata';
-import { paymentListParams, resolvePaymentSummaryFilter } from '@/lib/domain/payment_list';
+import {
+  PAYMENT_LIST_FIELDS,
+  paymentListParams,
+  resolvePaymentSummaryFilter,
+} from '@/lib/domain/payment_list';
 import { getSalesSummary } from '@/lib/domain/sales_summary';
 import { NextResponse } from 'next/server';
 
@@ -24,10 +27,12 @@ export async function GET(request: Request): Promise<Response> {
   const { range, projectId, activeFilter } = resolvePaymentSummaryFilter(sp);
 
   // 画面と同じく、集計の表に出ている担当者を求めてから一覧の絞り込みを決める
-  const [summary, fields] = await Promise.all([
-    getSalesSummary({ paymentFrom: range.from, paymentTo: range.to, projectId, activeFilter }),
-    getVisibleFields('applications', 'list'),
-  ]);
+  const summary = await getSalesSummary({
+    paymentFrom: range.from,
+    paymentTo: range.to,
+    projectId,
+    activeFilter,
+  });
   const { selectedUserId: _selected, ...listFilter } = paymentListParams(
     { paymentFrom: range.from, paymentTo: range.to, projectId },
     summary.rows.map((r) => r.user_id),
@@ -53,7 +58,7 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const filename = buildPaymentCsvFilename(range);
-  return new NextResponse(toApplicationsCsv(result.rows, fields), {
+  return new NextResponse(toApplicationsCsv(result.rows, PAYMENT_LIST_FIELDS), {
     status: 200,
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
