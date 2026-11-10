@@ -20,6 +20,7 @@ import {
 } from '@/lib/domain/mail';
 import { splitVisibleAttachments } from '@/lib/domain/mail_attachment_view';
 import { buildReplySubject, findAddressesInText } from '@/lib/domain/mail_compose';
+import { deliveryStatusLabel, isDeliveryProblem } from '@/lib/domain/mail_delivery';
 import { splitOtherMailBox } from '@/lib/domain/mail_folders';
 import { findMatchingRule, mailBodyText } from '@/lib/domain/mail_import_rules';
 import { MAIL_OUTBOX_STATUS_LABELS, canDirectSend } from '@/lib/domain/mail_outbox';
@@ -245,12 +246,12 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
                   {isOut && m.delivery_status && (
                     <span
                       className={
-                        m.delivery_status === 'bounced' || m.delivery_status === 'failed'
+                        isDeliveryProblem(m.delivery_status)
                           ? 'text-red-600'
                           : 'text-muted-foreground'
                       }
                     >
-                      配信: {m.delivery_status}
+                      配信: {deliveryStatusLabel(m.delivery_status)}
                     </span>
                   )}
                 </div>
