@@ -3,18 +3,11 @@
  * 受信箱の「送信済み」タブ(/mail?box=…&tab=sent)と「自分の送信履歴」(/mail/sent?mine=1)で使う。
  */
 
+import { deliveryStatusLabel, isDeliveryProblem } from '@/lib/domain/mail_delivery';
 import { SENT_PAGE_SIZE, sentCursorOf } from '@/lib/domain/mail_sent';
 import type { SentMessageRow } from '@/lib/domain/mail_sent_queries';
 import { formatDateTime } from '@/lib/utils/date';
 import Link from 'next/link';
-
-const DELIVERY_LABEL: Record<string, string> = {
-  queued: '送信中',
-  sent: '送信済み',
-  delivered: '配信済み',
-  bounced: '不達',
-  failed: '失敗',
-};
 
 export function SentMessagesTable({
   rows,
@@ -78,10 +71,10 @@ export function SentMessagesTable({
                         ''
                       ))}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2">
-                    {m.delivery_status
-                      ? (DELIVERY_LABEL[m.delivery_status] ?? m.delivery_status)
-                      : ''}
+                  <td
+                    className={`whitespace-nowrap px-3 py-2 ${isDeliveryProblem(m.delivery_status) ? 'text-red-600' : ''}`}
+                  >
+                    {deliveryStatusLabel(m.delivery_status)}
                   </td>
                 </tr>
               ))}
