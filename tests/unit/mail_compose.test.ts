@@ -92,8 +92,9 @@ describe('parseAddressList', () => {
 });
 
 // フォーム通知の差出人はフォームの送信システムで、お客様のアドレスは本文にある。
-// 返信先を画面で 1 件に書き換えられるようにした(2026-10-29)
-describe('resolveReplyTo(返信先の上書き)', () => {
+// 返信先を画面で書き換えられるようにした(2026-10-29)。2026-11-10 から複数可
+// (送信済みメールのコピーで、宛先が複数のメールをそのまま戻せるように)
+describe('resolveReplyTo(宛先の上書き)', () => {
   it('入力が無ければ既定(直近の受信メールの差出人)を使う', () => {
     expect(resolveReplyTo(undefined, ['form@x.com'])).toEqual({ addresses: ['form@x.com'] });
   });
@@ -106,13 +107,16 @@ describe('resolveReplyTo(返信先の上書き)', () => {
     expect(resolveReplyTo(' 顧客 <c@y.jp> ', ['form@x.com'])).toEqual({ addresses: ['c@y.jp'] });
   });
 
-  it('空・不正な形式・2 件以上は黙って既定に戻さずエラーにする(誤送信を防ぐ)', () => {
-    expect(resolveReplyTo('  ', ['form@x.com']).error).toBe('返信先を入力してください');
-    expect(resolveReplyTo('notanaddress', ['form@x.com']).error).toContain(
-      '返信先の形式が不正です',
-    );
-    expect(resolveReplyTo('a@x.com, b@x.com', ['form@x.com']).error).toBe(
-      '返信先は 1 件だけ指定してください',
+  it('カンマ区切りで複数指定できる', () => {
+    expect(resolveReplyTo('a@x.com, b@x.com', ['form@x.com'])).toEqual({
+      addresses: ['a@x.com', 'b@x.com'],
+    });
+  });
+
+  it('空・不正な形式は黙って既定に戻さずエラーにする(誤送信を防ぐ)', () => {
+    expect(resolveReplyTo('  ', ['form@x.com']).error).toBe('宛先を入力してください');
+    expect(resolveReplyTo('a@x.com, notanaddress', ['form@x.com']).error).toContain(
+      '宛先の形式が不正です',
     );
   });
 });
