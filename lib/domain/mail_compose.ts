@@ -86,7 +86,7 @@ export function parseAddressList(input: string | null | undefined): {
 
 /**
  * 返信先の決定(2026-10-29。フォーム通知の差出人はお客様ではないため、画面で書き換えられるようにした)。
- * 入力が無い(undefined)なら既定(直近の受信メールの差出人)を使う。入力があれば 1 件のアドレスに限る。
+ * 入力が無い(undefined)なら既定(直近の受信メールの差出人)を使う。入力があればそのアドレス(カンマ区切りで複数可)。
  */
 export function resolveReplyTo(
   input: string | null | undefined,
@@ -97,12 +97,11 @@ export function resolveReplyTo(
       ? { addresses: fallback }
       : { addresses: [], error: '返信先アドレスが特定できません' };
   }
+  // 2026-11-10 から複数可(送信済みメールのコピーで、宛先が複数のメールをそのまま戻せるように)。
+  // 件数の上限は宛先と CC を合わせて呼び出し側(MAX_RECIPIENTS)で確かめる
   const parsed = parseAddressList(input);
-  if (parsed.error) return { addresses: [], error: parsed.error.replace('宛先', '返信先') };
-  if (parsed.addresses.length === 0) return { addresses: [], error: '返信先を入力してください' };
-  if (parsed.addresses.length > 1) {
-    return { addresses: [], error: '返信先は 1 件だけ指定してください' };
-  }
+  if (parsed.error) return { addresses: [], error: parsed.error };
+  if (parsed.addresses.length === 0) return { addresses: [], error: '宛先を入力してください' };
   return { addresses: parsed.addresses };
 }
 

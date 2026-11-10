@@ -124,12 +124,44 @@ export function useMailAttachments() {
     setErrors([]);
   }, []);
 
+  /**
+   * Storage に置き済みのファイル(送信済みメールのコピーで下書き置き場に複製したもの)で添付を置き換える。
+   * アップロードは要らないので最初から完了扱い。errors には付けられなかった添付の理由を入れる。
+   */
+  const replaceWithUploaded = useCallback(
+    (
+      uploaded: ReadonlyArray<{
+        path: string;
+        filename: string;
+        size: number;
+        contentType: string;
+        inline: boolean;
+      }>,
+      notes: string[] = [],
+    ) => {
+      for (const it of itemsRef.current) if (it.previewUrl) URL.revokeObjectURL(it.previewUrl);
+      setItems(
+        uploaded.map((u) => ({
+          key: crypto.randomUUID(),
+          filename: u.filename,
+          size: u.size,
+          contentType: u.contentType,
+          inline: u.inline,
+          status: 'done' as const,
+          path: u.path,
+        })),
+      );
+      setErrors(notes);
+    },
+    [],
+  );
+
   const uploading = items.some((i) => i.status === 'uploading');
   const submitted: SubmittedAttachment[] = items
     .filter((i) => i.status === 'done' && i.path)
     .map((i) => ({ path: i.path as string, filename: i.filename, inline: i.inline }));
 
-  return { items, errors, uploading, submitted, addFiles, remove, reset };
+  return { items, errors, uploading, submitted, addFiles, remove, reset, replaceWithUploaded };
 }
 
 export type MailAttachmentsState = ReturnType<typeof useMailAttachments>;

@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { MAIL_COPY_SENT_EVENT } from '@/lib/domain/mail_copy';
+import { prepareSentMailCopy } from '@/lib/domain/mail_copy_actions';
 import { groupAddressesByDomain } from '@/lib/domain/mail_folders';
 import type { MailSendMode } from '@/lib/domain/mail_outbox';
 import { replyToMailThread } from '@/lib/domain/mail_send_actions';
@@ -14,7 +16,7 @@ import {
 } from '@/lib/domain/mail_signatures';
 import { composeOutgoingBody } from '@/lib/domain/mail_text';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import {
   MailAttachmentField,
   attachmentBlockReason,
@@ -38,7 +40,8 @@ export interface ReplyBoxOption {
 
 /**
  * スレッドへの返信フォーム(M2)。
- * - 返信先: 既定は直近の受信メールの差出人。1 件に書き換えられ、本文中のアドレスをボタンで入れられる(2026-10-29)
+ * - 宛先: 既定は直近の受信メールの差出人。書き換えられ(2026-11-10 から複数可)、本文中のアドレスをボタンで入れられる(2026-10-29)
+ * - 送信メールのカードの「コピーして編集」(2026-11-10): そのメールの中身(宛先・CC・件名・本文・署名・添付)をこのフォームに入れる
  * - 送信元: 既定はスレッドの受信箱。送信可能な受信箱をプルダウンで選べる
  * - 差出人表示名: 既定は送信元の設定値。その場で書き換え可
  * - 署名: 署名マスタ(有効なもの)から名前で選ぶ(既定は送信元の受信箱の既定署名)。「署名なし」も可
@@ -114,6 +117,61 @@ export function MailReplyForm({
   const att = useMailAttachments();
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  const [copyInfo, setCopyInfo] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // 送信メールのカードの「コピーして編集」(CLAUDE.md §5.15「送信済みメールのコピー」)。
+  // ボタンは画面内のイベントで知らせてくるので、最新の入力内容を見る処理を ref に入れて 1 回だけ登録する
+  const loadCopyRef = useRef<(messageId: string) => void>(() => {});
+  loadCopyRef.current = (messageId: string) => {
+    if (!sendable && !anySendable) {
+      window.alert('この受信箱は受信専用のため、返信できません。');
+      return;
+    }
+    const dirty = text.trim() !== '' || cc.trim() !== '' || att.items.length > 0;
+    if (dirty && !window.confirm('入力中の内容を、コピーしたメールの内容に置き換えますか？'))
+      return;
+    setError(null);
+    setSent(null);
+    setCopyInfo('送信済みメールを読み込んでいます…');
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    startTransition(async () => {
+      const r = await prepareSentMailCopy(messageId);
+      if (!r.copy) {
+        setCopyInfo(null);
+        setError(r.error ?? 'コピーに失敗しました');
+        return;
+      }
+      const c = r.copy;
+      setTo(c.to);
+      setCc(c.cc);
+      setSubject(c.subject);
+      setText(c.text);
+      setSignatureId(c.signatureId);
+      setSignatureTouched(true);
+      // 送信元は送れる受信箱のときだけ切り替える(送れなければ今の送信元のまま)
+      const box = c.boxId != null ? boxes.find((b) => b.id === c.boxId && b.sendable) : undefined;
+      if (box) {
+        setBoxId(String(box.id));
+        if (c.fromName === null && !fromNameTouched) setFromName(box.display_name ?? '');
+      }
+      if (c.fromName !== null) {
+        setFromName(c.fromName);
+        setFromNameTouched(true);
+      }
+      att.replaceWithUploaded(c.attachments, c.notes);
+      setCopyInfo('送信済みメールの内容を入れました。直してから送信してください。');
+      formRef.current?.querySelector<HTMLTextAreaElement>('textarea[aria-label="本文"]')?.focus();
+    });
+  };
+  useEffect(() => {
+    const onCopy = (e: Event) => {
+      const id = (e as CustomEvent<{ messageId?: string }>).detail?.messageId;
+      if (id) loadCopyRef.current(id);
+    };
+    window.addEventListener(MAIL_COPY_SENT_EVENT, onCopy);
+    return () => window.removeEventListener(MAIL_COPY_SENT_EVENT, onCopy);
+  }, []);
 
   if (!sendable && !anySendable) {
     return (
@@ -172,6 +230,7 @@ export function MailReplyForm({
       setTo(replyTo ?? '');
       setScheduledAt('');
       setSendMode(canDirectSend ? 'direct' : 'approval');
+      setCopyInfo(null);
       setSent(r.message ?? '承認依頼を出しました');
       router.refresh();
     });
@@ -180,7 +239,8 @@ export function MailReplyForm({
   return (
     <>
       <form
-        className="space-y-2 rounded border p-3"
+        ref={formRef}
+        className="scroll-mt-4 space-y-2 rounded border p-3"
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);
@@ -188,10 +248,11 @@ export function MailReplyForm({
           setConfirmOpen(true);
         }}
       >
+        {copyInfo && <p className="rounded bg-sky-50 px-2 py-1 text-xs text-sky-800">{copyInfo}</p>}
         <div className="block text-xs">
-          返信先(1 件)
+          宛先(複数のときはカンマ区切り)
           <Input
-            aria-label="返信先"
+            aria-label="宛先"
             className="mt-1 font-mono"
             placeholder="例: customer@example.com"
             value={to}

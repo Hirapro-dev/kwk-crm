@@ -34,6 +34,7 @@ import { formatDateTime } from '@/lib/utils/date';
 import { Paperclip } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { CopySentMailButton } from './CopySentMailButton';
 import { MailAttachmentList } from './MailAttachmentList';
 import { MailBodyViewer } from './MailBodyViewer';
 import { MailImportRulePanel } from './MailImportRulePanel';
@@ -253,9 +254,13 @@ export async function MailThreadPanel({ threadId, embedded, showReply = true }: 
                     </span>
                   )}
                 </div>
-                <time dateTime={m.sent_at ?? m.created_at} className="text-muted-foreground">
-                  {formatDateTime(m.sent_at ?? m.created_at)}
-                </time>
+                <div className="flex items-center gap-2">
+                  {/* 送ったメールの中身を返信フォームにコピーして、直して送れるようにする(2026-11-10) */}
+                  {isOut && canEdit && showReply && <CopySentMailButton messageId={m.id} />}
+                  <time dateTime={m.sent_at ?? m.created_at} className="text-muted-foreground">
+                    {formatDateTime(m.sent_at ?? m.created_at)}
+                  </time>
+                </div>
               </div>
               <div className="mt-1 text-[11px] text-muted-foreground">
                 宛先: {m.to_addresses.join(', ') || '-'}
