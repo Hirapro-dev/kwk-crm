@@ -513,6 +513,8 @@ export async function deleteTaskComment(id: number, taskId: number): Promise<Act
 // ---------------- 添付 ----------------
 
 const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
+/** Asana 取込の外部リンク添付の storage_path の接頭辞(scripts/import/import_asana_json.ts が付ける) */
+const EXTERNAL_ATTACHMENT_PREFIX = 'external:';
 
 /** 添付をアップロードする(FormData: taskId, file)。閲覧できるタスクか確認してからサービスロールで保存 */
 export async function uploadTaskAttachment(
@@ -566,6 +568,13 @@ export async function getTaskAttachmentUrl(
     .maybeSingle();
   if (!data) return { error: '添付が見つかりません' };
   const row = data as { storage_path: string; filename: string | null };
+  // Asana から取り込んだ外部リンクの添付(storage_path が「external:<URL>」)は Storage に実体が無い。
+  // 署名 URL は作れないので、https の URL だけそのまま返す
+  if (row.storage_path.startsWith(EXTERNAL_ATTACHMENT_PREFIX)) {
+    const external = row.storage_path.slice(EXTERNAL_ATTACHMENT_PREFIX.length);
+    if (!/^https:\/\//i.test(external)) return { error: 'この添付は開けません(外部リンクの形式が不正です)' };
+    return { data: { url: external } };
+  }
   const admin = createServiceRoleClient();
   // キーは ASCII 化した名前なので、ダウンロード時は元のファイル名を付ける
   const signed = await admin.storage
@@ -589,7 +598,10 @@ export async function deleteTaskAttachment(id: number, taskId: number): Promise<
   if (me.role !== 'admin' && row.uploaded_by !== me.id)
     return { error: '添付の削除はアップロードした本人と管理者だけができます' };
   const admin = createServiceRoleClient();
-  await admin.storage.from('task-attachments').remove([row.storage_path]);
+  // 外部リンクの添付は Storage に実体が無いので、行だけ消す
+  if (!row.storage_path.startsWith(EXTERNAL_ATTACHMENT_PREFIX)) {
+    await admin.storage.from('task-attachments').remove([row.storage_path]);
+  }
   const { error } = await admin.from('task_attachments').delete().eq('id', id);
   if (error) return { error: `削除に失敗しました: ${error.message}` };
   revalidatePath(`/task/${taskId}`);

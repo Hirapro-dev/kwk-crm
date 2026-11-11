@@ -56,6 +56,16 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
     sort_order: 40,
     is_visible: true,
   },
+  // LP(migration 95 で nav_items に登録済み)。ここに無いと、メニューバー設定・ロール管理の保存が
+  // 「既知の項目ではない」として LP だけ読み飛ばしていた
+  {
+    id: 'lp',
+    label: 'LP',
+    href: '/lp',
+    match_prefix: true,
+    sort_order: 41,
+    is_visible: true,
+  },
   {
     id: 'activities',
     label: '対応歴',

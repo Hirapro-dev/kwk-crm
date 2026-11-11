@@ -64,7 +64,9 @@ export default async function ReportRunPage({ params, searchParams }: PageProps)
   const toNormalHref = `/reports/${report.id}`;
 
   const typeMeta = REPORT_TYPES[report.report_type as keyof typeof REPORT_TYPES] ?? null;
-  const canEdit = !report.is_standard || me.role === 'admin';
+  // 編集できるのは 作成者(標準レポートを除く)か管理者だけ(RLS の reports_update と同じ条件)。
+  // それ以外の人に「編集」を出すと、保存しても 1 行も変わらない
+  const canEdit = me.role === 'admin' || (!report.is_standard && report.created_by === me.id);
 
   // #画像1: サマリー指標が設定されていれば、ヘッダー帯を「件数 + 指定集計値」に置き換える。
   // 未設定なら従来のメタ情報(タイプ/カテゴリ/区分/件数・実行時間)を表示。

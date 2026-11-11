@@ -67,14 +67,28 @@ export async function saveReport(input: {
     !!msg && /shared_with/.test(msg);
 
   if (parsed.data.id) {
-    let { error } = await supabase
+    // 更新できた行を受け取る。作成者でも管理者でもない人の保存は RLS で 0 行になるが、
+    // エラーにはならないため、行数を見ないと「保存されていないのに成功」になる
+    let { data: updatedRows, error } = await supabase
       .from('reports')
       .update({ ...baseValues, shared_with: sharedWith })
-      .eq('id', parsed.data.id);
+      .eq('id', parsed.data.id)
+      .select('id');
     if (error && isMissingSharedWith(error.message)) {
-      ({ error } = await supabase.from('reports').update(baseValues).eq('id', parsed.data.id));
+      ({ data: updatedRows, error } = await supabase
+        .from('reports')
+        .update(baseValues)
+        .eq('id', parsed.data.id)
+        .select('id'));
     }
     if (error) return { ok: false, error: error.message };
+    if (!updatedRows || updatedRows.length === 0) {
+      return {
+        ok: false,
+        error:
+          'このレポートを変更する権限がありません(作成者か管理者のみ変更できます)。複製してから編集してください',
+      };
+    }
     revalidatePath('/reports');
     revalidatePath(`/reports/${parsed.data.id}`);
     return { ok: true, id: parsed.data.id };

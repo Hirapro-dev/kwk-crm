@@ -91,7 +91,8 @@ export async function getNewCustomerSummary(opts: {
     if (opts.to) q = q.lte('info_acquired_date', opts.to);
     if (opts.filters.points.length > 0) q = q.in('info_acquired_points', opts.filters.points);
 
-    const { data, error } = await q.range(fromIdx, fromIdx + PAGE - 1);
+    // 並び順を固定する(順序なしでページを送ると、ページの間で行が重複・欠落しうる)
+    const { data, error } = await q.order('id').range(fromIdx, fromIdx + PAGE - 1);
     if (error) break;
     if (!data || data.length === 0) break;
     rows.push(...(data as typeof rows));

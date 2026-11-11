@@ -118,7 +118,10 @@ export async function loadExistingRows(
   for (let i = 0; i < ids.length; i += batch) {
     const chunk = ids.slice(i, i + batch);
     if (chunk.length === 0) continue;
-    const { data } = await supabase.from(table).select('*').in(idField, chunk);
+    const { data, error } = await supabase.from(table).select('*').in(idField, chunk);
+    // 読み込みに失敗した塊を「既存なし」として扱うと、全件が「新規」に見えたり、
+    // 更新のみの取込で黙って読み飛ばされたりする。失敗は失敗として止める
+    if (error) throw new Error(`既存データの読み込みに失敗しました(${table}): ${error.message}`);
     for (const r of (data ?? []) as Array<Record<string, unknown>>) {
       const idv = r[idField];
       if (idv != null) map.set(String(idv), r);

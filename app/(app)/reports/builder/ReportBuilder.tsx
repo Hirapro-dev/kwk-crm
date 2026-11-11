@@ -236,9 +236,19 @@ export function ReportBuilder({
         groupBy.length > 0
           ? groupBy.map((field, i) => ({ field, level: (i + 1) as 1 | 2 | 3 }))
           : undefined,
-      sort: sort ? [{ field: sort.field, direction: sort.direction }] : undefined,
+      // 画面で編集できるのは 1 つ目の並び順だけ。保存済みの 2 つ目以降・行数の上限・集計後の絞り込みは
+      // 画面に項目が無いので、編集して保存しても消さずに引き継ぐ
+      // (標準レポート「大口会員ランキング」の上位 100 件などが、保存し直すと黙って消えていた)
+      sort: sort
+        ? [
+            { field: sort.field, direction: sort.direction },
+            ...(initial?.definition?.sort?.slice(1).filter((s) => s.field !== sort.field) ?? []),
+          ]
+        : undefined,
+      having: initial?.definition?.having,
+      row_limit: initial?.definition?.row_limit,
     }),
-    [columns, filterRoot, groupBy, sort],
+    [columns, filterRoot, groupBy, sort, initial],
   );
 
   // ----- 表示設定(グルーピング / サマリー)。存在しない列参照は除外 -----

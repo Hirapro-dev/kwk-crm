@@ -230,15 +230,22 @@ export async function moveMailImportRule(
   const idx = rows.findIndex((r) => r.id === id);
   const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
   if (idx < 0 || swapIdx < 0 || swapIdx >= rows.length) return { id };
-  // 同じ sort_order 同士だと入れ替えても順が変わらないため、位置に応じた値を振り直す
-  const a = rows[idx] as { id: number; sort_order: number };
-  const b = rows[swapIdx] as { id: number; sort_order: number };
-  const aOrder = (swapIdx + 1) * 10;
-  const bOrder = (idx + 1) * 10;
-  const r1 = await supabase.from('mail_import_rules').update({ sort_order: aOrder }).eq('id', a.id);
-  if (r1.error) return { error: `更新に失敗しました: ${r1.error.message}` };
-  const r2 = await supabase.from('mail_import_rules').update({ sort_order: bOrder }).eq('id', b.id);
-  if (r2.error) return { error: `更新に失敗しました: ${r2.error.message}` };
+  // 入れ替えた後の並びで、全部のルールに位置どおりの値(10 刻み)を振り直す。
+  // 入れ替える 2 件だけに振ると、ほかのルールが元の値(画面から足したルールは既定の 100)のまま残り、
+  // 関係のないルールの判定順まで変わってしまう。値が変わる行だけ更新する
+  const reordered = [...rows];
+  const moved = reordered[idx] as { id: number; sort_order: number };
+  reordered[idx] = reordered[swapIdx] as { id: number; sort_order: number };
+  reordered[swapIdx] = moved;
+  for (const [i, row] of reordered.entries()) {
+    const order = (i + 1) * 10;
+    if (row.sort_order === order) continue;
+    const res = await supabase
+      .from('mail_import_rules')
+      .update({ sort_order: order })
+      .eq('id', row.id);
+    if (res.error) return { error: `更新に失敗しました: ${res.error.message}` };
+  }
   revalidate();
   return { id };
 }

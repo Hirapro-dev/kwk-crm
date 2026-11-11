@@ -40,12 +40,20 @@ export interface DateRange {
 }
 
 /** YYYY-MM-DD で日付フォーマット */
+// 日付の計算はすべて UTC の暦で行う(下の resolveDateRange が日本時間に 9 時間ずらした時刻を渡す)
 function fmt(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+
+/** 年・月(0 始まり)・日から日付を作る(月・日のはみ出しは繰り上げ・繰り下げ) */
+function ymd(y: number, m: number, d: number): Date {
+  return new Date(Date.UTC(y, m, d));
+}
+
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 /**
  * プリセットキーから日付範囲を計算する。
@@ -55,10 +63,13 @@ export function resolveDateRange(
   preset: DatePresetKey,
   customFrom?: string | null,
   customTo?: string | null,
+  base: Date = new Date(),
 ): DateRange {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
+  // サーバー(Vercel)の時計は UTC。日本時間の暦で「今日・今月」を決めるため 9 時間進めて UTC の暦で読む
+  // (サーバーのローカル時刻で計算していたため、日本時間 0:00〜8:59 は前日・前月になっていた)
+  const now = new Date(base.getTime() + JST_OFFSET_MS);
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
 
   switch (preset) {
     case 'all':
@@ -68,34 +79,34 @@ export function resolveDateRange(
       return { from: t, to: t };
     }
     case 'yesterday': {
-      const yd = fmt(new Date(y, m, now.getDate() - 1));
+      const yd = fmt(ymd(y, m, now.getUTCDate() - 1));
       return { from: yd, to: yd };
     }
     case 'this_month':
       return {
-        from: fmt(new Date(y, m, 1)),
-        to: fmt(new Date(y, m + 1, 0)),
+        from: fmt(ymd(y, m, 1)),
+        to: fmt(ymd(y, m + 1, 0)),
       };
     case 'last_month':
       return {
-        from: fmt(new Date(y, m - 1, 1)),
-        to: fmt(new Date(y, m, 0)),
+        from: fmt(ymd(y, m - 1, 1)),
+        to: fmt(ymd(y, m, 0)),
       };
     case 'last_3_months':
       // 当月含む直近3ヶ月(月初〜当月末)
       return {
-        from: fmt(new Date(y, m - 2, 1)),
-        to: fmt(new Date(y, m + 1, 0)),
+        from: fmt(ymd(y, m - 2, 1)),
+        to: fmt(ymd(y, m + 1, 0)),
       };
     case 'last_6_months':
       return {
-        from: fmt(new Date(y, m - 5, 1)),
-        to: fmt(new Date(y, m + 1, 0)),
+        from: fmt(ymd(y, m - 5, 1)),
+        to: fmt(ymd(y, m + 1, 0)),
       };
     case 'last_12_months':
       return {
-        from: fmt(new Date(y, m - 11, 1)),
-        to: fmt(new Date(y, m + 1, 0)),
+        from: fmt(ymd(y, m - 11, 1)),
+        to: fmt(ymd(y, m + 1, 0)),
       };
     case 'this_year':
       return {

@@ -129,9 +129,10 @@ export async function expireProtects(supabase: SupabaseClient): Promise<number> 
       .select('id'));
   }
 
+  // 失敗を 0 件として返すと、定期実行が「成功・解除 0 件」に見えて気づけない。呼び出し側(cron)に伝える
   if (error) {
     console.error('[protect] expireProtects failed:', error.message);
-    return 0;
+    throw new Error(`プロテクトの期限切れ解除に失敗しました: ${error.message}`);
   }
 
   return data?.length ?? 0;

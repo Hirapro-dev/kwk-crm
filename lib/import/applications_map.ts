@@ -197,12 +197,17 @@ export function convertApplicationRow(
   }
 
   // 担当 / 申込獲得者
-  const ownerRaw = nz(raw['永久担当']);
-  data.owner_name_raw = ownerRaw;
-  data.owner_id = resolveOwner(ownerRaw, maps);
-  const acqRaw = nz(raw['申込獲得者']);
-  data.acquirer_name_raw = acqRaw;
-  data.acquirer_id = resolveOwner(acqRaw, maps);
+  // 列が無ければ触らない(既存値を保つ。§6.1b「CSV に無い列を触らない」。ほかの列と同じ扱い)
+  if (headers.has('永久担当')) {
+    const ownerRaw = nz(raw['永久担当']);
+    data.owner_name_raw = ownerRaw;
+    data.owner_id = resolveOwner(ownerRaw, maps);
+  }
+  if (headers.has('申込獲得者')) {
+    const acqRaw = nz(raw['申込獲得者']);
+    data.acquirer_name_raw = acqRaw;
+    data.acquirer_id = resolveOwner(acqRaw, maps);
+  }
 
   // 直接マッピング(CSVにある列のみ)
   for (const m of DIRECT_FIELDS) {

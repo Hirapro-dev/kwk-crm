@@ -25,10 +25,20 @@ self.addEventListener('notificationclick', (event) => {
   const url = (event.notification.data && event.notification.data.url) || '/task';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      // 行き先を変えられるのは、この Service Worker の範囲(/task)にあるタブだけ。
+      // CRM 本体やメーラーのタブを選ぶと、前面に出るだけでタスクが開かない
       for (const c of clients) {
-        if ('focus' in c) {
-          c.navigate(url);
-          return c.focus();
+        let inScope = false;
+        try {
+          inScope = new URL(c.url).pathname.startsWith('/task');
+        } catch (_) {
+          inScope = false;
+        }
+        if (inScope && 'focus' in c && 'navigate' in c) {
+          return c
+            .navigate(url)
+            .then((moved) => (moved || c).focus())
+            .catch(() => self.clients.openWindow(url));
         }
       }
       return self.clients.openWindow(url);

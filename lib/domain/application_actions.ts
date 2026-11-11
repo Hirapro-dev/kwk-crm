@@ -9,62 +9,12 @@ import {
   startDateToTimestamp,
 } from './application_create_schema';
 import { buildApplicationPatch } from './application_edit';
-import { ALL_APP_STATUSES } from './applications';
 import { getCurrentUser } from './auth';
 import { mergeInquiryExtra } from './inquiry_extra_edit';
 import { getVisibleFields } from './object_metadata';
 
-/**
- * 申込ステータス遷移(仕様書 §3 / §5.6)。
- * 仕様書ER図に従い: 対応中 → 未購入/完了 → 出金/資金移動
- *
- * 厳密な遷移ルールは Phase 7 で確定。本フェーズではどの遷移も許可するが、
- * 後ろ向き(完了 → 対応中 等)の遷移は警告のみ。
- */
-
 // 実データの申込IDは M- + 9桁ゼロ埋め(例 M-000051826)。旧仕様の 7 桁表記は誤りだったため 2026-09-16 に修正
 const APPLICATION_ID_RE = /^M-\d{9}$/;
-
-const UpdateStatusSchema = z.object({
-  application_id: z.string().regex(APPLICATION_ID_RE),
-  status: z.enum(ALL_APP_STATUSES as [string, ...string[]]).optional(),
-});
-
-export interface UpdateStatusResult {
-  ok: boolean;
-  error?: string;
-}
-
-export async function updateApplicationStatus(input: {
-  application_id: string;
-  status?: string;
-}): Promise<UpdateStatusResult> {
-  const parsed = UpdateStatusSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? '入力エラー' };
-  }
-  const me = await getCurrentUser();
-  if (me.role === 'viewer') {
-    return { ok: false, error: '閲覧専用ロールでは操作できません' };
-  }
-
-  const supabase = await createClient();
-  const update: Record<string, unknown> = {};
-  if (parsed.data.status !== undefined) update.status = parsed.data.status;
-  if (Object.keys(update).length === 0) {
-    return { ok: false, error: '更新する項目がありません' };
-  }
-
-  const { error } = await supabase
-    .from('applications')
-    .update(update)
-    .eq('id', parsed.data.application_id);
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath('/applications');
-  revalidatePath(`/applications/${parsed.data.application_id}`);
-  return { ok: true };
-}
 
 /**
  * 申込の新規登録(申込一覧の「新規登録」。CLAUDE.md §5.6 / §8.1)。

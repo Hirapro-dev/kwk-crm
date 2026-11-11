@@ -173,9 +173,14 @@ export async function getProtectExpiringSoon(userId: string): Promise<ProtectSec
   }
 
   // 該当なし → 自分+同名アカウントの有効プロテクトを最大20件返す
-  const { data: allData, error: allErr } = await supabase
+  // 表示は 20 件までだが、件数は全件を数える(行数をそのまま件数にすると 20 で頭打ちになる)
+  const {
+    data: allData,
+    error: allErr,
+    count: allCount,
+  } = await supabase
     .from('members')
-    .select(SELECT)
+    .select(SELECT, { count: 'exact' })
     .is('deleted_at', null)
     .not('protect_expires_at', 'is', null)
     .gt('protect_expires_at', now)
@@ -185,7 +190,7 @@ export async function getProtectExpiringSoon(userId: string): Promise<ProtectSec
 
   if (allErr) return { rows: [], expiringSoonCount: 0, totalCount: 0 };
   const allRows = (allData ?? []) as unknown as ProtectExpiringMember[];
-  return { rows: allRows, expiringSoonCount: 0, totalCount: allRows.length };
+  return { rows: allRows, expiringSoonCount: 0, totalCount: allCount ?? allRows.length };
 }
 
 /** 過去 24 時間の自分の対応歴を返す(ダッシュボード用)。 */

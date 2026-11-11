@@ -95,6 +95,9 @@ export async function createField(input: {
     is_visible_detail: parsed.data.is_visible_detail,
     is_system: false,
     is_custom: true,
+    // 画面から足す項目は DB の列を作らない(値は extra に入る)。指定しないと既定の true になり、
+    // レポートが存在しない列を読みに行って失敗し、編集フォームでも値を保存できなかった
+    is_in_db: false,
     sort_order_list: nextList,
     sort_order_detail: nextDetail,
     description: parsed.data.description || null,
