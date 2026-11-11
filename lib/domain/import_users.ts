@@ -11,7 +11,12 @@
  */
 
 import { type RowError, parseCsv } from '@/lib/import/parse';
-import { type UserRecord, type UserResolveMaps, convertUserRow } from '@/lib/import/users_map';
+import {
+  type ExistingUser,
+  type UserRecord,
+  type UserResolveMaps,
+  convertUserRow,
+} from '@/lib/import/users_map';
 // 取込はサービスロールで実行(auth.uid()=null → 監査ログに取込を記録しない)。
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
@@ -41,16 +46,18 @@ function parseAll(csvTexts: string[]): Array<Record<string, string>> {
 async function buildResolveMaps(supabase: Db): Promise<UserResolveMaps> {
   const idByLegacy = new Map<string, string>();
   const idByEmail = new Map<string, string>();
-  const { data } = await supabase.from('users').select('id, legacy_sf_id, email');
-  for (const u of (data ?? []) as Array<{
-    id: string;
-    legacy_sf_id: string | null;
-    email: string | null;
-  }>) {
+  const existingById = new Map<string, ExistingUser>();
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, legacy_sf_id, email, first_name, last_name, full_name, is_active, role');
+  // 読めないまま進めると、既存ユーザーを新規として作り直したり、既存の値を残せなかったりする
+  if (error) throw new Error(`既存ユーザーの読み込みに失敗しました: ${error.message}`);
+  for (const u of (data ?? []) as Array<ExistingUser & { id: string; email: string | null }>) {
     if (u.legacy_sf_id) idByLegacy.set(u.legacy_sf_id, u.id);
     if (u.email) idByEmail.set(u.email.toLowerCase(), u.id);
+    existingById.set(u.id, u);
   }
-  return { idByLegacy, idByEmail };
+  return { idByLegacy, idByEmail, existingById };
 }
 
 function convertAll(

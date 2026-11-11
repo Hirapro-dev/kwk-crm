@@ -11,12 +11,13 @@
  * 行変換は lib/import/inquiries.ts(純粋関数)を使用。
  */
 
-import { classifyAgainstDb } from '@/lib/import/diff';
+import { type Classification, classifyRecords, loadExistingRows } from '@/lib/import/diff';
 import {
   INQUIRY_COMMON_KEYS,
   type InquiryRecord,
   convertInquiryRow,
   inquiriesExtraHeaderKeys,
+  mergeInquiryWithExisting,
 } from '@/lib/import/inquiries';
 import { type RowError, parseCsv } from '@/lib/import/parse';
 // 取込はサービスロールで実行(auth.uid()=null → 監査ログに取込を記録しない)。
@@ -106,6 +107,25 @@ function convertAll(
   return { records: [...byId.values()], errors };
 }
 
+/**
+ * 既存の問合せを読み、CRM で入れた値(会員の紐付け・備考などの可変項目・空でない共通項目)を残すよう
+ * CSV の行に重ねてから、新規 / 更新 / スキップ に分類する(mergeInquiryWithExisting。2026-11-11)。
+ */
+async function classifyInquiries(
+  supabase: Db,
+  records: InquiryRecord[],
+  updateOnly: boolean,
+): Promise<Classification<InquiryRecord>> {
+  const existing = await loadExistingRows(
+    supabase,
+    'inquiries',
+    'id',
+    records.map((r) => r.id),
+  );
+  const merged = records.map((r) => mergeInquiryWithExisting(r, existing.get(r.id)));
+  return classifyRecords(merged, (r) => r.id, existing, { updateOnly });
+}
+
 export async function previewInquiriesCsv(
   csvTexts: string[],
   updateOnly = false,
@@ -130,13 +150,10 @@ export async function previewInquiriesCsv(
   const { records, errors } = convertAll(rawRows, formMap, validMembers);
 
   // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定
-  const { toUpsert, newCount, updateCount, skippedCount, existingIds } = await classifyAgainstDb(
+  const { toUpsert, newCount, updateCount, skippedCount, existingIds } = await classifyInquiries(
     supabase,
-    'inquiries',
-    'id',
     records,
-    (r) => r.id,
-    { updateOnly },
+    updateOnly,
   );
   const upsertIds = new Set(toUpsert.map((r) => r.id));
   const sample: PreviewResult['sample'] = [];
@@ -227,13 +244,10 @@ export async function commitInquiriesCsv(
   }
 
   // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定。変更なしは upsert しない。
-  const { toUpsert, newCount, updateCount, skippedCount } = await classifyAgainstDb(
+  const { toUpsert, newCount, updateCount, skippedCount } = await classifyInquiries(
     supabase,
-    'inquiries',
-    'id',
     records,
-    (r) => r.id,
-    { updateOnly },
+    updateOnly,
   );
 
   // 3) inquiries upsert(問合せIDで突合)

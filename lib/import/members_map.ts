@@ -10,6 +10,7 @@
  * 純粋関数。DB アクセスは行わない(owner 解決マップは action 側で構築)。
  */
 
+import { isProjectAmountKey } from '@/lib/domain/member_amounts';
 import { coerceValue, isCoerceErr } from './coerce';
 import type { ImportFieldType } from './schema';
 
@@ -94,6 +95,30 @@ function nz(v: unknown): string | null {
 function lenient(type: ImportFieldType, raw: unknown): string | number | boolean | null {
   const r = coerceValue(type, raw == null ? '' : String(raw));
   return isCoerceErr(r) ? null : r.value;
+}
+
+/** 申込から自動計算する extra のキー(§5.4。会員 CSV の値では上書きしない) */
+export function isComputedMemberAmountKey(key: string): boolean {
+  return isProjectAmountKey(key) || key === '累計入金額';
+}
+
+/**
+ * 既存の会員の extra に CSV の値を重ねる(2026-11-11)。
+ * - 申込から自動計算する 利用額・出金額・累計入金額 は CSV から書かない(既存の値を残す。§5.4)
+ * - CSV に値がある列だけ差し替え、値が空の列・CSV に無い列は既存の値を残す
+ *   (画面で編集した 電話番号2・3 など、CRM 側で入れた値を取込で消さない)
+ * 以前は extra を CSV の値で丸ごと置き換えていた。
+ */
+export function mergeMemberExtra(
+  existing: Record<string, unknown> | null | undefined,
+  incoming: Record<string, string>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...(existing ?? {}) };
+  for (const [k, v] of Object.entries(incoming)) {
+    if (isComputedMemberAmountKey(k)) continue;
+    out[k] = v;
+  }
+  return out;
 }
 
 /**

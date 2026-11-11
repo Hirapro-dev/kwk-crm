@@ -28,24 +28,17 @@ export interface MapResult {
   totalRows: number;
 }
 
-/** CSV 文字列を {ヘッダー: 値文字列} の配列にする */
+/**
+ * CSV 文字列を {ヘッダー: 値文字列} の配列にする。値は整形せずに文字列のまま返す(parseCsvRaw と同じ)。
+ * 以前は xlsx の整形(raw: false)を通していたため、"2018/7/24 22:06" が "7/24/18" になって時刻が消え、
+ * "1925/3/4" が "3/4/25"(→ 2025 年)に、"2026/09" が "9/1/26" になっていた(2026-11-11 修正)。
+ * 日付・数値の解釈は coerce.ts が行う(桁区切りの金額・先頭 0 の電話番号も文字列のまま渡る)。
+ */
 export function parseCsv(csvText: string): Array<Record<string, string>> {
-  const wb = XLSX.read(csvText, { type: 'string', raw: false });
-  const first = wb.SheetNames[0];
-  if (!first) return [];
-  const ws = wb.Sheets[first];
-  if (!ws) return [];
-  return XLSX.utils.sheet_to_json<Record<string, string>>(ws, {
-    defval: '',
-    raw: false,
-  });
+  return parseCsvRaw(csvText);
 }
 
-/**
- * CSV 文字列を値を加工せずに {ヘッダー: 文字列} の配列にする。
- * parseCsv(raw: false)は "2026-09-23 08:00:35" のような日時を "9/23/26" に整形して時刻を落とすため、
- * 日時をそのまま読みたい取込(記事反応のクリック履歴 CSV。§5.13b)はこちらを使う。
- */
+/** CSV 文字列を値を加工せずに {ヘッダー: 文字列} の配列にする */
 export function parseCsvRaw(csvText: string): Array<Record<string, string>> {
   const wb = XLSX.read(csvText, { type: 'string', raw: true });
   const first = wb.SheetNames[0];

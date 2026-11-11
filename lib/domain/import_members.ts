@@ -11,12 +11,13 @@
  * 行変換は lib/import/members_map.ts(純粋関数)を使用。
  */
 
-import { classifyAgainstDb } from '@/lib/import/diff';
+import { type Classification, classifyRecords, loadExistingRows } from '@/lib/import/diff';
 import {
   type MemberRecord,
   type OwnerMaps,
   convertMemberRow,
   membersExtraHeaderKeys,
+  mergeMemberExtra,
 } from '@/lib/import/members_map';
 import { type RowError, parseCsv } from '@/lib/import/parse';
 // 取込(preview/commit)はサービスロールで実行する。
@@ -81,6 +82,31 @@ function convertAll(
   return { records: [...byId.values()], errors };
 }
 
+/**
+ * 既存の会員を読み、extra を併合してから 新規 / 更新 / スキップ に分類する(mergeMemberExtra。2026-11-11)。
+ * 申込から自動計算する 利用額・出金額・累計入金額 は CSV で上書きせず、CSV の値が空の項目・CSV に無い項目も残す。
+ */
+async function classifyMembers(
+  supabase: Db,
+  records: MemberRecord[],
+  updateOnly: boolean,
+): Promise<Classification<MemberRecord>> {
+  const existing = await loadExistingRows(
+    supabase,
+    'members',
+    'id',
+    records.map((r) => r.id),
+  );
+  for (const r of records) {
+    const ex = existing.get(r.id);
+    r.extra = mergeMemberExtra(
+      (ex?.extra as Record<string, unknown> | null) ?? null,
+      (r.extra as Record<string, string> | undefined) ?? {},
+    );
+  }
+  return classifyRecords(records, (r) => r.id, existing, { updateOnly });
+}
+
 export async function previewMembersCsv(
   csvTexts: string[],
   updateOnly = false,
@@ -104,13 +130,10 @@ export async function previewMembersCsv(
   const { records, errors } = convertAll(rawRows, ownerMaps);
 
   // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定
-  const { toUpsert, newCount, updateCount, skippedCount, existingIds } = await classifyAgainstDb(
+  const { toUpsert, newCount, updateCount, skippedCount, existingIds } = await classifyMembers(
     supabase,
-    'members',
-    'id',
     records,
-    (r) => r.id,
-    { updateOnly },
+    updateOnly,
   );
 
   const upsertIds = new Set(toUpsert.map((r) => r.id));
@@ -182,13 +205,10 @@ export async function commitMembersCsv(
   }
 
   // 既存行と突合して 新規/更新/スキップ(=変更なし) を判定。変更なしは upsert しない。
-  const { toUpsert, newCount, updateCount, skippedCount } = await classifyAgainstDb(
+  const { toUpsert, newCount, updateCount, skippedCount } = await classifyMembers(
     supabase,
-    'members',
-    'id',
     records,
-    (r) => r.id,
-    { updateOnly },
+    updateOnly,
   );
 
   let upserted = 0;

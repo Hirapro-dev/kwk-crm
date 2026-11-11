@@ -36,6 +36,8 @@ import { getCurrentUser } from './auth';
 import type { CommitResult, PreviewResult } from './import_actions';
 
 const BATCH = 500;
+/** 既存行を読むときの 1 ページの行数(PostgREST の 1 回の上限と同じ) */
+const LEGACY_PAGE = 1000;
 const MAX_ROWS = 100_000;
 const MAX_REMARKS = 200;
 const MAX_MEDIA = 100;
@@ -91,7 +93,7 @@ function parseAndDedupe(
   const rawRows: Array<Record<string, string>> = [];
   try {
     for (const t of csvTexts) {
-      // 日時を整形せずそのまま読む(parseCsv は時刻を落とす)
+      // 日時を整形せずそのまま読む
       if (t && t.trim() !== '') rawRows.push(...parseCsvRaw(t));
     }
   } catch (e) {
@@ -179,15 +181,23 @@ async function matchLegacyForImport(
   reactedDate: string | null,
 ): Promise<LegacyMatch[]> {
   if (rows.length === 0) return [];
-  const { data, error } = await supabase
-    .from('article_reactions')
-    .select('id, member_id, member_name, reacted_date')
-    .eq('detail', remarks)
-    .is('email', null)
-    .is('deleted_at', null)
-    .limit(5000);
-  if (error) throw new Error(`既存の記事反応の確認に失敗: ${error.message}`);
-  const legacy = (data ?? []) as LegacyReactionRow[];
+  // PostgREST は 1 回 1,000 行までしか返さない(.limit(5000) でも 1,000 で切れる)。
+  // 切れた分は突合できずに重複行として作られるので、id 順にページを送って全部読む
+  const legacy: LegacyReactionRow[] = [];
+  for (let from = 0; ; from += LEGACY_PAGE) {
+    const { data, error } = await supabase
+      .from('article_reactions')
+      .select('id, member_id, member_name, reacted_date')
+      .eq('detail', remarks)
+      .is('email', null)
+      .is('deleted_at', null)
+      .order('id')
+      .range(from, from + LEGACY_PAGE - 1);
+    if (error) throw new Error(`既存の記事反応の確認に失敗: ${error.message}`);
+    const page = (data ?? []) as LegacyReactionRow[];
+    legacy.push(...page);
+    if (page.length < LEGACY_PAGE) break;
+  }
   if (legacy.length === 0) return [];
   const memberIds = [...new Set(legacy.map((l) => l.member_id).filter((v): v is string => !!v))];
   const memberEmails = new Map<string, string[]>();
