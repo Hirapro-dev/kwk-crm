@@ -71,11 +71,28 @@ function validateBody(body: string): string | null {
   return null;
 }
 
-/** 保存時の状態: 承認依頼は承認待ち、そのまま送信は本人が承認した扱い(承認済み) */
-function statusFields(mode: MailSendMode, userId: string) {
-  return mode === 'direct'
-    ? { status: 'approved', approved_by: userId, approved_at: new Date().toISOString() }
-    : { status: 'pending' };
+/**
+ * そのまま送信のとき、添付の登録が済んでから「承認待ち → 承認済み」にする(本人が承認した扱い)。
+ * 最初から承認済みで保存すると、添付を登録する前に毎分の定期実行が拾い、添付なしで送ってしまう恐れがある。
+ * 承認依頼のときは何もしない。失敗したら理由を返す(メールは承認待ちのまま残る)。
+ */
+async function approveIfDirect(
+  admin: ReturnType<typeof createServiceRoleClient>,
+  outboxId: string,
+  mode: MailSendMode,
+  userId: string,
+): Promise<string | null> {
+  if (mode !== 'direct') return null;
+  const { data, error } = await admin
+    .from('mail_outbox')
+    .update({ status: 'approved', approved_by: userId, approved_at: new Date().toISOString() })
+    .eq('id', outboxId)
+    .eq('status', 'pending')
+    .select('id');
+  if (error || !data || data.length === 0) {
+    return 'そのまま送信の準備に失敗しました。メールは承認待ちに残っています。送信待ちの一覧から送り直してください';
+  }
+  return null;
 }
 
 /** 保存の後始末。そのまま送信で予約が無ければその場で送る(予約ありは定期実行が送る) */
@@ -117,7 +134,9 @@ async function attachOrCancel(
       cancelled_at: new Date().toISOString(),
       last_error: `添付の登録に失敗したため取り消しました: ${err}`.slice(0, 1000),
     })
-    .eq('id', outboxId);
+    .eq('id', outboxId)
+    // 送信中・送信済みになったものを取消で上書きしない
+    .in('status', ['pending', 'approved']);
   return `添付の登録に失敗しました: ${err}`;
 }
 
@@ -228,7 +247,8 @@ export async function replyToMailThread(input: {
       in_reply_to: headers.inReplyTo,
       references_header: headers.references,
       scheduled_at: schedule.at,
-      ...statusFields(send.mode, me.id),
+      // いったん承認待ちで保存する(そのまま送信は、添付の登録後に approveIfDirect で承認済みにする)
+      status: 'pending',
       created_by: me.id,
     })
     .select('id')
@@ -237,6 +257,8 @@ export async function replyToMailThread(input: {
   const outboxId = (data as { id: string }).id;
   const attErr = await attachOrCancel(admin, outboxId, me.id, att.rows);
   if (attErr) return { error: attErr };
+  const approveErr = await approveIfDirect(admin, outboxId, send.mode, me.id);
+  if (approveErr) return { error: approveErr };
   // 承認待ちの間はスレッドを「承認待ち」にする(一覧の「対応中」タブに出る。migration 129)
   await syncThreadStatusWithOutbox(admin, thread.id);
 
@@ -300,7 +322,8 @@ export async function createMailThreadAndSend(input: {
       subject,
       text_body: `${input.body.replace(/\s+$/, '')}\n`,
       scheduled_at: schedule.at,
-      ...statusFields(send.mode, me.id),
+      // いったん承認待ちで保存する(そのまま送信は、添付の登録後に approveIfDirect で承認済みにする)
+      status: 'pending',
       created_by: me.id,
     })
     .select('id')
@@ -309,6 +332,8 @@ export async function createMailThreadAndSend(input: {
   const outboxId = (data as { id: string }).id;
   const attErr = await attachOrCancel(admin, outboxId, me.id, att.rows);
   if (attErr) return { error: attErr };
+  const approveErr = await approveIfDirect(admin, outboxId, send.mode, me.id);
+  if (approveErr) return { error: approveErr };
 
   return finishSubmission(outboxId, send.mode, schedule.at);
 }

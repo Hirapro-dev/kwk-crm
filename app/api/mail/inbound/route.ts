@@ -161,7 +161,11 @@ export async function POST(request: Request): Promise<Response> {
         .update({ delivery_status: deliveryStatus })
         .eq('provider_message_id', messageId)
         .eq('direction', 'out');
-      await (deliveryStatus === 'sent' ? q.eq('delivery_status', 'queued') : q);
+      // 通知は宛先ごとに届く。1 人が不達・もう 1 人が配信成功のとき、後から届いた「配信済み」で
+      // 不達(bounced / failed)を上書きすると赤字の表示が消えるので、配信済みにするのは 確認中・送信済み からだけ
+      if (deliveryStatus === 'sent') await q.eq('delivery_status', 'queued');
+      else if (deliveryStatus === 'delivered') await q.in('delivery_status', ['queued', 'sent']);
+      else await q;
     }
     return json({ ok: true, type: kind });
   }
@@ -461,13 +465,19 @@ export async function POST(request: Request): Promise<Response> {
         skippedAttachments++;
         continue;
       }
-      await supabase.from('mail_attachments').insert({
+      const { error: attachRowError } = await supabase.from('mail_attachments').insert({
         message_id: messageRowId,
         filename: inboundAttachmentFilename(att.filename),
         content_type: att.contentType || null,
         size_bytes: size,
         storage_path: storagePath,
       });
+      // 行の登録に失敗した添付は画面に出ないので、保存できた数には入れない
+      if (attachRowError) {
+        console.error('[mail inbound] 添付の登録に失敗しました', { messageRowId });
+        skippedAttachments++;
+        continue;
+      }
       savedAttachments++;
     } catch {
       // 添付1件の失敗でメール本体の取り込みを失敗扱いにはしない

@@ -10,7 +10,7 @@ KAWARA版/AI極(投資情報サービス)向け、自社最適化CRMシステム
 
 - **フロント**: Next.js 15 (App Router) + TypeScript + Tailwind CSS + shadcn/ui
 - **認証 / DB**: Supabase (Auth + Postgres Pro)
-- **パッケージ管理**: pnpm
+- **パッケージ管理**: npm(`package-lock.json`。Node.js 24.x)
 - **Lint / Format**: Biome
 - **テスト**: Vitest (unit) + Playwright (E2E)
 - **CI**: GitHub Actions
@@ -20,7 +20,7 @@ KAWARA版/AI極(投資情報サービス)向け、自社最適化CRMシステム
 ### 1. 依存関係インストール
 
 ```bash
-pnpm install
+npm install
 ```
 
 ### 2. 環境変数設定
@@ -38,15 +38,15 @@ Supabase プロジェクトを作成し、`.env.local` に以下を設定:
 ### 3. ローカル DB を立ち上げる(任意)
 
 ```bash
-pnpm dlx supabase start
-pnpm dlx supabase db reset   # マイグレーション適用
-pnpm db:types                # TypeScript 型生成
+npx supabase start
+npx supabase db reset   # マイグレーション適用
+npm run db:types                # TypeScript 型生成
 ```
 
 ### 4. 開発サーバー起動
 
 ```bash
-pnpm dev
+npm run dev
 # → http://localhost:3000
 ```
 
@@ -91,14 +91,14 @@ pnpm dev
 ## スクリプト
 
 ```bash
-pnpm dev          # 開発サーバー
-pnpm build        # 本番ビルド
-pnpm lint         # Biome lint
-pnpm lint:fix     # 自動修正
-pnpm typecheck    # TypeScript型チェック
-pnpm test         # Vitest
-pnpm test:e2e     # Playwright
-pnpm db:types     # Supabase 型自動生成
+npm run dev          # 開発サーバー
+npm run build        # 本番ビルド
+npm run lint         # Biome lint
+npm run lint:fix     # 自動修正
+npm run typecheck    # TypeScript型チェック
+npm test         # Vitest
+npm run test:e2e # Playwright
+npm run db:types     # Supabase 型自動生成
 ```
 
 ## 注意事項(仕様書 §12 / §15 抜粋)

@@ -182,17 +182,25 @@ export function MemberEditDialog({
   const handleSubmit = () => {
     setError(null);
     startTransition(async () => {
-      // admin のときだけプロテクト項目を送信する
-      const protectPayload = isAdmin
-        ? {
-            protect_by_user_id: protectUserId || null,
-            protect_expires_at: protectUserId
-              ? protectUnlimited
-                ? '2099-12-31'
-                : protectDate || null
-              : null,
-          }
-        : {};
+      // admin が プロテクト者・期限・無期限 のどれかを実際に変えたときだけプロテクト項目を送信する。
+      // (変えていないのに毎回送ると、期限の時刻が日付だけに切り詰められて短くなり、
+      //  プロテクトの無い会員には保存のたびに「解除日時 = いま」が付いてしまう)
+      const protectChanged =
+        protectUserId !== (member.protect_by_user_id ?? '') ||
+        protectUnlimited !== initialUnlimited ||
+        (!protectUnlimited &&
+          protectDate !== (initialUnlimited ? '' : toDateInput(member.protect_expires_at)));
+      const protectPayload =
+        isAdmin && protectChanged
+          ? {
+              protect_by_user_id: protectUserId || null,
+              protect_expires_at: protectUserId
+                ? protectUnlimited
+                  ? '2099-12-31'
+                  : protectDate || null
+                : null,
+            }
+          : {};
       // DB カラムと extra のキーを分けて送る(extra は許可キーだけを差し替える)
       const columnValues: Record<string, string | boolean> = {};
       const extraValues: Record<string, string> = {};

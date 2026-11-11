@@ -27,6 +27,9 @@ export const DEV_AUTH_USERS: Record<string, AppUser & { password: string }> = {
 };
 
 export function isDevAuthEnabled(): boolean {
+  // 本番ビルド(next build / Vercel)では、環境変数が入っていても有効にしない。
+  // 変数 1 つの設定ミスで、固定のユーザー名・パスワードで管理者として入れてしまうのを防ぐ
+  if (process.env.NODE_ENV === 'production') return false;
   return process.env.DEV_AUTH_BYPASS === '1';
 }
 

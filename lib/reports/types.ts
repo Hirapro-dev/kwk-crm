@@ -2,7 +2,7 @@
  * 仕様書 §9.3 レポートタイプ定義 (RT01-RT10)
  *
  * このファイルはレポートタイプのメタデータを TypeScript の型と定数として保持する。
- * 実際の SQL 生成は lib/reports/builder.ts が、ホワイトリスト方式で安全に行う。
+ * 実際の SQL 生成は lib/reports/builder_v2.ts が、ホワイトリスト方式で安全に行う。
  */
 
 export type ReportTypeId =

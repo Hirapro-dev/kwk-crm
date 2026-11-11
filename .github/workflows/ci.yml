@@ -3,14 +3,14 @@ name: CI
 # 仕様書 §10 Phase 0: lint + type check + build
 #
 # 方針: 既存コードには手を入れずに導入する。
-#   - typecheck / build は現状パスするため「失敗させる」ゲートにする
-#   - lint / test は既存の未解消な指摘・失敗が残っているため、当面は
+#   - typecheck / build / test は現状パスするため「失敗させる」ゲートにする
+#     (test は 2026-11-11 時点で全件成功。それまでは 1 件失敗が残っていたため参考扱いだった)
+#   - lint は既存の未解消な指摘が残っているため、当面は
 #     continue-on-error で「結果を見えるようにするだけ」に留める
 #     (ここをゲートにすると全PRが即失敗し、開発が止まるため)
 #
 #   TODO: 既存の指摘を解消したら continue-on-error を外してゲート化する
-#     - lint: Biome 14 errors / 2 warnings (既存コードのフォーマット・key={i} 等)
-#     - test: tests/unit/report_builder.test.ts が1件失敗 (レポートv1ビルダー)
+#     - lint: Biome 約 470 errors / 90 warnings (2026-11-11 時点。大半は自動修正できる書き方の指摘)
 on:
   push:
     branches: [main]
@@ -56,7 +56,5 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-anon-key
         run: npm run build
 
-      # --- 参考情報(失敗してもCIは止めない) ---
       - name: Unit tests
-        continue-on-error: true
         run: npm test

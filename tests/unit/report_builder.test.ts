@@ -163,6 +163,27 @@ describe('buildReportQuery(仕様書 §9.8)', () => {
     expect(q.params).toEqual(['%山田%', 1000000]);
   });
 
+  // 意図: フィルタの AND / OR は SQL にそのまま入る。型は 'AND' | 'OR' でも、直接送られた定義には
+  // 任意の文字列が入りうるので、AND / OR 以外は AND として扱い SQL に混ぜない(§9.8 ホワイトリスト)
+  it('フィルタの logic が AND / OR 以外のときは SQL に入れず AND として扱う', () => {
+    const q = buildReportQuery(
+      'RT01',
+      {
+        columns: [{ id: 'c1', source: 'm.id', label: '会員ID' }],
+        filters: {
+          logic: 'OR 1=1) OR (1=1' as unknown as 'AND',
+          conditions: [
+            { field: 'm.name', op: 'contains', value: '山田' },
+            { field: 'm.name', op: 'contains', value: '田中' },
+          ],
+        },
+      },
+      CURRENT_USER,
+    );
+    expect(q.sql).not.toContain('1=1');
+    expect(q.sql).toContain('m.name ILIKE $1 AND m.name ILIKE $2');
+  });
+
   // 意図: exec_report_sql はパラメータを text で束縛するので、数値・日付の列との比較は値側に型を付けないと
   // 「operator does not exist: numeric < text」になる(2026-09-25 の不具合。申込一覧の 入金額 < 10000000)
   it('数値・日付の比較にはキャストを付け、文字列の比較と部分一致には付けない', () => {

@@ -71,6 +71,8 @@ export async function getProtectSummary(filter: {
       .is('deleted_at', null)
       .not('protect_expires_at', 'is', null)
       .gt('protect_expires_at', now)
+      // 並び順を固定する(順序なしでページを送ると、ページの間で行が重複・欠落しうる)
+      .order('id')
       .range(offset, offset + PAGE - 1);
     if (error) throw new Error(`プロテクト集計に失敗: ${error.message}`);
     const rows = data ?? [];

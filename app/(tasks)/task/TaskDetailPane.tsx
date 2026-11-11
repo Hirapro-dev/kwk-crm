@@ -30,6 +30,9 @@ export async function TaskDetailPane({
   ]);
   return (
     <TaskDetail
+      // 一覧で別のタスクを選んだら作り直す。key が無いと ?task= が変わっても同じ部品が使い回され、
+      // 名前・期日・担当などの入力欄に前のタスクの値が残り、そのまま保存すると別のタスクを上書きしていた
+      key={task.id}
       task={task}
       sections={sections}
       users={users.map((u) => ({

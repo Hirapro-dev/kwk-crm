@@ -85,7 +85,8 @@ export async function getFormSummary(opts: {
     if (opts.from) q = q.gte('registered_at', `${opts.from}T00:00:00+09:00`);
     if (opts.to) q = q.lte('registered_at', `${opts.to}T23:59:59.999+09:00`);
 
-    const { data, error } = await q.range(fromIdx, fromIdx + PAGE - 1);
+    // 並び順を固定する(順序なしでページを送ると、ページの間で行が重複・欠落しうる)
+    const { data, error } = await q.order('id').range(fromIdx, fromIdx + PAGE - 1);
     if (error) break;
     if (!data || data.length === 0) break;
     rows.push(...(data as unknown as InquiryRow[]));

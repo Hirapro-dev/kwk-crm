@@ -365,7 +365,10 @@ function buildFilterGroup(
     }
   }
   if (parts.length === 0) return '1 = 1';
-  return parts.join(` ${group.logic} `);
+  // logic は SQL にそのまま入るので、AND / OR 以外は受け付けない(§9.8 ホワイトリスト。
+  // 型は 'AND' | 'OR' だが、保存済みの定義や直接送られた定義は実行時に確かめる必要がある)
+  const logic = group.logic === 'OR' ? 'OR' : 'AND';
+  return parts.join(` ${logic} `);
 }
 
 /**
