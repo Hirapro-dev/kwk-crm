@@ -53,9 +53,7 @@ export function inquiriesExtraHeaderKeys(rawRows: Array<Record<string, string>>)
 }
 
 /** 共通キー以外を extra に格納(クリーニング後、非空のみ) */
-export function buildInquiryExtra(
-  raw: Record<string, string>,
-): Record<string, string> {
+export function buildInquiryExtra(raw: Record<string, string>): Record<string, string> {
   const extra: Record<string, string> = {};
   for (const [k, v] of Object.entries(raw)) {
     if (INQUIRY_COMMON_KEYS.has(k)) continue;
@@ -78,6 +76,44 @@ export interface InquiryRecord {
   ad_id: string | null;
   extra: Record<string, string>;
   registered_at: string;
+}
+
+/** 取込で既存の値を残す列(CSV に列が無い・値が空・会員やフォームが解決できないとき)。登録日時は必須のため対象外 */
+const INQUIRY_KEEPABLE_COLUMNS = [
+  'form_id',
+  'member_id',
+  'name',
+  'name_kana',
+  'email',
+  'phone',
+  'postal_code',
+  'address',
+  'ad_id',
+] as const;
+
+/**
+ * 既存の問合せに CSV の行を重ねる(2026-11-11)。CRM で入れた値を取込で消さないため:
+ * - CSV に列が無い項目・CSV の値が空の項目は既存の値を残す(CSV に値があればそれで上書き)
+ * - 会員ID が空(または未登録の会員)なら、CRM で付けた紐付けを残す
+ * - 可変項目(extra)は CSV に値がある列だけ差し替え、ほかのキー(画面で編集した備考など)は残す
+ * (convertInquiryRow は CSV に列が無い項目も空の項目も null にするので、null の列を既存の値で埋めればよい)
+ * 既存の行が無ければ record をそのまま返す。
+ */
+export function mergeInquiryWithExisting(
+  record: InquiryRecord,
+  existing: Record<string, unknown> | null | undefined,
+): InquiryRecord {
+  if (!existing) return record;
+  const out: Record<string, unknown> = { ...record };
+  for (const col of INQUIRY_KEEPABLE_COLUMNS) {
+    if (out[col] === null || out[col] === undefined) out[col] = existing[col] ?? null;
+  }
+  const exExtra =
+    existing.extra && typeof existing.extra === 'object'
+      ? (existing.extra as Record<string, string>)
+      : {};
+  out.extra = { ...exExtra, ...record.extra };
+  return out as unknown as InquiryRecord;
 }
 
 export interface ConvertOptions {
@@ -127,8 +163,7 @@ export function convertInquiryRow(
 
   // member_id は既存のもののみ採用
   const rawMember = cleanInquiryValue(raw['会員ID']);
-  const memberId =
-    rawMember && opts.validMemberIds.has(rawMember) ? rawMember : null;
+  const memberId = rawMember && opts.validMemberIds.has(rawMember) ? rawMember : null;
 
   return {
     formName,

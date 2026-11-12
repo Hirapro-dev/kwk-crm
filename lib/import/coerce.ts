@@ -15,6 +15,14 @@ export type CoerceResult = CoerceOk | CoerceErr;
 
 const pad = (n: string | number) => String(n).padStart(2, '0');
 
+/** CSV の日時に時差の表記が無いときの時差(日本時間) */
+const JST_OFFSET = '+09:00';
+
+/** "+0900" を "+09:00" にそろえる */
+function normalizeOffset(tz: string): string {
+  return tz.includes(':') ? tz : `${tz.slice(0, 3)}:${tz.slice(3)}`;
+}
+
 function coerceNumber(s: string): CoerceResult {
   const t = s.replace(/[,¥￥\s]/g, '');
   if (t === '') return { value: null };
@@ -77,8 +85,13 @@ function coerceDateTime(s: string): CoerceResult {
   const h = tm ? tm[1]! : '0';
   const mi = tm ? tm[2]! : '0';
   const se = tm?.[3] ?? '0';
+  // 時差の表記(Z / +09:00 など)が書かれていればそれに従い、無ければ日本時間とみなす。
+  // Salesforce の書き出しは日本時間。時差を付けずに渡すと DB(UTC)が UTC として保存し、画面で 9 時間ずれる
+  // (スクリプト取込は以前から +09:00 を付けていたため、画面取込とスクリプト取込で値がずれていた。2026-11-11 修正)
+  const tz = t.match(/(Z|[+-]\d{2}:?\d{2})$/i)?.[1];
+  const offset = tz ? (tz.toUpperCase() === 'Z' ? 'Z' : normalizeOffset(tz)) : JST_OFFSET;
   return {
-    value: `${ymd.y}-${pad(ymd.mo)}-${pad(ymd.d)}T${pad(h)}:${pad(mi)}:${pad(se)}`,
+    value: `${ymd.y}-${pad(ymd.mo)}-${pad(ymd.d)}T${pad(h)}:${pad(mi)}:${pad(se)}${offset}`,
   };
 }
 

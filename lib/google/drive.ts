@@ -11,6 +11,7 @@
  */
 
 import crypto from 'node:crypto';
+import { decodeCsvBytes } from '@/lib/import/decode';
 
 interface ServiceAccount {
   client_email: string;
@@ -131,5 +132,7 @@ export async function fetchDriveFileCsv(fileIdOrUrl: string): Promise<string> {
   if (!res.ok) {
     throw new Error(`ファイルのダウンロードに失敗しました (${res.status})`);
   }
-  return res.text();
+  // res.text() は常に UTF-8 として読むため、Salesforce の書き出し(Shift_JIS)をそのまま置くと文字化けして
+  // 「有効行がありません」になっていた。取込画面と同じく、UTF-8 として読めなければ Shift_JIS として読む
+  return decodeCsvBytes(await res.arrayBuffer());
 }

@@ -130,6 +130,28 @@ export async function loadExistingRows(
   return map;
 }
 
+/**
+ * 書き込む行の列をそろえる(2026-11-11)。upsert は渡した行の列の和集合で書き込み、ある行に無い列は NULL になる。
+ * そのため「申込日のある行」と「申込日が空で列を持たない行」が同じ塊に入ると、後者の既存の申込日が消えていた。
+ * 既存の行で欠けている列には、既存の値を入れて元のまま残す。新規の行は既存の値が無いので補わない。
+ */
+function fillMissingColumnsFromExisting<T>(
+  rows: T[],
+  getId: (r: T) => string,
+  existingRows: Map<string, Record<string, unknown>>,
+  getData?: (r: T) => Record<string, unknown>,
+): void {
+  const dataOf = (r: T) => (getData ? getData(r) : (r as unknown as Record<string, unknown>));
+  const allKeys = new Set<string>();
+  for (const r of rows) for (const k of Object.keys(dataOf(r))) allKeys.add(k);
+  for (const r of rows) {
+    const ex = existingRows.get(getId(r));
+    if (!ex) continue;
+    const data = dataOf(r);
+    for (const k of allKeys) if (!(k in data) && k in ex) data[k] = ex[k];
+  }
+}
+
 /** records を 既存行マップと突合して 新規/更新/スキップ に分類する */
 export function classifyRecords<T>(
   records: T[],
@@ -163,6 +185,7 @@ export function classifyRecords<T>(
       }
     }
   }
+  fillMissingColumnsFromExisting(toUpsert, getId, existingRows, opts?.getData);
   return { toUpsert, newCount, updateCount, skippedCount, existingIds };
 }
 

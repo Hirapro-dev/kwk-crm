@@ -19,6 +19,7 @@
 import { extractDriveFileId, fetchDriveFileCsv, isDriveConfigured } from '@/lib/google/drive';
 import { calcExpiresAt } from '@/lib/domain/flow_rules_types';
 import { listFlowRules } from '@/lib/domain/flow_rules';
+import { parseCsvRaw } from '@/lib/import/parse';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from './auth';
 
@@ -175,30 +176,49 @@ interface ProcessResult {
   expiresAt: string | null;
 }
 
-async function processProtectCsv(
-  csvText: string,
-  dryRun: boolean,
-): Promise<{
+/** 会員を読む・更新するときの 1 回の件数 */
+const MEMBER_BATCH = 500;
+
+/** 会員ID → 情報取得ポイント(固定プロテクトの判定用)。まとめて読む(以前は 1 行ごとに読んでいた) */
+async function loadAcquiredPoints(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  memberIds: string[],
+): Promise<Map<string, string | null>> {
+  const map = new Map<string, string | null>();
+  const ids = [...new Set(memberIds)];
+  for (let i = 0; i < ids.length; i += MEMBER_BATCH) {
+    const chunk = ids.slice(i, i + MEMBER_BATCH);
+    const { data, error } = await supabase
+      .from('members')
+      .select('id, info_acquired_points')
+      .in('id', chunk);
+    if (error) throw new Error(`会員の情報取得ポイントの読み込みに失敗しました: ${error.message}`);
+    for (const m of (data ?? []) as Array<{ id: string; info_acquired_points: string | null }>) {
+      map.set(m.id, m.info_acquired_points);
+    }
+  }
+  return map;
+}
+
+async function processProtectCsv(csvText: string): Promise<{
   totalRows: number;
   results: ProcessResult[];
   parseErrors: { row: number; message: string }[];
 }> {
   const supabase = await createClient();
 
-  // CSV 解析
-  const lines = csvText.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) {
+  // CSV 解析(引用符・値の中のカンマ・改行に対応した共通の解析。以前は split(',') で、氏名にカンマがあると列がずれた)
+  const rows = parseCsvRaw(csvText);
+  if (rows.length === 0) {
     return { totalRows: 0, results: [], parseErrors: [{ row: 0, message: 'CSVが空です' }] };
   }
 
-  const header = (lines[0] ?? '').split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
-  const dataRows = lines.slice(1);
-
   // ユーザーキャッシュ: legacy_sf_id → user
-  const { data: allUsers } = await supabase
+  const { data: allUsers, error: usersErr } = await supabase
     .from('users')
     .select('id, full_name, legacy_sf_id, is_active')
     .is('deleted_at', null);
+  if (usersErr) throw new Error(`ユーザーの読み込みに失敗しました: ${usersErr.message}`);
   const userBySfId = new Map<string, { id: string; full_name: string | null; is_active: boolean }>();
   for (const u of allUsers ?? []) {
     if (u.legacy_sf_id) userBySfId.set(u.legacy_sf_id, u);
@@ -208,17 +228,17 @@ async function processProtectCsv(
   const flowRules = await listFlowRules();
   const activeRule = flowRules.find((r) => r.is_active && r.duration_type === 'days_at_time');
 
+  const parsed = rows.map((row, i) => ({ rowNum: i + 2, ...parseCsvRow(row) }));
+  // 情報取得ポイントで固定になるかの判定に使う(プレビューでも同じ判定をして、件数を実行結果とそろえる)
+  const acquiredPoints = await loadAcquiredPoints(
+    supabase,
+    parsed.map((p) => p.memberId).filter((v): v is string => !!v),
+  );
+
   const results: ProcessResult[] = [];
   const parseErrors: { row: number; message: string }[] = [];
 
-  for (let i = 0; i < dataRows.length; i++) {
-    const rowNum = i + 2;
-    const cols = (dataRows[i] ?? '').split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
-    const rowObj: Record<string, string> = {};
-    header.forEach((h, idx) => { rowObj[h] = cols[idx] ?? ''; });
-
-    const { memberId, ownerSfId, protectValue } = parseCsvRow(rowObj);
-
+  for (const { rowNum, memberId, ownerSfId, protectValue } of parsed) {
     if (!memberId) {
       parseErrors.push({ row: rowNum, message: '会員IDが見つかりません' });
       continue;
@@ -250,20 +270,14 @@ async function processProtectCsv(
       }
     }
 
-    // メンバーの info_acquired_points チェック(実行時のみ。プレビューは省略)
-    if (!isFixed && !dryRun && user) {
-      const { data: member } = await supabase
-        .from('members')
-        .select('info_acquired_points')
-        .eq('id', memberId)
-        .maybeSingle();
-      if (member?.info_acquired_points) {
-        for (const kw of FIXED_ACQUIRE_KEYWORDS) {
-          if (member.info_acquired_points.includes(kw)) {
-            isFixed = true;
-            fixedReason = `情報取得ポイント: ${kw}`;
-            break;
-          }
+    // メンバーの info_acquired_points チェック
+    const points = acquiredPoints.get(memberId);
+    if (!isFixed && user && points) {
+      for (const kw of FIXED_ACQUIRE_KEYWORDS) {
+        if (points.includes(kw)) {
+          isFixed = true;
+          fixedReason = `情報取得ポイント: ${kw}`;
+          break;
         }
       }
     }
@@ -291,13 +305,17 @@ async function processProtectCsv(
     results.push({ memberId, userId, userName, isFixed, fixedReason, skip: false, skipReason: null, expiresAt });
   }
 
-  return { totalRows: dataRows.length, results, parseErrors };
+  return { totalRows: rows.length, results, parseErrors };
 }
 
 // ─────────────────────────────────────────────
 // 共通: DB 書き込み
 // ─────────────────────────────────────────────
 
+/**
+ * プロテクトを書き込む。同じ(担当・期限)の会員をまとめて更新し(以前は 1 件ずつ)、
+ * 実際に更新できた会員だけを数える(以前は 0 行の更新も「更新」に数えていた)。
+ */
 async function commitProtectResults(results: ProcessResult[]): Promise<{
   updated: number;
   fixedCount: number;
@@ -310,23 +328,52 @@ async function commitProtectResults(results: ProcessResult[]): Promise<{
   let fixedCount = 0;
   let normalCount = 0;
 
+  // 同じ会員が複数行あれば後の行を使う(1 件ずつ更新していたときと同じ結果)
+  const byMember = new Map<string, ProcessResult>();
   for (const r of results) {
     if (r.skip || !r.expiresAt) continue;
-    const { error } = await supabase
-      .from('members')
-      .update({
-        protect_by_user_id: r.userId,
-        protect_expires_at: r.expiresAt,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', r.memberId)
-      .is('deleted_at', null);
+    byMember.set(r.memberId, r);
+  }
+  const groups = new Map<string, ProcessResult[]>();
+  for (const r of byMember.values()) {
+    const key = `${r.userId ?? ''}|${r.expiresAt}`;
+    const list = groups.get(key) ?? [];
+    list.push(r);
+    groups.set(key, list);
+  }
 
-    if (error) {
-      errors.push({ memberId: r.memberId, message: error.message });
-    } else {
-      updated++;
-      if (r.isFixed) fixedCount++; else normalCount++;
+  const now = new Date().toISOString();
+  for (const list of groups.values()) {
+    const first = list[0] as ProcessResult;
+    for (let i = 0; i < list.length; i += MEMBER_BATCH) {
+      const chunk = list.slice(i, i + MEMBER_BATCH);
+      const { data, error } = await supabase
+        .from('members')
+        .update({
+          protect_by_user_id: first.userId,
+          protect_expires_at: first.expiresAt,
+          updated_at: now,
+        })
+        .in(
+          'id',
+          chunk.map((r) => r.memberId),
+        )
+        .is('deleted_at', null)
+        .select('id');
+      if (error) {
+        for (const r of chunk) errors.push({ memberId: r.memberId, message: error.message });
+        continue;
+      }
+      const done = new Set(((data ?? []) as Array<{ id: string }>).map((d) => d.id));
+      for (const r of chunk) {
+        if (!done.has(r.memberId)) {
+          errors.push({ memberId: r.memberId, message: '会員が見つかりません(未登録か削除済み)' });
+          continue;
+        }
+        updated++;
+        if (r.isFixed) fixedCount++;
+        else normalCount++;
+      }
     }
   }
   return { updated, fixedCount, normalCount, errors };
@@ -378,7 +425,7 @@ export async function runProtectImport(fileId: string): Promise<ProtectImportRes
 // ─────────────────────────────────────────────
 
 async function previewFromCsvText(csvText: string): Promise<ProtectImportPreview> {
-  const { totalRows, results, parseErrors } = await processProtectCsv(csvText, true);
+  const { totalRows, results, parseErrors } = await processProtectCsv(csvText);
   const fixedCount = results.filter((r) => !r.skip && r.isFixed).length;
   const normalCount = results.filter((r) => !r.skip && !r.isFixed).length;
   const skipCount = results.filter((r) => r.skip).length;
@@ -386,7 +433,7 @@ async function previewFromCsvText(csvText: string): Promise<ProtectImportPreview
 }
 
 async function runFromCsvText(csvText: string): Promise<ProtectImportResult> {
-  const { totalRows, results, parseErrors } = await processProtectCsv(csvText, false);
+  const { totalRows, results, parseErrors } = await processProtectCsv(csvText);
   const skipCount = results.filter((r) => r.skip).length;
   const { updated, fixedCount, normalCount, errors } = await commitProtectResults(results);
   return {
